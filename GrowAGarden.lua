@@ -1,7 +1,7 @@
 -- =========================================================================
 --  ZYLOHUB - GROW A GARDEN (v3.5 - OFFICIAL PetEggService EDITION + PET TEAM)
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  VERIFIED FROM LOCAL DECOMPILE - 100% PRESERVED & COMPLETE
+--  VERIFIED FROM LOCAL DECOMPILE - 100% PRESERVED & INTEGRATED
 -- =========================================================================
 
 local Players = game:GetService("Players")
@@ -53,7 +53,7 @@ local State = {
     AntiAfk = true,
     SpeedVal = 42,
 
-    -- [TAMBAHAN FITUR TIM SESUAI REFERENSI GAMBAR]
+    -- [STATE PET TEAM MANAGER]
     ActiveTeam = "Main Team",
     TeamDelayEquip = { ["Main Team"] = 0, ["Bronto Team"] = 0, ["Hatch Team"] = 0, ["Sell Team"] = 0 },
     TeamDelayUnequip = { ["Main Team"] = 1, ["Bronto Team"] = 1, ["Hatch Team"] = 1, ["Sell Team"] = 1 },
@@ -722,45 +722,49 @@ task.spawn(function()
     end
 end)
 
--- Accordion 2: Auto Hatch (Asli 100%)
-local accHatch, bodyHatch = ZyloLib:CreateAccordion(PagePets, "Auto Hatch", false, 85)
+-- =============================================================
+-- [ACCORDION 2: AUTO HATCH DENGAN INTEGRASI PET TEAM MANAGER]
+-- Bisa di-hide dan tampilkan lewat panah accordion Auto Hatch
+-- Tema warna diselaraskan 100% dengan ZyloHub (Obsidian & Cosmic Purple)
+-- =============================================================
+local accHatch, bodyHatch = ZyloLib:CreateAccordion(PagePets, "Auto Hatch", false, 410)
+
+-- Baris Auto Hatch Switch Asli
 local ahRow = Instance.new("Frame", bodyHatch)
-ahRow.Size = UDim2.new(1, -24, 0, 28)
+ahRow.Size = UDim2.new(1, -24, 0, 32)
 ahRow.Position = UDim2.new(0, 12, 0, 6)
 ahRow.BackgroundColor3 = C.CARD_2
 Instance.new("UICorner", ahRow).CornerRadius = UDim.new(0, 6)
 local ahLbl = Instance.new("TextLabel", ahRow)
-ahLbl.Position = UDim2.new(0, 8, 0, 0)
-ahLbl.Size = UDim2.new(1, -45, 1, 0)
+ahLbl.Position = UDim2.new(0, 10, 0, 0)
+ahLbl.Size = UDim2.new(1, -55, 1, 0)
 ahLbl.BackgroundTransparency = 1
 ahLbl.Text = "Otomatis Tetaskan & Claim Telur Siap Panen"
 ahLbl.TextColor3 = C.TEXT_W
 ahLbl.Font = Enum.Font.GothamMedium
-ahLbl.TextSize = 8.5
+ahLbl.TextSize = 9
 ahLbl.TextXAlignment = Enum.TextXAlignment.Left
 local ahSw = ZyloLib:CreatePillSwitch(ahRow, State.AutoHatch, function(v) State.AutoHatch = v end)
 ahSw.Position = UDim2.new(1, -40, 0.5, -10)
 
--- =============================================================
--- [TAMBAHAN FITUR: PET TEAM MANAGER PERSIS GAMBAR REFERENSI]
--- Ditaruh tepat di bawah Auto Hatch
--- =============================================================
-local TeamCard = Instance.new("Frame", PagePets)
+-- Container Pet Team Manager (DI DALAM BODY HATCH DENGAN TEMA ZYLOHUB)
+local TeamCard = Instance.new("Frame", bodyHatch)
 TeamCard.Name = "PetTeamManagerCard"
-TeamCard.Size = UDim2.new(1, 0, 0, 360)
-TeamCard.BackgroundColor3 = C.CARD
-Instance.new("UICorner", TeamCard).CornerRadius = UDim.new(0, 10)
+TeamCard.Position = UDim2.new(0, 12, 0, 44)
+TeamCard.Size = UDim2.new(1, -24, 0, 355)
+TeamCard.BackgroundColor3 = Color3.fromRGB(10, 13, 24)
+Instance.new("UICorner", TeamCard).CornerRadius = UDim.new(0, 8)
 local tcStroke = Instance.new("UIStroke", TeamCard)
-tcStroke.Color = Color3.fromRGB(240, 185, 40)
-tcStroke.Thickness = 1.5
+tcStroke.Color = C.PURPLE
+tcStroke.Thickness = 1.2
 
 -- Baris Sub-Tab (Main Team, Bronto Team, Hatch Team, Sell Team, Config, ⚙)
 local SubTabRow = Instance.new("ScrollingFrame", TeamCard)
-SubTabRow.Position = UDim2.new(0, 10, 0, 10)
-SubTabRow.Size = UDim2.new(1, -20, 0, 30)
+SubTabRow.Position = UDim2.new(0, 8, 0, 8)
+SubTabRow.Size = UDim2.new(1, -16, 0, 28)
 SubTabRow.BackgroundTransparency = 1
 SubTabRow.ScrollBarThickness = 0
-SubTabRow.CanvasSize = UDim2.new(0, 480, 0, 0)
+SubTabRow.CanvasSize = UDim2.new(0, 470, 0, 0)
 
 local stLayout = Instance.new("UIListLayout", SubTabRow)
 stLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -774,12 +778,12 @@ local SelPetTitle = nil
 local function updateSubTabs()
     for name, btn in pairs(subTabBtns) do
         local isAct = (State.ActiveTeam == name)
-        btn.BackgroundColor3 = isAct and Color3.fromRGB(28, 24, 16) or Color3.fromRGB(16, 20, 36)
-        btn.TextColor3 = isAct and Color3.fromRGB(255, 215, 80) or C.TEXT_M
+        btn.BackgroundColor3 = isAct and C.PURPLE or C.CARD_2
+        btn.TextColor3 = isAct and Color3.fromRGB(255, 255, 255) or C.TEXT_M
         local stroke = btn:FindFirstChildOfClass("UIStroke")
         if stroke then
-            stroke.Color = isAct and Color3.fromRGB(240, 185, 40) or Color3.fromRGB(40, 48, 75)
-            stroke.Thickness = isAct and 1.5 or 1
+            stroke.Color = isAct and Color3.fromRGB(200, 160, 255) or C.STROKE
+            stroke.Thickness = isAct and 1.2 or 1
         end
     end
     if DelayHeaderLbl then
@@ -793,14 +797,14 @@ end
 for _, tabName in ipairs(subTabs) do
     local sBtn = Instance.new("TextButton", SubTabRow)
     sBtn.Size = UDim2.new(0, (tabName == "Config") and 68 or 88, 1, 0)
-    sBtn.BackgroundColor3 = (State.ActiveTeam == tabName) and Color3.fromRGB(28, 24, 16) or Color3.fromRGB(16, 20, 36)
+    sBtn.BackgroundColor3 = (State.ActiveTeam == tabName) and C.PURPLE or C.CARD_2
     sBtn.Text = tabName
-    sBtn.TextColor3 = (State.ActiveTeam == tabName) and Color3.fromRGB(255, 215, 80) or C.TEXT_M
+    sBtn.TextColor3 = (State.ActiveTeam == tabName) and Color3.fromRGB(255, 255, 255) or C.TEXT_M
     sBtn.Font = Enum.Font.GothamBold
-    sBtn.TextSize = 9.5
+    sBtn.TextSize = 9
     Instance.new("UICorner", sBtn).CornerRadius = UDim.new(1, 0)
     local bStroke = Instance.new("UIStroke", sBtn)
-    bStroke.Color = (State.ActiveTeam == tabName) and Color3.fromRGB(240, 185, 40) or Color3.fromRGB(40, 48, 75)
+    bStroke.Color = (State.ActiveTeam == tabName) and Color3.fromRGB(200, 160, 255) or C.STROKE
 
     sBtn.MouseButton1Click:Connect(function()
         State.ActiveTeam = tabName
@@ -810,24 +814,24 @@ for _, tabName in ipairs(subTabs) do
 end
 
 local GearBtn = Instance.new("TextButton", SubTabRow)
-GearBtn.Size = UDim2.new(0, 32, 1, 0)
-GearBtn.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
+GearBtn.Size = UDim2.new(0, 28, 1, 0)
+GearBtn.BackgroundColor3 = C.CARD_2
 GearBtn.Text = "⚙"
 GearBtn.TextColor3 = C.TEXT_M
 GearBtn.Font = Enum.Font.GothamBold
-GearBtn.TextSize = 12
+GearBtn.TextSize = 11
 Instance.new("UICorner", GearBtn).CornerRadius = UDim.new(1, 0)
 local gbStroke = Instance.new("UIStroke", GearBtn)
-gbStroke.Color = Color3.fromRGB(40, 48, 75)
+gbStroke.Color = C.STROKE
 
--- Dropdown Delay Header
+-- Dropdown Delay Header Sesuai ZyloHub Theme
 local DelayHeader = Instance.new("Frame", TeamCard)
-DelayHeader.Position = UDim2.new(0, 10, 0, 48)
-DelayHeader.Size = UDim2.new(1, -20, 0, 26)
-DelayHeader.BackgroundColor3 = Color3.fromRGB(16, 18, 28)
+DelayHeader.Position = UDim2.new(0, 8, 0, 42)
+DelayHeader.Size = UDim2.new(1, -16, 0, 26)
+DelayHeader.BackgroundColor3 = C.CARD_2
 Instance.new("UICorner", DelayHeader).CornerRadius = UDim.new(0, 6)
 local dhStroke = Instance.new("UIStroke", DelayHeader)
-dhStroke.Color = Color3.fromRGB(240, 185, 40)
+dhStroke.Color = C.PURPLE
 dhStroke.Thickness = 1
 
 DelayHeaderLbl = Instance.new("TextLabel", DelayHeader)
@@ -835,7 +839,7 @@ DelayHeaderLbl.Position = UDim2.new(0, 10, 0, 0)
 DelayHeaderLbl.Size = UDim2.new(1, -35, 1, 0)
 DelayHeaderLbl.BackgroundTransparency = 1
 DelayHeaderLbl.Text = "( " .. State.ActiveTeam .. " ) Delay Settings"
-DelayHeaderLbl.TextColor3 = Color3.fromRGB(255, 215, 80)
+DelayHeaderLbl.TextColor3 = C.PURPLE_L
 DelayHeaderLbl.Font = Enum.Font.GothamBold
 DelayHeaderLbl.TextSize = 9.5
 DelayHeaderLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -845,14 +849,14 @@ DhArrow.Position = UDim2.new(1, -22, 0, 0)
 DhArrow.Size = UDim2.new(0, 16, 1, 0)
 DhArrow.BackgroundTransparency = 1
 DhArrow.Text = "▼"
-DhArrow.TextColor3 = Color3.fromRGB(255, 215, 80)
+DhArrow.TextColor3 = C.PURPLE_L
 DhArrow.Font = Enum.Font.GothamBold
 DhArrow.TextSize = 8
 
--- Baris Indikator Hitungan
+-- Baris Indikator Hitungan Status
 local CounterRow = Instance.new("Frame", TeamCard)
-CounterRow.Position = UDim2.new(0, 12, 0, 80)
-CounterRow.Size = UDim2.new(1, -24, 0, 18)
+CounterRow.Position = UDim2.new(0, 10, 0, 74)
+CounterRow.Size = UDim2.new(1, -20, 0, 18)
 CounterRow.BackgroundTransparency = 1
 
 local cntLayout = Instance.new("UIListLayout", CounterRow)
@@ -861,7 +865,7 @@ cntLayout.Padding = UDim.new(0, 12)
 
 local function makeCounterLabel(icon, name, count)
     local lbl = Instance.new("TextLabel", CounterRow)
-    lbl.Size = UDim2.new(0, 78, 1, 0)
+    lbl.Size = UDim2.new(0, 76, 1, 0)
     lbl.BackgroundTransparency = 1
     lbl.Text = icon .. " " .. name .. " (" .. tostring(count) .. ")"
     lbl.TextColor3 = C.TEXT_M
@@ -878,15 +882,15 @@ local cSell   = makeCounterLabel("💰", "Sell", 0)
 
 -- Baris Delay Equip (sec)
 local RowEquip = Instance.new("Frame", TeamCard)
-RowEquip.Position = UDim2.new(0, 12, 0, 104)
-RowEquip.Size = UDim2.new(1, -24, 0, 26)
+RowEquip.Position = UDim2.new(0, 10, 0, 98)
+RowEquip.Size = UDim2.new(1, -20, 0, 26)
 RowEquip.BackgroundTransparency = 1
 
 local eqLbl = Instance.new("TextLabel", RowEquip)
 eqLbl.Size = UDim2.new(0.6, 0, 1, 0)
 eqLbl.BackgroundTransparency = 1
 eqLbl.Text = "Delay Equip (sec)"
-eqLbl.TextColor3 = C.TEXT_M
+eqLbl.TextColor3 = C.TEXT_W
 eqLbl.Font = Enum.Font.GothamMedium
 eqLbl.TextSize = 9.5
 eqLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -894,14 +898,14 @@ eqLbl.TextXAlignment = Enum.TextXAlignment.Left
 local eqBox = Instance.new("TextBox", RowEquip)
 eqBox.Position = UDim2.new(1, -75, 0, 0)
 eqBox.Size = UDim2.new(0, 75, 1, 0)
-eqBox.BackgroundColor3 = Color3.fromRGB(14, 18, 32)
+eqBox.BackgroundColor3 = C.CARD_2
 eqBox.Text = "0"
 eqBox.TextColor3 = C.TEXT_W
 eqBox.Font = Enum.Font.GothamBold
 eqBox.TextSize = 9.5
 Instance.new("UICorner", eqBox).CornerRadius = UDim.new(0, 6)
 local eqBoxStroke = Instance.new("UIStroke", eqBox)
-eqBoxStroke.Color = Color3.fromRGB(40, 48, 75)
+eqBoxStroke.Color = C.STROKE
 
 eqBox:GetPropertyChangedSignal("Text"):Connect(function()
     local val = tonumber(eqBox.Text)
@@ -912,15 +916,15 @@ end)
 
 -- Baris Delay Unequip (sec)
 local RowUnequip = Instance.new("Frame", TeamCard)
-RowUnequip.Position = UDim2.new(0, 12, 0, 136)
-RowUnequip.Size = UDim2.new(1, -24, 0, 26)
+RowUnequip.Position = UDim2.new(0, 10, 0, 128)
+RowUnequip.Size = UDim2.new(1, -20, 0, 26)
 RowUnequip.BackgroundTransparency = 1
 
 local uqLbl = Instance.new("TextLabel", RowUnequip)
 uqLbl.Size = UDim2.new(0.6, 0, 1, 0)
 uqLbl.BackgroundTransparency = 1
 uqLbl.Text = "Delay Unequip (sec)"
-uqLbl.TextColor3 = C.TEXT_M
+uqLbl.TextColor3 = C.TEXT_W
 uqLbl.Font = Enum.Font.GothamMedium
 uqLbl.TextSize = 9.5
 uqLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -928,14 +932,14 @@ uqLbl.TextXAlignment = Enum.TextXAlignment.Left
 local uqBox = Instance.new("TextBox", RowUnequip)
 uqBox.Position = UDim2.new(1, -75, 0, 0)
 uqBox.Size = UDim2.new(0, 75, 1, 0)
-uqBox.BackgroundColor3 = Color3.fromRGB(14, 18, 32)
+uqBox.BackgroundColor3 = C.CARD_2
 uqBox.Text = "1"
 uqBox.TextColor3 = C.TEXT_W
 uqBox.Font = Enum.Font.GothamBold
 uqBox.TextSize = 9.5
 Instance.new("UICorner", uqBox).CornerRadius = UDim.new(0, 6)
 local uqBoxStroke = Instance.new("UIStroke", uqBox)
-uqBoxStroke.Color = Color3.fromRGB(40, 48, 75)
+uqBoxStroke.Color = C.STROKE
 
 uqBox:GetPropertyChangedSignal("Text"):Connect(function()
     local val = tonumber(uqBox.Text)
@@ -946,29 +950,29 @@ end)
 
 -- Wadah Select Pet
 SelPetTitle = Instance.new("TextLabel", TeamCard)
-SelPetTitle.Position = UDim2.new(0, 12, 0, 168)
-SelPetTitle.Size = UDim2.new(1, -24, 0, 16)
+SelPetTitle.Position = UDim2.new(0, 10, 0, 158)
+SelPetTitle.Size = UDim2.new(1, -20, 0, 16)
 SelPetTitle.BackgroundTransparency = 1
 SelPetTitle.Text = "Select Pet (" .. State.ActiveTeam .. ")"
-SelPetTitle.TextColor3 = C.TEXT_M
-SelPetTitle.Font = Enum.Font.GothamMedium
+SelPetTitle.TextColor3 = C.CYAN
+SelPetTitle.Font = Enum.Font.GothamBold
 SelPetTitle.TextSize = 9.5
 SelPetTitle.TextXAlignment = Enum.TextXAlignment.Left
 
 local PetListFrame = Instance.new("Frame", TeamCard)
-PetListFrame.Position = UDim2.new(0, 10, 0, 188)
-PetListFrame.Size = UDim2.new(1, -20, 0, 120)
-PetListFrame.BackgroundColor3 = Color3.fromRGB(10, 13, 24)
+PetListFrame.Position = UDim2.new(0, 8, 0, 178)
+PetListFrame.Size = UDim2.new(1, -16, 0, 125)
+PetListFrame.BackgroundColor3 = Color3.fromRGB(14, 18, 34)
 Instance.new("UICorner", PetListFrame).CornerRadius = UDim.new(0, 6)
 local plStroke = Instance.new("UIStroke", PetListFrame)
-plStroke.Color = Color3.fromRGB(32, 40, 65)
+plStroke.Color = C.STROKE
 
 local TeamSearchBox = Instance.new("TextBox", PetListFrame)
 TeamSearchBox.Position = UDim2.new(0, 8, 0, 6)
-TeamSearchBox.Size = UDim2.new(1, -16, 0, 22)
-TeamSearchBox.BackgroundColor3 = Color3.fromRGB(14, 18, 32)
-TeamSearchBox.PlaceholderText = "Search..."
-TeamSearchBox.PlaceholderColor3 = Color3.fromRGB(100, 110, 140)
+TeamSearchBox.Size = UDim2.new(1, -16, 0, 24)
+TeamSearchBox.BackgroundColor3 = C.CARD_2
+TeamSearchBox.PlaceholderText = "🔍 Search pet..."
+TeamSearchBox.PlaceholderColor3 = C.TEXT_M
 TeamSearchBox.Text = ""
 TeamSearchBox.TextColor3 = C.TEXT_W
 TeamSearchBox.Font = Enum.Font.GothamMedium
@@ -976,14 +980,15 @@ TeamSearchBox.TextSize = 9
 Instance.new("UICorner", TeamSearchBox).CornerRadius = UDim.new(0, 5)
 
 local PetScroll = Instance.new("ScrollingFrame", PetListFrame)
-PetScroll.Position = UDim2.new(0, 8, 0, 32)
-PetScroll.Size = UDim2.new(1, -16, 1, -38)
+PetScroll.Position = UDim2.new(0, 8, 0, 34)
+PetScroll.Size = UDim2.new(1, -16, 1, -40)
 PetScroll.BackgroundTransparency = 1
 PetScroll.ScrollBarThickness = 2
+PetScroll.ScrollBarImageColor3 = C.PURPLE
 PetScroll.CanvasSize = UDim2.new(0, 0, 0, 90)
 
 local psLayout = Instance.new("UIListLayout", PetScroll)
-psLayout.Padding = UDim.new(0, 3)
+psLayout.Padding = UDim.new(0, 4)
 
 local dummyPets = {
     "Bald Eagle | Age 46 | 4.98 KG",
@@ -992,62 +997,63 @@ local dummyPets = {
 
 for _, petStr in ipairs(dummyPets) do
     local petItem = Instance.new("TextButton", PetScroll)
-    petItem.Size = UDim2.new(1, -4, 0, 22)
-    petItem.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
-    petItem.Text = "   " .. petStr
-    petItem.TextColor3 = C.TEXT_M
+    petItem.Size = UDim2.new(1, -4, 0, 24)
+    petItem.BackgroundColor3 = C.CARD_2
+    petItem.Text = "   🐾 " .. petStr
+    petItem.TextColor3 = C.TEXT_W
     petItem.Font = Enum.Font.GothamMedium
-    petItem.TextSize = 9
+    petItem.TextSize = 8.5
     petItem.TextXAlignment = Enum.TextXAlignment.Left
     Instance.new("UICorner", petItem).CornerRadius = UDim.new(0, 4)
+    local piStroke = Instance.new("UIStroke", petItem)
+    piStroke.Color = Color3.fromRGB(35, 42, 65)
 end
 
--- Tombol START & STOP
+-- Tombol START & STOP Sesuai Palet ZyloHub
 local BtnRow = Instance.new("Frame", TeamCard)
-BtnRow.Position = UDim2.new(0, 10, 1, -40)
-BtnRow.Size = UDim2.new(1, -20, 0, 30)
+BtnRow.Position = UDim2.new(0, 8, 1, -38)
+BtnRow.Size = UDim2.new(1, -16, 0, 28)
 BtnRow.BackgroundTransparency = 1
 
 local StartBtn = Instance.new("TextButton", BtnRow)
-StartBtn.Size = UDim2.new(0, 80, 1, 0)
-StartBtn.BackgroundColor3 = Color3.fromRGB(24, 20, 14)
+StartBtn.Size = UDim2.new(0, 88, 1, 0)
+StartBtn.BackgroundColor3 = C.PURPLE
 StartBtn.Text = "⚡ START"
-StartBtn.TextColor3 = Color3.fromRGB(255, 215, 80)
+StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 StartBtn.Font = Enum.Font.GothamBold
-StartBtn.TextSize = 10
+StartBtn.TextSize = 9.5
 Instance.new("UICorner", StartBtn).CornerRadius = UDim.new(1, 0)
 local sbStroke = Instance.new("UIStroke", StartBtn)
-sbStroke.Color = Color3.fromRGB(240, 185, 40)
-sbStroke.Thickness = 1.5
+sbStroke.Color = Color3.fromRGB(200, 160, 255)
 
 local StopBtn = Instance.new("TextButton", BtnRow)
-StopBtn.Position = UDim2.new(0, 88, 0, 0)
-StopBtn.Size = UDim2.new(0, 72, 1, 0)
-StopBtn.BackgroundColor3 = Color3.fromRGB(16, 20, 34)
+StopBtn.Position = UDim2.new(0, 96, 0, 0)
+StopBtn.Size = UDim2.new(0, 75, 1, 0)
+StopBtn.BackgroundColor3 = C.CARD_2
 StopBtn.Text = "STOP"
 StopBtn.TextColor3 = C.TEXT_M
 StopBtn.Font = Enum.Font.GothamBold
-StopBtn.TextSize = 10
+StopBtn.TextSize = 9.5
 Instance.new("UICorner", StopBtn).CornerRadius = UDim.new(1, 0)
 local stpStroke = Instance.new("UIStroke", StopBtn)
-stpStroke.Color = Color3.fromRGB(45, 52, 75)
+stpStroke.Color = C.STROKE
 
 StartBtn.MouseButton1Click:Connect(function()
     State.IsTeamRunning = true
-    StartBtn.BackgroundColor3 = Color3.fromRGB(240, 185, 40)
-    StartBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
-    StopBtn.BackgroundColor3 = Color3.fromRGB(16, 20, 34)
+    StartBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 140)
+    StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    StopBtn.BackgroundColor3 = C.CARD_2
     StopBtn.TextColor3 = C.TEXT_M
-    stpStroke.Color = Color3.fromRGB(45, 52, 75)
+    stpStroke.Color = C.STROKE
 end)
 
 StopBtn.MouseButton1Click:Connect(function()
     State.IsTeamRunning = false
-    StartBtn.BackgroundColor3 = Color3.fromRGB(24, 20, 14)
-    StartBtn.TextColor3 = Color3.fromRGB(255, 215, 80)
-    StopBtn.BackgroundColor3 = Color3.fromRGB(36, 18, 24)
+    StartBtn.BackgroundColor3 = C.PURPLE
+    StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    StopBtn.BackgroundColor3 = Color3.fromRGB(45, 15, 25)
     StopBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-    stpStroke.Color = Color3.fromRGB(200, 60, 60)
+    stpStroke.Color = Color3.fromRGB(180, 50, 70)
 end)
 
 -- =============================================================
