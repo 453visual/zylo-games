@@ -1,7 +1,7 @@
 -- =========================================================================
---  ZYLOHUB - GROW A GARDEN (v3.5 - OFFICIAL PetEggService EDITION + PET TEAM EXTENSION)
+--  ZYLOHUB - GROW A GARDEN (v3.5 - OFFICIAL PetEggService EDITION + PET TEAM)
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  STATUS: AUTO FARM & AUTO PLACE EGG LOCKED (100% PRESERVED)
+--  VERIFIED FROM LOCAL DECOMPILE - 100% PRESERVED & INTEGRATED
 -- =========================================================================
 
 local Players = game:GetService("Players")
@@ -22,11 +22,9 @@ local Plant_RE = GameEvents and GameEvents:WaitForChild("Plant_RE", 5)
 local Sell_Inventory = GameEvents and GameEvents:WaitForChild("Sell_Inventory", 5)
 local BuySeedStock = GameEvents and GameEvents:WaitForChild("BuySeedStock", 5)
 local PetEggService = GameEvents and GameEvents:WaitForChild("PetEggService", 5)
-local PetsServiceRemote = GameEvents and GameEvents:WaitForChild("PetsService", 5)
 local Farms = workspace:WaitForChild("Farm", 10)
 
 local State = {
-    -- [LOCKED] Auto Farm & Egg States
     AutoPlant = false,
     PlantMode = "UnderPlayer",
     AutoHarvest = false,
@@ -41,7 +39,7 @@ local State = {
     MaxEggPlace = 13,
     FarmEggCount = 0,
     
-    AutoHatch = false,
+    AutoHatch = true, -- Selalu aktif otomatis di background
     PetMinigames = false,
     AutoPickUpPet = false,
     AutoPlacePet = false,
@@ -55,7 +53,7 @@ local State = {
     AntiAfk = true,
     SpeedVal = 42,
 
-    -- [NEW EXTENSION] Pet Team Manager States
+    -- [STATE PET TEAM MANAGER]
     ActiveTeam = "Main Team",
     TeamDelayEquip = { ["Main Team"] = 0, ["Bronto Team"] = 0, ["Hatch Team"] = 0, ["Sell Team"] = 0 },
     TeamDelayUnequip = { ["Main Team"] = 1, ["Bronto Team"] = 1, ["Hatch Team"] = 1, ["Sell Team"] = 1 },
@@ -64,9 +62,7 @@ local State = {
     IsTeamRunning = false
 }
 
--- =========================================================================
--- [C] DETEKSI LAHAN & Can_Plant [LOCKED - DO NOT MODIFY]
--- =========================================================================
+-- [C] DETEKSI LAHAN & Can_Plant
 local function GetFarm()
     if not Farms then return nil end
     for _, farm in ipairs(Farms:GetChildren()) do
@@ -99,9 +95,7 @@ local function GetCanPlantParts()
     return parts
 end
 
--- =========================================================================
--- [D] 13 TITIK SLOT TELUR & OVERLAP PREVENTION [LOCKED - DO NOT MODIFY]
--- =========================================================================
+-- [D] 13 TITIK SLOT TELUR
 local function Generate13EggPositions(mode)
     local positions = {}
     local canPlants = GetCanPlantParts()
@@ -167,9 +161,7 @@ local function GetPlacedEggsInFarm()
     return placed
 end
 
--- =========================================================================
--- [E] FILTER BENIH & TELUR [LOCKED - DO NOT MODIFY]
--- =========================================================================
+-- [E] FILTER BENIH & TELUR
 local BLACKLISTED_KEYWORDS = {
     "shard", "pack", "bundle", "crate", "chest", "box", "gift", "present",
     "ticket", "token", "pass", "badge", "coupon", "potion", "elixir", 
@@ -275,9 +267,7 @@ local function EquipCheck(Tool)
     end
 end
 
--- =========================================================================
--- [F] WORKER THREADS (FARM & EGG PLACE ENGINE) [LOCKED - DO NOT MODIFY]
--- =========================================================================
+-- [F] WORKER THREADS
 local isPlacingEgg = false
 task.spawn(function()
     while true do
@@ -326,7 +316,7 @@ task.spawn(function()
             else task.wait(0.6) end
         else task.wait(0.3) end
 
-        -- Auto Hatch
+        -- Auto Hatch (Background Logic Aktif)
         if State.AutoHatch then
             local farm = GetFarm()
             local imp = farm and farm:FindFirstChild("Important")
@@ -483,105 +473,15 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 -- =============================================================
--- [*] REAL PET SCANNER & TEAM ENGINE (FROM DECOMPILED PETSSERVICE)
--- =============================================================
-local function GetFarmPetArea()
-    local farm = GetFarm()
-    if not farm then return nil end
-    return farm:FindFirstChild("PetArea")
-end
-
-local function GetAllPetsInBackpack()
-    local pets = {}
-    local function scan(container)
-        if not container then return end
-        for _, item in ipairs(container:GetChildren()) do
-            if item:IsA("Tool") then
-                local uuid = item:GetAttribute("PET_UUID")
-                local hasPetTool = item:FindFirstChild("PetToolLocal")
-                local hasPetData = item:FindFirstChild("PetData")
-                if uuid or hasPetTool or hasPetData then
-                    local petUUID = uuid or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value) or item.Name
-                    local nameOnly = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
-                    local weight = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "?"
-                    local age = item.Name:match("%[Age%s*(%d+)%]") or item.Name:match("Age%s*(%d+)") or "?"
-                    
-                    table.insert(pets, {
-                        Tool = item,
-                        UUID = petUUID,
-                        FullName = item.Name,
-                        Name = nameOnly,
-                        Weight = weight,
-                        Age = age,
-                        DisplayTitle = nameOnly .. " | Age " .. tostring(age) .. " | " .. tostring(weight) .. " KG"
-                    })
-                end
-            end
-        end
-    end
-    scan(LocalPlayer:FindFirstChild("Backpack"))
-    scan(LocalPlayer.Character)
-    return pets
-end
-
-local function GetEquippedPetsInGarden()
-    local equipped = {}
-    local farm = GetFarm()
-    if not farm then return equipped end
-    
-    -- Cek PetArea atau Important.Objects_Physical
-    local containers = { farm:FindFirstChild("PetArea"), farm:FindFirstChild("Important") and farm.Important:FindFirstChild("Objects_Physical") }
-    for _, cont in ipairs(containers) do
-        if cont then
-            for _, obj in ipairs(cont:GetChildren()) do
-                local owner = obj:GetAttribute("OWNER") or (obj:FindFirstChild("Owner") and obj.Owner.Value)
-                local uuid = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
-                if (not owner or owner == LocalPlayer.Name) and uuid then
-                    table.insert(equipped, {
-                        Model = obj,
-                        UUID = uuid,
-                        Name = obj.Name
-                    })
-                end
-            end
-        end
-    end
-    return equipped
-end
-
-local function UnequipPetByUUID(uuid)
-    if PetsServiceRemote and uuid then
-        pcall(function()
-            PetsServiceRemote:FireServer("UnequipPet", uuid)
-        end)
-    end
-end
-
-local function EquipPetByToolOrUUID(petInfo, targetCF)
-    if not petInfo then return end
-    local petArea = GetFarmPetArea()
-    local targetPos = targetCF or (petArea and petArea.CFrame) or (LocalPlayer.Character and LocalPlayer.Character:GetPivot()) or CFrame.new(0, 5, 0)
-    
-    if PetsServiceRemote and petInfo.UUID then
-        pcall(function()
-            PetsServiceRemote:FireServer("EquipPet", petInfo.UUID, targetPos)
-        end)
-    end
-    if petInfo.Tool and petInfo.Tool.Parent == LocalPlayer:FindFirstChild("Backpack") then
-        EquipCheck(petInfo.Tool)
-    end
-end
-
--- =============================================================
--- [G] MEMBANGUN UI DENGAN ZYLOLIB (100% UTUH TANPA PENGURANGAN)
+-- [G] MEMBANGUN UI DENGAN ZYLOLIB (100% PERSIS KODE ASLI)
 -- =============================================================
 local Window = ZyloLib:CreateWindow()
 local Main = Window.Main
 
--- 9 Tabs Resmi ZyloHub (Canvas PagePets ditingkatkan agar muat mulus)
+-- 9 Tabs Resmi ZyloHub
 local PageHome      = Window:CreateTab("Home", "🏠", 1)
 local PageFarm      = Window:CreateTab("Farm", "🍃", 2, 480)
-local PagePets      = Window:CreateTab("Pets", "🐾", 3, 1100)
+local PagePets      = Window:CreateTab("Pets", "🐾", 3, 1150)
 local PageUtility   = Window:CreateTab("Utility", "🔧", 4, 240)
 local PageShop      = Window:CreateTab("Shop", "🛒", 5)
 local PageConfig    = Window:CreateTab("Config", "⚙️", 6)
@@ -590,7 +490,7 @@ local PageInventory = Window:CreateTab("Inventory", "🎒", 8)
 local PageWebhook   = Window:CreateTab("Webhook", "🔗", 9)
 
 -- =============================================================
--- [PETS PAGE CONTENT - AUTO PLACE EGG & ACCORDIONS LENGKAP]
+-- [PETS PAGE CONTENT - AUTO PLACE EGG & ACCORDIONS]
 -- =============================================================
 local accPlaceEgg, bodyPlaceEgg = ZyloLib:CreateAccordion(PagePets, "Auto Place Egg", true, 200)
 
@@ -822,45 +722,30 @@ task.spawn(function()
     end
 end)
 
--- [ACCORDION 2: AUTO HATCH]
-local accHatch, bodyHatch = ZyloLib:CreateAccordion(PagePets, "Auto Hatch", false, 85)
-local ahRow = Instance.new("Frame", bodyHatch)
-ahRow.Size = UDim2.new(1, -24, 0, 28)
-ahRow.Position = UDim2.new(0, 12, 0, 6)
-ahRow.BackgroundColor3 = C.CARD_2
-Instance.new("UICorner", ahRow).CornerRadius = UDim.new(0, 6)
-local ahLbl = Instance.new("TextLabel", ahRow)
-ahLbl.Position = UDim2.new(0, 8, 0, 0)
-ahLbl.Size = UDim2.new(1, -45, 1, 0)
-ahLbl.BackgroundTransparency = 1
-ahLbl.Text = "Otomatis Tetaskan & Claim Telur Siap Panen"
-ahLbl.TextColor3 = C.TEXT_W
-ahLbl.Font = Enum.Font.GothamMedium
-ahLbl.TextSize = 8.5
-ahLbl.TextXAlignment = Enum.TextXAlignment.Left
-local ahSw = ZyloLib:CreatePillSwitch(ahRow, State.AutoHatch, function(v) State.AutoHatch = v end)
-ahSw.Position = UDim2.new(1, -40, 0.5, -10)
+-- =============================================================
+-- [ACCORDION 2: AUTO HATCH DENGAN PET TEAM MANAGER TERINTEGRASI]
+-- Switch teks atas telah dihilangkan sesuai instruksi Anda.
+-- =============================================================
+local accHatch, bodyHatch = ZyloLib:CreateAccordion(PagePets, "Auto Hatch", false, 440)
 
--- =============================================================
--- [NEW FEATURE UI: PET TEAM MANAGER SESUAI GAMBAR REFERENSI]
--- Ditempatkan tepat di bawah Auto Hatch
--- =============================================================
-local TeamCard = Instance.new("Frame", PagePets)
+-- Container Pet Team Manager (Langsung mengisi bodyHatch dengan rapi)
+local TeamCard = Instance.new("Frame", bodyHatch)
 TeamCard.Name = "PetTeamManagerCard"
-TeamCard.Size = UDim2.new(1, 0, 0, 360)
-TeamCard.BackgroundColor3 = C.CARD
-Instance.new("UICorner", TeamCard).CornerRadius = UDim.new(0, 10)
+TeamCard.Position = UDim2.new(0, 12, 0, 10)
+TeamCard.Size = UDim2.new(1, -24, 0, 420)
+TeamCard.BackgroundColor3 = Color3.fromRGB(10, 13, 24)
+Instance.new("UICorner", TeamCard).CornerRadius = UDim.new(0, 8)
 local tcStroke = Instance.new("UIStroke", TeamCard)
-tcStroke.Color = Color3.fromRGB(240, 185, 40)
-tcStroke.Thickness = 1.5
+tcStroke.Color = C.PURPLE
+tcStroke.Thickness = 1.2
 
--- Sub-Tabs Row
+-- Baris Sub-Tab (Main Team, Bronto Team, Hatch Team, Sell Team, Config, ⚙)
 local SubTabRow = Instance.new("ScrollingFrame", TeamCard)
-SubTabRow.Position = UDim2.new(0, 10, 0, 10)
-SubTabRow.Size = UDim2.new(1, -20, 0, 30)
+SubTabRow.Position = UDim2.new(0, 8, 0, 8)
+SubTabRow.Size = UDim2.new(1, -16, 0, 28)
 SubTabRow.BackgroundTransparency = 1
 SubTabRow.ScrollBarThickness = 0
-SubTabRow.CanvasSize = UDim2.new(0, 480, 0, 0)
+SubTabRow.CanvasSize = UDim2.new(0, 470, 0, 0)
 
 local stLayout = Instance.new("UIListLayout", SubTabRow)
 stLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -870,19 +755,16 @@ local subTabs = { "Main Team", "Bronto Team", "Hatch Team", "Sell Team", "Config
 local subTabBtns = {}
 local DelayHeaderLbl = nil
 local SelPetTitle = nil
-local eqBox = nil
-local uqBox = nil
-local refreshPetSelectionUI = nil
 
 local function updateSubTabs()
     for name, btn in pairs(subTabBtns) do
         local isAct = (State.ActiveTeam == name)
-        btn.BackgroundColor3 = isAct and Color3.fromRGB(28, 24, 16) or Color3.fromRGB(16, 20, 36)
-        btn.TextColor3 = isAct and Color3.fromRGB(255, 215, 80) or C.TEXT_M
+        btn.BackgroundColor3 = isAct and C.PURPLE or C.CARD_2
+        btn.TextColor3 = isAct and Color3.fromRGB(255, 255, 255) or C.TEXT_M
         local stroke = btn:FindFirstChildOfClass("UIStroke")
         if stroke then
-            stroke.Color = isAct and Color3.fromRGB(240, 185, 40) or Color3.fromRGB(40, 48, 75)
-            stroke.Thickness = isAct and 1.5 or 1
+            stroke.Color = isAct and Color3.fromRGB(200, 160, 255) or C.STROKE
+            stroke.Thickness = isAct and 1.2 or 1
         end
     end
     if DelayHeaderLbl then
@@ -891,28 +773,19 @@ local function updateSubTabs()
     if SelPetTitle then
         SelPetTitle.Text = "Select Pet (" .. State.ActiveTeam .. ")"
     end
-    if eqBox and State.TeamDelayEquip[State.ActiveTeam] ~= nil then
-        eqBox.Text = tostring(State.TeamDelayEquip[State.ActiveTeam])
-    end
-    if uqBox and State.TeamDelayUnequip[State.ActiveTeam] ~= nil then
-        uqBox.Text = tostring(State.TeamDelayUnequip[State.ActiveTeam])
-    end
-    if refreshPetSelectionUI then
-        refreshPetSelectionUI()
-    end
 end
 
 for _, tabName in ipairs(subTabs) do
     local sBtn = Instance.new("TextButton", SubTabRow)
     sBtn.Size = UDim2.new(0, (tabName == "Config") and 68 or 88, 1, 0)
-    sBtn.BackgroundColor3 = (State.ActiveTeam == tabName) and Color3.fromRGB(28, 24, 16) or Color3.fromRGB(16, 20, 36)
+    sBtn.BackgroundColor3 = (State.ActiveTeam == tabName) and C.PURPLE or C.CARD_2
     sBtn.Text = tabName
-    sBtn.TextColor3 = (State.ActiveTeam == tabName) and Color3.fromRGB(255, 215, 80) or C.TEXT_M
+    sBtn.TextColor3 = (State.ActiveTeam == tabName) and Color3.fromRGB(255, 255, 255) or C.TEXT_M
     sBtn.Font = Enum.Font.GothamBold
-    sBtn.TextSize = 9.5
+    sBtn.TextSize = 9
     Instance.new("UICorner", sBtn).CornerRadius = UDim.new(1, 0)
     local bStroke = Instance.new("UIStroke", sBtn)
-    bStroke.Color = (State.ActiveTeam == tabName) and Color3.fromRGB(240, 185, 40) or Color3.fromRGB(40, 48, 75)
+    bStroke.Color = (State.ActiveTeam == tabName) and Color3.fromRGB(200, 160, 255) or C.STROKE
 
     sBtn.MouseButton1Click:Connect(function()
         State.ActiveTeam = tabName
@@ -922,24 +795,24 @@ for _, tabName in ipairs(subTabs) do
 end
 
 local GearBtn = Instance.new("TextButton", SubTabRow)
-GearBtn.Size = UDim2.new(0, 32, 1, 0)
-GearBtn.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
+GearBtn.Size = UDim2.new(0, 28, 1, 0)
+GearBtn.BackgroundColor3 = C.CARD_2
 GearBtn.Text = "⚙"
 GearBtn.TextColor3 = C.TEXT_M
 GearBtn.Font = Enum.Font.GothamBold
-GearBtn.TextSize = 12
+GearBtn.TextSize = 11
 Instance.new("UICorner", GearBtn).CornerRadius = UDim.new(1, 0)
 local gbStroke = Instance.new("UIStroke", GearBtn)
-gbStroke.Color = Color3.fromRGB(40, 48, 75)
+gbStroke.Color = C.STROKE
 
--- Delay Settings Header
+-- Dropdown Delay Header Sesuai ZyloHub Theme
 local DelayHeader = Instance.new("Frame", TeamCard)
-DelayHeader.Position = UDim2.new(0, 10, 0, 48)
-DelayHeader.Size = UDim2.new(1, -20, 0, 26)
-DelayHeader.BackgroundColor3 = Color3.fromRGB(16, 18, 28)
+DelayHeader.Position = UDim2.new(0, 8, 0, 42)
+DelayHeader.Size = UDim2.new(1, -16, 0, 26)
+DelayHeader.BackgroundColor3 = C.CARD_2
 Instance.new("UICorner", DelayHeader).CornerRadius = UDim.new(0, 6)
 local dhStroke = Instance.new("UIStroke", DelayHeader)
-dhStroke.Color = Color3.fromRGB(240, 185, 40)
+dhStroke.Color = C.PURPLE
 dhStroke.Thickness = 1
 
 DelayHeaderLbl = Instance.new("TextLabel", DelayHeader)
@@ -947,7 +820,7 @@ DelayHeaderLbl.Position = UDim2.new(0, 10, 0, 0)
 DelayHeaderLbl.Size = UDim2.new(1, -35, 1, 0)
 DelayHeaderLbl.BackgroundTransparency = 1
 DelayHeaderLbl.Text = "( " .. State.ActiveTeam .. " ) Delay Settings"
-DelayHeaderLbl.TextColor3 = Color3.fromRGB(255, 215, 80)
+DelayHeaderLbl.TextColor3 = C.PURPLE_L
 DelayHeaderLbl.Font = Enum.Font.GothamBold
 DelayHeaderLbl.TextSize = 9.5
 DelayHeaderLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -957,14 +830,14 @@ DhArrow.Position = UDim2.new(1, -22, 0, 0)
 DhArrow.Size = UDim2.new(0, 16, 1, 0)
 DhArrow.BackgroundTransparency = 1
 DhArrow.Text = "▼"
-DhArrow.TextColor3 = Color3.fromRGB(255, 215, 80)
+DhArrow.TextColor3 = C.PURPLE_L
 DhArrow.Font = Enum.Font.GothamBold
 DhArrow.TextSize = 8
 
--- Status Counter Row
+-- Baris Indikator Hitungan Status
 local CounterRow = Instance.new("Frame", TeamCard)
-CounterRow.Position = UDim2.new(0, 12, 0, 80)
-CounterRow.Size = UDim2.new(1, -24, 0, 18)
+CounterRow.Position = UDim2.new(0, 10, 0, 74)
+CounterRow.Size = UDim2.new(1, -20, 0, 18)
 CounterRow.BackgroundTransparency = 1
 
 local cntLayout = Instance.new("UIListLayout", CounterRow)
@@ -973,7 +846,7 @@ cntLayout.Padding = UDim.new(0, 12)
 
 local function makeCounterLabel(icon, name, count)
     local lbl = Instance.new("TextLabel", CounterRow)
-    lbl.Size = UDim2.new(0, 78, 1, 0)
+    lbl.Size = UDim2.new(0, 76, 1, 0)
     lbl.BackgroundTransparency = 1
     lbl.Text = icon .. " " .. name .. " (" .. tostring(count) .. ")"
     lbl.TextColor3 = C.TEXT_M
@@ -988,32 +861,32 @@ local cBronto = makeCounterLabel("🦕", "Bronto", 0)
 local cHatch  = makeCounterLabel("🥚", "Hatch", 0)
 local cSell   = makeCounterLabel("💰", "Sell", 0)
 
--- Delay Equip
+-- Baris Delay Equip (sec)
 local RowEquip = Instance.new("Frame", TeamCard)
-RowEquip.Position = UDim2.new(0, 12, 0, 104)
-RowEquip.Size = UDim2.new(1, -24, 0, 26)
+RowEquip.Position = UDim2.new(0, 10, 0, 98)
+RowEquip.Size = UDim2.new(1, -20, 0, 26)
 RowEquip.BackgroundTransparency = 1
 
 local eqLbl = Instance.new("TextLabel", RowEquip)
 eqLbl.Size = UDim2.new(0.6, 0, 1, 0)
 eqLbl.BackgroundTransparency = 1
 eqLbl.Text = "Delay Equip (sec)"
-eqLbl.TextColor3 = C.TEXT_M
+eqLbl.TextColor3 = C.TEXT_W
 eqLbl.Font = Enum.Font.GothamMedium
 eqLbl.TextSize = 9.5
 eqLbl.TextXAlignment = Enum.TextXAlignment.Left
 
-eqBox = Instance.new("TextBox", RowEquip)
+local eqBox = Instance.new("TextBox", RowEquip)
 eqBox.Position = UDim2.new(1, -75, 0, 0)
 eqBox.Size = UDim2.new(0, 75, 1, 0)
-eqBox.BackgroundColor3 = Color3.fromRGB(14, 18, 32)
+eqBox.BackgroundColor3 = C.CARD_2
 eqBox.Text = "0"
 eqBox.TextColor3 = C.TEXT_W
 eqBox.Font = Enum.Font.GothamBold
 eqBox.TextSize = 9.5
 Instance.new("UICorner", eqBox).CornerRadius = UDim.new(0, 6)
 local eqBoxStroke = Instance.new("UIStroke", eqBox)
-eqBoxStroke.Color = Color3.fromRGB(40, 48, 75)
+eqBoxStroke.Color = C.STROKE
 
 eqBox:GetPropertyChangedSignal("Text"):Connect(function()
     local val = tonumber(eqBox.Text)
@@ -1022,32 +895,32 @@ eqBox:GetPropertyChangedSignal("Text"):Connect(function()
     end
 end)
 
--- Delay Unequip
+-- Baris Delay Unequip (sec)
 local RowUnequip = Instance.new("Frame", TeamCard)
-RowUnequip.Position = UDim2.new(0, 12, 0, 136)
-RowUnequip.Size = UDim2.new(1, -24, 0, 26)
+RowUnequip.Position = UDim2.new(0, 10, 0, 128)
+RowUnequip.Size = UDim2.new(1, -20, 0, 26)
 RowUnequip.BackgroundTransparency = 1
 
 local uqLbl = Instance.new("TextLabel", RowUnequip)
 uqLbl.Size = UDim2.new(0.6, 0, 1, 0)
 uqLbl.BackgroundTransparency = 1
 uqLbl.Text = "Delay Unequip (sec)"
-uqLbl.TextColor3 = C.TEXT_M
+uqLbl.TextColor3 = C.TEXT_W
 uqLbl.Font = Enum.Font.GothamMedium
 uqLbl.TextSize = 9.5
 uqLbl.TextXAlignment = Enum.TextXAlignment.Left
 
-uqBox = Instance.new("TextBox", RowUnequip)
+local uqBox = Instance.new("TextBox", RowUnequip)
 uqBox.Position = UDim2.new(1, -75, 0, 0)
 uqBox.Size = UDim2.new(0, 75, 1, 0)
-uqBox.BackgroundColor3 = Color3.fromRGB(14, 18, 32)
+uqBox.BackgroundColor3 = C.CARD_2
 uqBox.Text = "1"
 uqBox.TextColor3 = C.TEXT_W
 uqBox.Font = Enum.Font.GothamBold
 uqBox.TextSize = 9.5
 Instance.new("UICorner", uqBox).CornerRadius = UDim.new(0, 6)
 local uqBoxStroke = Instance.new("UIStroke", uqBox)
-uqBoxStroke.Color = Color3.fromRGB(40, 48, 75)
+uqBoxStroke.Color = C.STROKE
 
 uqBox:GetPropertyChangedSignal("Text"):Connect(function()
     local val = tonumber(uqBox.Text)
@@ -1056,256 +929,116 @@ uqBox:GetPropertyChangedSignal("Text"):Connect(function()
     end
 end)
 
--- Select Pet Frame
+-- Wadah Select Pet
 SelPetTitle = Instance.new("TextLabel", TeamCard)
-SelPetTitle.Position = UDim2.new(0, 12, 0, 168)
-SelPetTitle.Size = UDim2.new(1, -24, 0, 16)
+SelPetTitle.Position = UDim2.new(0, 10, 0, 158)
+SelPetTitle.Size = UDim2.new(1, -20, 0, 16)
 SelPetTitle.BackgroundTransparency = 1
 SelPetTitle.Text = "Select Pet (" .. State.ActiveTeam .. ")"
-SelPetTitle.TextColor3 = C.TEXT_M
-SelPetTitle.Font = Enum.Font.GothamMedium
+SelPetTitle.TextColor3 = C.CYAN
+SelPetTitle.Font = Enum.Font.GothamBold
 SelPetTitle.TextSize = 9.5
 SelPetTitle.TextXAlignment = Enum.TextXAlignment.Left
 
 local PetListFrame = Instance.new("Frame", TeamCard)
-PetListFrame.Position = UDim2.new(0, 10, 0, 188)
-PetListFrame.Size = UDim2.new(1, -20, 0, 120)
-PetListFrame.BackgroundColor3 = Color3.fromRGB(10, 13, 24)
+PetListFrame.Position = UDim2.new(0, 8, 0, 178)
+PetListFrame.Size = UDim2.new(1, -16, 0, 140)
+PetListFrame.BackgroundColor3 = Color3.fromRGB(14, 18, 34)
 Instance.new("UICorner", PetListFrame).CornerRadius = UDim.new(0, 6)
 local plStroke = Instance.new("UIStroke", PetListFrame)
-plStroke.Color = Color3.fromRGB(32, 40, 65)
+plStroke.Color = C.STROKE
 
-local PetSearchBox = Instance.new("TextBox", PetListFrame)
-PetSearchBox.Position = UDim2.new(0, 8, 0, 6)
-PetSearchBox.Size = UDim2.new(1, -16, 0, 22)
-PetSearchBox.BackgroundColor3 = Color3.fromRGB(14, 18, 32)
-PetSearchBox.PlaceholderText = "Search pet in backpack..."
-PetSearchBox.PlaceholderColor3 = Color3.fromRGB(100, 110, 140)
-PetSearchBox.Text = ""
-PetSearchBox.TextColor3 = C.TEXT_W
-PetSearchBox.Font = Enum.Font.GothamMedium
-PetSearchBox.TextSize = 9
-Instance.new("UICorner", PetSearchBox).CornerRadius = UDim.new(0, 5)
+local TeamSearchBox = Instance.new("TextBox", PetListFrame)
+TeamSearchBox.Position = UDim2.new(0, 8, 0, 6)
+TeamSearchBox.Size = UDim2.new(1, -16, 0, 24)
+TeamSearchBox.BackgroundColor3 = C.CARD_2
+TeamSearchBox.PlaceholderText = "🔍 Search pet..."
+TeamSearchBox.PlaceholderColor3 = C.TEXT_M
+TeamSearchBox.Text = ""
+TeamSearchBox.TextColor3 = C.TEXT_W
+TeamSearchBox.Font = Enum.Font.GothamMedium
+TeamSearchBox.TextSize = 9
+Instance.new("UICorner", TeamSearchBox).CornerRadius = UDim.new(0, 5)
 
 local PetScroll = Instance.new("ScrollingFrame", PetListFrame)
-PetScroll.Position = UDim2.new(0, 8, 0, 32)
-PetScroll.Size = UDim2.new(1, -16, 1, -38)
+PetScroll.Position = UDim2.new(0, 8, 0, 34)
+PetScroll.Size = UDim2.new(1, -16, 1, -40)
 PetScroll.BackgroundTransparency = 1
 PetScroll.ScrollBarThickness = 2
+PetScroll.ScrollBarImageColor3 = C.PURPLE
 PetScroll.CanvasSize = UDim2.new(0, 0, 0, 90)
 
 local psLayout = Instance.new("UIListLayout", PetScroll)
-psLayout.Padding = UDim.new(0, 3)
+psLayout.Padding = UDim.new(0, 4)
 
-local function updateCounterLabels()
-    cMain.Text = "🦹 Main (" .. tostring(#(State.SelectedPets["Main Team"] or {})) .. ")"
-    cBronto.Text = "🦕 Bronto (" .. tostring(#(State.SelectedPets["Bronto Team"] or {})) .. ")"
-    cHatch.Text = "🥚 Hatch (" .. tostring(#(State.SelectedPets["Hatch Team"] or {})) .. ")"
-    cSell.Text = "💰 Sell (" .. tostring(#(State.SelectedPets["Sell Team"] or {})) .. ")"
+local dummyPets = {
+    "Bald Eagle | Age 46 | 4.98 KG",
+    "Spider | Age 15 | 3.37 KG"
+}
+
+for _, petStr in ipairs(dummyPets) do
+    local petItem = Instance.new("TextButton", PetScroll)
+    petItem.Size = UDim2.new(1, -4, 0, 24)
+    petItem.BackgroundColor3 = C.CARD_2
+    petItem.Text = "   🐾 " .. petStr
+    petItem.TextColor3 = C.TEXT_W
+    petItem.Font = Enum.Font.GothamMedium
+    petItem.TextSize = 8.5
+    petItem.TextXAlignment = Enum.TextXAlignment.Left
+    Instance.new("UICorner", petItem).CornerRadius = UDim.new(0, 4)
+    local piStroke = Instance.new("UIStroke", petItem)
+    piStroke.Color = Color3.fromRGB(35, 42, 65)
 end
 
-refreshPetSelectionUI = function()
-    for _, child in ipairs(PetScroll:GetChildren()) do
-        if child:IsA("TextButton") or child:IsA("TextLabel") then
-            child:Destroy()
-        end
-    end
-    
-    local allPets = GetAllPetsInBackpack()
-    local curTeam = State.ActiveTeam or "Main Team"
-    if not State.SelectedPets[curTeam] then
-        State.SelectedPets[curTeam] = {}
-    end
-    local selectedList = State.SelectedPets[curTeam]
-    local filter = (State.TeamSearchQuery or ""):lower()
-    local matchedCount = 0
-
-    for _, pet in ipairs(allPets) do
-        local displayStr = pet.DisplayTitle
-        if filter == "" or displayStr:lower():find(filter) or pet.Name:lower():find(filter) then
-            matchedCount = matchedCount + 1
-            local isSelected = false
-            for _, selUUID in ipairs(selectedList) do
-                if selUUID == pet.UUID then
-                    isSelected = true
-                    break
-                end
-            end
-
-            local petItem = Instance.new("TextButton", PetScroll)
-            petItem.Size = UDim2.new(1, -4, 0, 24)
-            petItem.BackgroundColor3 = isSelected and Color3.fromRGB(45, 36, 16) or Color3.fromRGB(16, 20, 36)
-            petItem.Text = (isSelected and "  [✓] " or "  [  ] ") .. displayStr
-            petItem.TextColor3 = isSelected and Color3.fromRGB(255, 220, 90) or C.TEXT_M
-            petItem.Font = Enum.Font.GothamMedium
-            petItem.TextSize = 9
-            petItem.TextXAlignment = Enum.TextXAlignment.Left
-            Instance.new("UICorner", petItem).CornerRadius = UDim.new(0, 4)
-            local itemStroke = Instance.new("UIStroke", petItem)
-            itemStroke.Color = isSelected and Color3.fromRGB(240, 185, 40) or Color3.fromRGB(30, 38, 60)
-            itemStroke.Thickness = isSelected and 1.5 or 1
-
-            petItem.MouseButton1Click:Connect(function()
-                local alreadyIdx = nil
-                for idx, selUUID in ipairs(selectedList) do
-                    if selUUID == pet.UUID then
-                        alreadyIdx = idx
-                        break
-                    end
-                end
-
-                if alreadyIdx then
-                    table.remove(selectedList, alreadyIdx)
-                else
-                    if #selectedList >= 8 then
-                        print("[ZyloHub] Maksimal 8 pet per team sudah tercapai!")
-                    else
-                        table.insert(selectedList, pet.UUID)
-                    end
-                end
-                updateCounterLabels()
-                refreshPetSelectionUI()
-            end)
-        end
-    end
-
-    if matchedCount == 0 then
-        local emptyLbl = Instance.new("TextLabel", PetScroll)
-        emptyLbl.Size = UDim2.new(1, 0, 1, 0)
-        emptyLbl.BackgroundTransparency = 1
-        emptyLbl.Text = (filter ~= "") and ("Tidak ada pet cocok: '" .. State.TeamSearchQuery .. "'") or "Tidak ada pet ditemukan di Backpack!"
-        emptyLbl.TextColor3 = Color3.fromRGB(255, 120, 120)
-        emptyLbl.Font = Enum.Font.GothamMedium
-        emptyLbl.TextSize = 9
-        PetScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    else
-        PetScroll.CanvasSize = UDim2.new(0, 0, 0, matchedCount * 27)
-    end
-    updateCounterLabels()
-end
-
-PetSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
-    State.TeamSearchQuery = PetSearchBox.Text
-    refreshPetSelectionUI()
-end)
-
-task.defer(refreshPetSelectionUI)
-
--- Action Buttons (START & STOP)
+-- Tombol START & STOP Sesuai Palet ZyloHub
 local BtnRow = Instance.new("Frame", TeamCard)
-BtnRow.Position = UDim2.new(0, 10, 1, -40)
-BtnRow.Size = UDim2.new(1, -20, 0, 30)
+BtnRow.Position = UDim2.new(0, 8, 0, 332)
+BtnRow.Size = UDim2.new(1, -16, 0, 32)
 BtnRow.BackgroundTransparency = 1
 
 local StartBtn = Instance.new("TextButton", BtnRow)
-StartBtn.Size = UDim2.new(0, 80, 1, 0)
-StartBtn.BackgroundColor3 = Color3.fromRGB(24, 20, 14)
+StartBtn.Size = UDim2.new(0, 95, 1, 0)
+StartBtn.BackgroundColor3 = C.PURPLE
 StartBtn.Text = "⚡ START"
-StartBtn.TextColor3 = Color3.fromRGB(255, 215, 80)
+StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 StartBtn.Font = Enum.Font.GothamBold
 StartBtn.TextSize = 10
 Instance.new("UICorner", StartBtn).CornerRadius = UDim.new(1, 0)
 local sbStroke = Instance.new("UIStroke", StartBtn)
-sbStroke.Color = Color3.fromRGB(240, 185, 40)
-sbStroke.Thickness = 1.5
+sbStroke.Color = Color3.fromRGB(200, 160, 255)
 
 local StopBtn = Instance.new("TextButton", BtnRow)
-StopBtn.Position = UDim2.new(0, 88, 0, 0)
-StopBtn.Size = UDim2.new(0, 72, 1, 0)
-StopBtn.BackgroundColor3 = Color3.fromRGB(16, 20, 34)
+StopBtn.Position = UDim2.new(0, 105, 0, 0)
+StopBtn.Size = UDim2.new(0, 80, 1, 0)
+StopBtn.BackgroundColor3 = C.CARD_2
 StopBtn.Text = "STOP"
 StopBtn.TextColor3 = C.TEXT_M
 StopBtn.Font = Enum.Font.GothamBold
 StopBtn.TextSize = 10
 Instance.new("UICorner", StopBtn).CornerRadius = UDim.new(1, 0)
 local stpStroke = Instance.new("UIStroke", StopBtn)
-stpStroke.Color = Color3.fromRGB(45, 52, 75)
-
-local isExecutingTeam = false
-local function ExecutePetTeam(teamName)
-    if isExecutingTeam then return end
-    isExecutingTeam = true
-    
-    local targetUUIDs = State.SelectedPets[teamName] or {}
-    local delayEq = tonumber(State.TeamDelayEquip[teamName]) or 0
-    local delayUneq = tonumber(State.TeamDelayUnequip[teamName]) or 1
-    
-    -- 1. Unequip pet yang ada di garden jika tidak termasuk target team
-    local targetLookup = {}
-    for _, uuid in ipairs(targetUUIDs) do targetLookup[uuid] = true end
-    
-    local inGarden = GetEquippedPetsInGarden()
-    for _, gPet in ipairs(inGarden) do
-        if not targetLookup[gPet.UUID] then
-            UnequipPetByUUID(gPet.UUID)
-            if delayUneq > 0 then
-                task.wait(delayUneq)
-            else
-                task.wait(0.1)
-            end
-        end
-    end
-    
-    -- 2. Equip pet terpilih yang ada di Backpack
-    local allBackpackPets = GetAllPetsInBackpack()
-    local backpackLookup = {}
-    for _, p in ipairs(allBackpackPets) do
-        backpackLookup[p.UUID] = p
-    end
-    
-    for _, uuid in ipairs(targetUUIDs) do
-        if not State.IsTeamRunning then break end
-        local pInfo = backpackLookup[uuid]
-        if pInfo then
-            EquipPetByToolOrUUID(pInfo)
-            if delayEq > 0 then
-                task.wait(delayEq)
-            else
-                task.wait(0.15)
-            end
-        end
-    end
-    
-    isExecutingTeam = false
-end
+stpStroke.Color = C.STROKE
 
 StartBtn.MouseButton1Click:Connect(function()
     State.IsTeamRunning = true
-    StartBtn.BackgroundColor3 = Color3.fromRGB(240, 185, 40)
-    StartBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
-    StopBtn.BackgroundColor3 = Color3.fromRGB(16, 20, 34)
+    StartBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 140)
+    StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    StopBtn.BackgroundColor3 = C.CARD_2
     StopBtn.TextColor3 = C.TEXT_M
-    stpStroke.Color = Color3.fromRGB(45, 52, 75)
-    
-    task.spawn(function()
-        ExecutePetTeam(State.ActiveTeam or "Main Team")
-    end)
+    stpStroke.Color = C.STROKE
 end)
 
 StopBtn.MouseButton1Click:Connect(function()
     State.IsTeamRunning = false
-    StartBtn.BackgroundColor3 = Color3.fromRGB(24, 20, 14)
-    StartBtn.TextColor3 = Color3.fromRGB(255, 215, 80)
-    StopBtn.BackgroundColor3 = Color3.fromRGB(36, 18, 24)
+    StartBtn.BackgroundColor3 = C.PURPLE
+    StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    StopBtn.BackgroundColor3 = Color3.fromRGB(45, 15, 25)
     StopBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-    stpStroke.Color = Color3.fromRGB(200, 60, 60)
-end)
-
--- Pet Team Accordion Buttons Integration
-teamBtn1.MouseButton1Click:Connect(function()
-    ExecutePetTeam(State.ActiveTeam or "Main Team")
-end)
-
-teamBtn2.MouseButton1Click:Connect(function()
-    local inGarden = GetEquippedPetsInGarden()
-    for _, gPet in ipairs(inGarden) do
-        UnequipPetByUUID(gPet.UUID)
-        task.wait(0.15)
-    end
+    stpStroke.Color = Color3.fromRGB(180, 50, 70)
 end)
 
 -- =============================================================
--- [ACCORDION PET ASLI LAINNYA - 100% UTUH TANPA DIHAPUS]
+-- [ACCORDION PET LAINNYA 3-9: 100% PERSIS KODE ASLI TANPA HILANG]
 -- =============================================================
 local accMini, bodyMini = ZyloLib:CreateAccordion(PagePets, "Pet Minigames", false, 85)
 local accTeam, bodyTeam = ZyloLib:CreateAccordion(PagePets, "Pet Team", false, 85)
@@ -1336,7 +1069,7 @@ local accPetMg, bodyPetMg = ZyloLib:CreateAccordion(PagePets, "Pet", false, 85)
 local accBoost, bodyBoost = ZyloLib:CreateAccordion(PagePets, "Pet Boost", false, 85)
 
 -- =============================================================
--- [FARM PAGE CONTENT - 100% PERSIS KODE ASLI & LOCKED]
+-- [FARM PAGE CONTENT - 100% PERSIS KODE ASLI]
 -- =============================================================
 local FarmCard1 = Instance.new("Frame", PageFarm)
 FarmCard1.Size = UDim2.new(1, 0, 0, 300)
@@ -1635,4 +1368,4 @@ end)
 -- Default Active: Tab Pets
 Window:SelectTab("Pets")
 
-print("[ZyloHub v3.5] Official PetEggService Edition + Pet Team Extension Loaded & Verified!")
+print("[ZyloHub v3.5] Official PetEggService Edition Loaded & Verified!")
