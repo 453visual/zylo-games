@@ -478,10 +478,10 @@ end)
 local Window = ZyloLib:CreateWindow()
 local Main = Window.Main
 
--- 9 Tabs Resmi ZyloHub (Canvas PagePets 1100 agar muat semua accordion + panel tim)
+-- 9 Tabs Resmi ZyloHub (Canvas PagePets 1200 agar leluasa di-scroll)
 local PageHome      = Window:CreateTab("Home", "🏠", 1)
 local PageFarm      = Window:CreateTab("Farm", "🍃", 2, 480)
-local PagePets      = Window:CreateTab("Pets", "🐾", 3, 1100)
+local PagePets      = Window:CreateTab("Pets", "🐾", 3, 1200)
 local PageUtility   = Window:CreateTab("Utility", "🔧", 4, 240)
 local PageShop      = Window:CreateTab("Shop", "🛒", 5)
 local PageConfig    = Window:CreateTab("Config", "⚙️", 6)
@@ -724,10 +724,9 @@ end)
 
 -- =============================================================
 -- [ACCORDION 2: AUTO HATCH DENGAN INTEGRASI PET TEAM MANAGER]
--- Bisa di-hide dan tampilkan lewat panah accordion Auto Hatch
--- Tema warna diselaraskan 100% dengan ZyloHub (Obsidian & Cosmic Purple)
+-- Tinggi accordion disesuaikan menjadi 475 agar tombol START & STOP lega
 -- =============================================================
-local accHatch, bodyHatch = ZyloLib:CreateAccordion(PagePets, "Auto Hatch", false, 410)
+local accHatch, bodyHatch = ZyloLib:CreateAccordion(PagePets, "Auto Hatch", false, 475)
 
 -- Baris Auto Hatch Switch Asli
 local ahRow = Instance.new("Frame", bodyHatch)
@@ -747,11 +746,11 @@ ahLbl.TextXAlignment = Enum.TextXAlignment.Left
 local ahSw = ZyloLib:CreatePillSwitch(ahRow, State.AutoHatch, function(v) State.AutoHatch = v end)
 ahSw.Position = UDim2.new(1, -40, 0.5, -10)
 
--- Container Pet Team Manager (DI DALAM BODY HATCH DENGAN TEMA ZYLOHUB)
+-- Container Pet Team Manager (Tinggi 420px memberikan ruang lega ke tombol action)
 local TeamCard = Instance.new("Frame", bodyHatch)
 TeamCard.Name = "PetTeamManagerCard"
 TeamCard.Position = UDim2.new(0, 12, 0, 44)
-TeamCard.Size = UDim2.new(1, -24, 0, 355)
+TeamCard.Size = UDim2.new(1, -24, 0, 420)
 TeamCard.BackgroundColor3 = Color3.fromRGB(10, 13, 24)
 Instance.new("UICorner", TeamCard).CornerRadius = UDim.new(0, 8)
 local tcStroke = Instance.new("UIStroke", TeamCard)
@@ -961,7 +960,7 @@ SelPetTitle.TextXAlignment = Enum.TextXAlignment.Left
 
 local PetListFrame = Instance.new("Frame", TeamCard)
 PetListFrame.Position = UDim2.new(0, 8, 0, 178)
-PetListFrame.Size = UDim2.new(1, -16, 0, 125)
+PetListFrame.Size = UDim2.new(1, -16, 0, 140)
 PetListFrame.BackgroundColor3 = Color3.fromRGB(14, 18, 34)
 Instance.new("UICorner", PetListFrame).CornerRadius = UDim.new(0, 6)
 local plStroke = Instance.new("UIStroke", PetListFrame)
@@ -1009,31 +1008,31 @@ for _, petStr in ipairs(dummyPets) do
     piStroke.Color = Color3.fromRGB(35, 42, 65)
 end
 
--- Tombol START & STOP Sesuai Palet ZyloHub
+-- Tombol START & STOP Sesuai Palet ZyloHub (Diberi posisi jelas di y = 330px)
 local BtnRow = Instance.new("Frame", TeamCard)
-BtnRow.Position = UDim2.new(0, 8, 1, -38)
-BtnRow.Size = UDim2.new(1, -16, 0, 28)
+BtnRow.Position = UDim2.new(0, 8, 0, 332)
+BtnRow.Size = UDim2.new(1, -16, 0, 32)
 BtnRow.BackgroundTransparency = 1
 
 local StartBtn = Instance.new("TextButton", BtnRow)
-StartBtn.Size = UDim2.new(0, 88, 1, 0)
+StartBtn.Size = UDim2.new(0, 95, 1, 0)
 StartBtn.BackgroundColor3 = C.PURPLE
 StartBtn.Text = "⚡ START"
 StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 StartBtn.Font = Enum.Font.GothamBold
-StartBtn.TextSize = 9.5
+StartBtn.TextSize = 10
 Instance.new("UICorner", StartBtn).CornerRadius = UDim.new(1, 0)
 local sbStroke = Instance.new("UIStroke", StartBtn)
 sbStroke.Color = Color3.fromRGB(200, 160, 255)
 
 local StopBtn = Instance.new("TextButton", BtnRow)
-StopBtn.Position = UDim2.new(0, 96, 0, 0)
-StopBtn.Size = UDim2.new(0, 75, 1, 0)
+StopBtn.Position = UDim2.new(0, 105, 0, 0)
+StopBtn.Size = UDim2.new(0, 80, 1, 0)
 StopBtn.BackgroundColor3 = C.CARD_2
 StopBtn.Text = "STOP"
 StopBtn.TextColor3 = C.TEXT_M
 StopBtn.Font = Enum.Font.GothamBold
-StopBtn.TextSize = 9.5
+StopBtn.TextSize = 10
 Instance.new("UICorner", StopBtn).CornerRadius = UDim.new(1, 0)
 local stpStroke = Instance.new("UIStroke", StopBtn)
 stpStroke.Color = C.STROKE
