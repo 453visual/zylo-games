@@ -615,12 +615,30 @@ local function GetEquippedPetsInGarden()
     return equipped
 end
 
--- [FIX POIN 3] Ambil Semua Pet Tanpa Hilang Saat Aktif di Kebun
+-- [FIX POIN 3 & POIN 1 TERBARU] Ambil Semua Pet Beserta Nama Asli / Jenis (Mimic, Bald, dll) + Nickname
 local function GetAllPetsList()
     local pets = {}
     local seenUUIDs = {}
     local equippedMap = GetEquippedPetUUIDsMap()
     
+    -- Lookup Tool di Backpack & Character untuk mengenali jenis / varian lengkap dari Tool (misal: Venom Mimic Octopus)
+    local toolLookup = {}
+    local function registerTools(container)
+        if not container then return end
+        for _, item in ipairs(container:GetChildren()) do
+            if item:IsA("Tool") then
+                local u = item:GetAttribute("PET_UUID") or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value)
+                if u then
+                    local sU = tostring(u)
+                    toolLookup[sU] = item
+                    toolLookup[sU:gsub("[{}]", "")] = item
+                end
+            end
+        end
+    end
+    registerTools(LocalPlayer:FindFirstChild("Backpack"))
+    registerTools(LocalPlayer.Character)
+
     -- 1. Baca Database Permanen Game (DataService): Pet tetap ada di sini walau sedang ditaruh di kebun!
     if DataService then
         local ok, data = pcall(function() return DataService:GetData() end)
@@ -634,7 +652,7 @@ local function GetAllPetsList()
                 local isInGarden = (equippedMap[cleanUUID] == true) or (equippedMap[strippedUUID] == true)
                 local isFav = (petData.IsFavorite == true)
                 
-                local nameOnly = (petData.Name and petData.Name ~= "") and petData.Name or petType
+                local customNickname = (petData.Name and petData.Name ~= "") and petData.Name or nil
                 local level = petData.Level or 1
                 local weight = "?"
                 if PetUtilities and PetUtilities.CalculateWeight and petData.BaseWeight then
@@ -643,29 +661,47 @@ local function GetAllPetsList()
                 elseif petData.BaseWeight then
                     weight = tostring(petData.BaseWeight)
                 end
+
+                -- [PERBAIKAN PRESISI]: Tampilkan Nama Jenis Pet (Mimic Octopus, Bald Eagle, dll) + Nickname
+                local toolObj = toolLookup[cleanUUID] or toolLookup[strippedUUID]
+                local speciesName = petType
+                if toolObj then
+                    local cleanToolName = toolObj.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
+                    if cleanToolName ~= "" and not cleanToolName:lower():find("tool") then
+                        speciesName = cleanToolName
+                    end
+                elseif petData.Mutation and petData.Mutation ~= "" then
+                    speciesName = tostring(petData.Mutation) .. " " .. petType
+                end
+
+                local fullDisplayName = speciesName
+                if customNickname and customNickname:lower() ~= speciesName:lower() then
+                    fullDisplayName = string.format("%s (%s)", speciesName, customNickname)
+                end
                 
-                local fullName = string.format("%s [%s KG] [Age %s]", nameOnly, tostring(weight), tostring(level))
-                local displayTitle = string.format("%s | Age %s | %s KG", nameOnly, tostring(level), tostring(weight))
+                local displayTitle = string.format("%s | Age %s | %s KG", fullDisplayName, tostring(level), tostring(weight))
                 
                 seenUUIDs[cleanUUID] = true
                 seenUUIDs[strippedUUID] = true
                 
                 table.insert(pets, {
                     UUID = cleanUUID,
-                    FullName = fullName,
-                    Name = nameOnly,
+                    FullName = displayTitle,
+                    Name = fullDisplayName,
+                    Species = speciesName,
+                    Nickname = customNickname or "",
                     Weight = weight,
                     Age = level,
                     DisplayTitle = displayTitle,
                     InGarden = isInGarden,
                     IsFavorite = isFav,
-                    Tool = nil
+                    Tool = toolObj
                 })
             end
         end
     end
 
-    -- 2. Scan Backpack & Character untuk menghubungkan Tool Instance
+    -- 2. Scan Backpack & Character untuk pet yang mungkin belum masuk cache
     local function scanTools(container)
         if not container then return end
         for _, item in ipairs(container:GetChildren()) do
@@ -692,20 +728,23 @@ local function GetAllPetsList()
                         seenUUIDs[cleanUUID] = true
                         seenUUIDs[strippedUUID] = true
                         
-                        local nameOnly = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
+                        local cleanSpecies = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
                         local weight = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "?"
                         local age = item.Name:match("%[Age%s*(%d+)%]") or item.Name:match("Age%s*(%d+)") or "?"
                         local isFav = IsPetFavorited(cleanUUID, item)
                         local isInGarden = (equippedMap[cleanUUID] == true) or (equippedMap[strippedUUID] == true)
-                        
+                        local displayTitle = string.format("%s | Age %s | %s KG", cleanSpecies, tostring(age), tostring(weight))
+
                         table.insert(pets, {
                             Tool = item,
                             UUID = cleanUUID,
                             FullName = item.Name,
-                            Name = nameOnly,
+                            Name = cleanSpecies,
+                            Species = cleanSpecies,
+                            Nickname = "",
                             Weight = weight,
                             Age = age,
-                            DisplayTitle = nameOnly .. " | Age " .. tostring(age) .. " | " .. tostring(weight) .. " KG",
+                            DisplayTitle = displayTitle,
                             InGarden = isInGarden,
                             IsFavorite = isFav
                         })
@@ -1273,7 +1312,7 @@ local PetSearchBox = Instance.new("TextBox", PetListFrame)
 PetSearchBox.Position = UDim2.new(0, 8, 0, 6)
 PetSearchBox.Size = UDim2.new(1, -16, 0, 22)
 PetSearchBox.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
-PetSearchBox.PlaceholderText = "Search favorited pet..."
+PetSearchBox.PlaceholderText = "Search by species (mimic, bald) or name..."
 PetSearchBox.PlaceholderColor3 = Color3.fromRGB(110, 120, 150)
 PetSearchBox.Text = ""
 PetSearchBox.TextColor3 = C.TEXT_W
@@ -1320,7 +1359,7 @@ refreshPetSelectionUI = function()
         selectedMap[selUUID:gsub("[{}]", "")] = true
     end
 
-    -- [FIX POIN 2] Filter Ketat: HANYA pet yang berstatus FAVORITE yang dimasukkan & dapat dipilih!
+    -- [FIX POIN 2 & POIN 1] Filter Ketat: HANYA pet yang berstatus FAVORITE yang dimasukkan & dapat dipilih!
     local filteredPets = {}
     for _, pet in ipairs(allPets) do
         local isFav = (pet.IsFavorite == true)
@@ -1329,7 +1368,13 @@ refreshPetSelectionUI = function()
         -- Pet hanya ditampilkan jika benar-benar berstatus IsFavorite
         if isFav or isCurrentlySelected then
             local displayStr = pet.DisplayTitle
-            if filter == "" or displayStr:lower():find(filter) or pet.Name:lower():find(filter) then
+            local matchesQuery = (filter == "") 
+                or displayStr:lower():find(filter) 
+                or (pet.Name and pet.Name:lower():find(filter)) 
+                or (pet.Species and pet.Species:lower():find(filter)) 
+                or (pet.Nickname and pet.Nickname:lower():find(filter))
+
+            if matchesQuery then
                 table.insert(filteredPets, pet)
             end
         end
