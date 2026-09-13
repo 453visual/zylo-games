@@ -25,6 +25,22 @@ local PetEggService = GameEvents and GameEvents:WaitForChild("PetEggService", 5)
 local PetsServiceRemote = GameEvents and GameEvents:WaitForChild("PetsService", 5)
 local Farms = workspace:WaitForChild("Farm", 10)
 
+-- Modul Data Resmi Game (Sesuai Decompile PetEquipSlotsUIController & PetToolLocal)
+local DataService = nil
+pcall(function()
+    DataService = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("DataService", 5))
+end)
+
+local PetsServiceMod = nil
+pcall(function()
+    PetsServiceMod = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("PetServices", 5):WaitForChild("PetsService", 5))
+end)
+
+local PetUtilities = nil
+pcall(function()
+    PetUtilities = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("PetServices", 5):WaitForChild("PetUtilities", 5))
+end)
+
 local State = {
     -- [LOCKED] Auto Farm & Egg States
     AutoPlant = false,
@@ -482,47 +498,95 @@ LocalPlayer.Idled:Connect(function()
     end
 end)
 
--- =============================================================
--- [*] REAL PET SCANNER & TEAM ENGINE (FROM DECOMPILED PETSSERVICE)
--- =============================================================
+-- =========================================================================
+-- [*] SINKRONISASI RESMI PET (FIX POIN 2: FAVORITE & POIN 3: PERSISTENT UI)
+-- =========================================================================
 local function GetFarmPetArea()
     local farm = GetFarm()
     if not farm then return nil end
     return farm:FindFirstChild("PetArea")
 end
 
-local function IsPetFavorited(item)
-    if not item then return false end
-    -- Check common attributes and child values for favorite in Roblox
-    local isFavAttr = item:GetAttribute("IsFavorite") or item:GetAttribute("Favorite") or item:GetAttribute("FAVORITE") or item:GetAttribute("IsFav") or item:GetAttribute("Fav")
-    if isFavAttr == true or isFavAttr == 1 or isFavAttr == "true" then
-        return true
+-- [FIX POIN 2] Pengecekan Favorite 100% Menggunakan Database Game (PetData.IsFavorite)
+local function IsPetFavorited(uuid, item)
+    if not uuid and item then
+        uuid = item:GetAttribute("PET_UUID") or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value)
     end
-    local favVal = item:FindFirstChild("IsFavorite") or item:FindFirstChild("Favorite") or item:FindFirstChild("FAVORITE") or item:FindFirstChild("Fav")
-    if favVal and (favVal.Value == true or favVal.Value == 1) then
-        return true
-    end
-    -- Check PetData folder if present
-    local petData = item:FindFirstChild("PetData")
-    if petData then
-        local pFav = petData:FindFirstChild("IsFavorite") or petData:FindFirstChild("Favorite") or petData:FindFirstChild("Fav")
-        if pFav and (pFav.Value == true or pFav.Value == 1) then
-            return true
+    
+    -- 1. Deteksi Utama: DataService Game Resmi
+    if DataService and uuid then
+        local ok, data = pcall(function() return DataService:GetData() end)
+        if ok and data and data.PetsData and data.PetsData.PetInventory and data.PetsData.PetInventory.Data then
+            local entry = data.PetsData.PetInventory.Data[uuid]
+            if entry and entry.PetData and entry.PetData.IsFavorite ~= nil then
+                return entry.PetData.IsFavorite == true
+            end
         end
     end
-    -- Check visual heart/favorite indicator inside tool
-    if item:FindFirstChild("FavoriteIcon") or item:FindFirstChild("FavIcon") or item:FindFirstChild("FavoriteGui") then
-        return true
+
+    -- 2. Deteksi Alternatif: PetsService Game Resmi
+    if PetsServiceMod and PetsServiceMod.GetPlayerPetData and uuid then
+        local ok, info = pcall(function() return PetsServiceMod:GetPlayerPetData(uuid) end)
+        if ok and info and info.PetData and info.PetData.IsFavorite ~= nil then
+            return info.PetData.IsFavorite == true
+        end
+    end
+
+    -- 3. Fallback jika membaca dari Tool langsung
+    if item then
+        local isFavAttr = item:GetAttribute("IsFavorite") or item:GetAttribute("Favorite") or item:GetAttribute("FAVORITE") or item:GetAttribute("IsFav")
+        if isFavAttr == true or isFavAttr == 1 or isFavAttr == "true" then return true end
+        local favVal = item:FindFirstChild("IsFavorite") or item:FindFirstChild("Favorite") or item:FindFirstChild("Fav")
+        if favVal and (favVal.Value == true or favVal.Value == 1) then return true end
+        local petData = item:FindFirstChild("PetData")
+        if petData then
+            local pFav = petData:FindFirstChild("IsFavorite") or petData:FindFirstChild("Favorite") or petData:FindFirstChild("Fav")
+            if pFav and (pFav.Value == true or pFav.Value == 1) then return true end
+        end
     end
     return false
+end
+
+-- Mendapatkan UUID Pet yang sedang aktif di kebun
+local function GetEquippedPetUUIDsMap()
+    local map = {}
+    -- Cek dari DataService resmi
+    if DataService then
+        local ok, data = pcall(function() return DataService:GetData() end)
+        if ok and data and data.PetsData and data.PetsData.EquippedPets then
+            for _, u in ipairs(data.PetsData.EquippedPets) do
+                map[tostring(u)] = true
+                map[tostring(u):gsub("[{}]", "")] = true
+            end
+        end
+    end
+
+    -- Cek dari workspace.PetsPhysical (Model Mover di kebun)
+    local petsPhys = workspace:FindFirstChild("PetsPhysical")
+    if petsPhys then
+        for _, mover in ipairs(petsPhys:GetChildren()) do
+            local mUuid = mover:GetAttribute("PET_UUID") or mover:GetAttribute("UUID")
+            if not mUuid then
+                for _, ch in ipairs(mover:GetChildren()) do
+                    local raw = ch.Name:gsub("[{}]", "")
+                    if #raw > 20 and raw:find("-") then mUuid = ch.Name break end
+                end
+            end
+            if mUuid then
+                map[tostring(mUuid)] = true
+                map[tostring(mUuid):gsub("[{}]", "")] = true
+            end
+        end
+    end
+    return map
 end
 
 local function GetEquippedPetsInGarden()
     local equipped = {}
     local farm = GetFarm()
+    local eqMap = GetEquippedPetUUIDsMap()
     if not farm then return equipped end
     
-    -- Cek PetArea atau Important.Objects_Physical
     local containers = { farm:FindFirstChild("PetArea"), farm:FindFirstChild("Important") and farm.Important:FindFirstChild("Objects_Physical") }
     for _, cont in ipairs(containers) do
         if cont then
@@ -535,14 +599,14 @@ local function GetEquippedPetsInGarden()
                     local age = obj.Name:match("%[Age%s*(%d+)%]") or obj.Name:match("Age%s*(%d+)") or "?"
                     table.insert(equipped, {
                         Model = obj,
-                        UUID = uuid,
+                        UUID = tostring(uuid),
                         FullName = obj.Name,
                         Name = nameOnly,
                         Weight = weight,
                         Age = age,
                         DisplayTitle = nameOnly .. " | Age " .. tostring(age) .. " | " .. tostring(weight) .. " KG",
                         InGarden = true,
-                        IsFavorite = IsPetFavorited(obj)
+                        IsFavorite = IsPetFavorited(uuid, obj)
                     })
                 end
             end
@@ -551,11 +615,58 @@ local function GetEquippedPetsInGarden()
     return equipped
 end
 
-local function GetAllPetsInBackpack(includeGarden)
+-- [FIX POIN 3] Ambil Semua Pet Tanpa Hilang Saat Aktif di Kebun
+local function GetAllPetsList()
     local pets = {}
     local seenUUIDs = {}
+    local equippedMap = GetEquippedPetUUIDsMap()
+    
+    -- 1. Baca Database Permanen Game (DataService): Pet tetap ada di sini walau sedang ditaruh di kebun!
+    if DataService then
+        local ok, data = pcall(function() return DataService:GetData() end)
+        if ok and data and data.PetsData and data.PetsData.PetInventory and data.PetsData.PetInventory.Data then
+            for uuid, entry in pairs(data.PetsData.PetInventory.Data) do
+                local petData = entry.PetData or {}
+                local petType = entry.PetType or "Pet"
+                local cleanUUID = tostring(uuid)
+                local strippedUUID = cleanUUID:gsub("[{}]", "")
+                
+                local isInGarden = (equippedMap[cleanUUID] == true) or (equippedMap[strippedUUID] == true)
+                local isFav = (petData.IsFavorite == true)
+                
+                local nameOnly = (petData.Name and petData.Name ~= "") and petData.Name or petType
+                local level = petData.Level or 1
+                local weight = "?"
+                if PetUtilities and PetUtilities.CalculateWeight and petData.BaseWeight then
+                    local calcW = PetUtilities:CalculateWeight(petData.BaseWeight, level) * 100
+                    weight = string.format("%.2f", math.round(calcW) / 100)
+                elseif petData.BaseWeight then
+                    weight = tostring(petData.BaseWeight)
+                end
+                
+                local fullName = string.format("%s [%s KG] [Age %s]", nameOnly, tostring(weight), tostring(level))
+                local displayTitle = string.format("%s | Age %s | %s KG", nameOnly, tostring(level), tostring(weight))
+                
+                seenUUIDs[cleanUUID] = true
+                seenUUIDs[strippedUUID] = true
+                
+                table.insert(pets, {
+                    UUID = cleanUUID,
+                    FullName = fullName,
+                    Name = nameOnly,
+                    Weight = weight,
+                    Age = level,
+                    DisplayTitle = displayTitle,
+                    InGarden = isInGarden,
+                    IsFavorite = isFav,
+                    Tool = nil
+                })
+            end
+        end
+    end
 
-    local function scan(container)
+    -- 2. Scan Backpack & Character untuk menghubungkan Tool Instance
+    local function scanTools(container)
         if not container then return end
         for _, item in ipairs(container:GetChildren()) do
             if item:IsA("Tool") then
@@ -564,22 +675,38 @@ local function GetAllPetsInBackpack(includeGarden)
                 local hasPetData = item:FindFirstChild("PetData")
                 if uuid or hasPetTool or hasPetData then
                     local petUUID = uuid or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value) or item.Name
-                    local nameOnly = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
-                    local weight = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "?"
-                    local age = item.Name:match("%[Age%s*(%d+)%]") or item.Name:match("Age%s*(%d+)") or "?"
-                    local isFav = IsPetFavorited(item)
+                    local cleanUUID = tostring(petUUID)
+                    local strippedUUID = cleanUUID:gsub("[{}]", "")
                     
-                    if not seenUUIDs[petUUID] then
-                        seenUUIDs[petUUID] = true
+                    local existing = nil
+                    for _, p in ipairs(pets) do
+                        if p.UUID == cleanUUID or p.UUID == strippedUUID then
+                            existing = p
+                            break
+                        end
+                    end
+
+                    if existing then
+                        existing.Tool = item
+                    elseif not seenUUIDs[cleanUUID] and not seenUUIDs[strippedUUID] then
+                        seenUUIDs[cleanUUID] = true
+                        seenUUIDs[strippedUUID] = true
+                        
+                        local nameOnly = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
+                        local weight = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "?"
+                        local age = item.Name:match("%[Age%s*(%d+)%]") or item.Name:match("Age%s*(%d+)") or "?"
+                        local isFav = IsPetFavorited(cleanUUID, item)
+                        local isInGarden = (equippedMap[cleanUUID] == true) or (equippedMap[strippedUUID] == true)
+                        
                         table.insert(pets, {
                             Tool = item,
-                            UUID = petUUID,
+                            UUID = cleanUUID,
                             FullName = item.Name,
                             Name = nameOnly,
                             Weight = weight,
                             Age = age,
                             DisplayTitle = nameOnly .. " | Age " .. tostring(age) .. " | " .. tostring(weight) .. " KG",
-                            InGarden = false,
+                            InGarden = isInGarden,
                             IsFavorite = isFav
                         })
                     end
@@ -587,25 +714,26 @@ local function GetAllPetsInBackpack(includeGarden)
             end
         end
     end
-    scan(LocalPlayer:FindFirstChild("Backpack"))
-    scan(LocalPlayer.Character)
+    scanTools(LocalPlayer:FindFirstChild("Backpack"))
+    scanTools(LocalPlayer.Character)
 
-    -- Permintaan 3: Sertakan pet yang sedang aktif di kebun jika includeGarden == true
-    if includeGarden then
-        local gardenPets = GetEquippedPetsInGarden()
-        for _, gPet in ipairs(gardenPets) do
-            if not seenUUIDs[gPet.UUID] then
-                seenUUIDs[gPet.UUID] = true
-                table.insert(pets, gPet)
-            else
-                -- Update flag jika sudah ada di list
-                for _, p in ipairs(pets) do
-                    if p.UUID == gPet.UUID then
-                        p.InGarden = true
-                        break
-                    end
-                end
+    -- 3. Hubungkan pet yang ada di garden
+    local gardenEquipped = GetEquippedPetsInGarden()
+    for _, gPet in ipairs(gardenEquipped) do
+        local cleanUUID = tostring(gPet.UUID)
+        local strippedUUID = cleanUUID:gsub("[{}]", "")
+        local found = false
+        for _, p in ipairs(pets) do
+            if p.UUID == cleanUUID or p.UUID == strippedUUID then
+                p.InGarden = true
+                found = true
+                break
             end
+        end
+        if not found and not seenUUIDs[cleanUUID] and not seenUUIDs[strippedUUID] then
+            seenUUIDs[cleanUUID] = true
+            seenUUIDs[strippedUUID] = true
+            table.insert(pets, gPet)
         end
     end
 
@@ -613,22 +741,25 @@ local function GetAllPetsInBackpack(includeGarden)
 end
 
 local function UnequipPetByUUID(uuid)
-    if PetsServiceRemote and uuid then
-        pcall(function()
-            PetsServiceRemote:FireServer("UnequipPet", uuid)
-        end)
+    if not uuid then return end
+    if PetsServiceMod and PetsServiceMod.UnequipPet then
+        pcall(function() PetsServiceMod:UnequipPet(uuid) end)
+    end
+    if PetsServiceRemote then
+        pcall(function() PetsServiceRemote:FireServer("UnequipPet", uuid) end)
     end
 end
 
 local function EquipPetByToolOrUUID(petInfo, targetCF)
     if not petInfo then return end
     local petArea = GetFarmPetArea()
-    local targetPos = targetCF or (petArea and petArea.CFrame) or (LocalPlayer.Character and LocalPlayer.Character:GetPivot()) or CFrame.new(0, 5, 0)
+    local targetPos = targetCF or (petArea and petArea.CFrame + Vector3.new(0, 2, 0)) or (LocalPlayer.Character and LocalPlayer.Character:GetPivot()) or CFrame.new(0, 5, 0)
     
+    if PetsServiceMod and PetsServiceMod.EquipPet and petInfo.UUID then
+        pcall(function() PetsServiceMod:EquipPet(petInfo.UUID, targetPos) end)
+    end
     if PetsServiceRemote and petInfo.UUID then
-        pcall(function()
-            PetsServiceRemote:FireServer("EquipPet", petInfo.UUID, targetPos)
-        end)
+        pcall(function() PetsServiceRemote:FireServer("EquipPet", petInfo.UUID, targetPos) end)
     end
     if petInfo.Tool and petInfo.Tool.Parent == LocalPlayer:FindFirstChild("Backpack") then
         EquipCheck(petInfo.Tool)
@@ -641,7 +772,7 @@ end
 local Window = ZyloLib:CreateWindow()
 local Main = Window.Main
 
--- 9 Tabs Resmi ZyloHub (Canvas PagePets ditingkatkan agar muat mulus)
+-- 9 Tabs Resmi ZyloHub
 local PageHome      = Window:CreateTab("Home", "🏠", 1)
 local PageFarm      = Window:CreateTab("Farm", "🍃", 2, 480)
 local PagePets      = Window:CreateTab("Pets", "🐾", 3, 1100)
@@ -906,8 +1037,6 @@ ahSw.Position = UDim2.new(1, -40, 0.5, -10)
 
 -- =============================================================
 -- [NEW FEATURE UI: PET TEAM MANAGER SESUAI GAMBAR REFERENSI]
--- Terintegrasi di dalam Accordion Auto Hatch (Collapsible / Hide & Show)
--- Tema Warna: Diadaptasi 100% Selaras Tema ZyloHub (Obsidian Black & Cosmic Purple)
 -- =============================================================
 local TeamCard = Instance.new("Frame", bodyHatch)
 TeamCard.Name = "PetTeamManagerCard"
@@ -1144,7 +1273,7 @@ local PetSearchBox = Instance.new("TextBox", PetListFrame)
 PetSearchBox.Position = UDim2.new(0, 8, 0, 6)
 PetSearchBox.Size = UDim2.new(1, -16, 0, 22)
 PetSearchBox.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
-PetSearchBox.PlaceholderText = "Search pet in backpack..."
+PetSearchBox.PlaceholderText = "Search favorited pet..."
 PetSearchBox.PlaceholderColor3 = Color3.fromRGB(110, 120, 150)
 PetSearchBox.Text = ""
 PetSearchBox.TextColor3 = C.TEXT_W
@@ -1176,8 +1305,8 @@ refreshPetSelectionUI = function()
         end
     end
     
-    -- Permintaan 3: Ambil pet dari backpack + pet yang sedang aktif di kebun
-    local allPets = GetAllPetsInBackpack(true)
+    -- [FIX POIN 3] Ambil semua pet dari database permanen agar tidak hilang saat ditaruh di kebun
+    local allPets = GetAllPetsList()
     local curTeam = State.ActiveTeam or "Main Team"
     if not State.SelectedPets[curTeam] then
         State.SelectedPets[curTeam] = {}
@@ -1185,32 +1314,20 @@ refreshPetSelectionUI = function()
     local selectedList = State.SelectedPets[curTeam]
     local filter = (State.TeamSearchQuery or ""):lower()
 
-    -- Map pencarian cepat UUID terpilih
     local selectedMap = {}
     for _, selUUID in ipairs(selectedList) do
         selectedMap[selUUID] = true
+        selectedMap[selUUID:gsub("[{}]", "")] = true
     end
 
-    -- Permintaan 2: Filter hanya pet yang sudah difavoritkan (IsFavorite)
-    -- Jika user sedang memilih pet atau pet sudah masuk team, tetap ditampilkan
+    -- [FIX POIN 2] Filter Ketat: HANYA pet yang berstatus FAVORITE yang dimasukkan & dapat dipilih!
     local filteredPets = {}
-    local anyFavoritedFound = false
     for _, pet in ipairs(allPets) do
-        if pet.IsFavorite then
-            anyFavoritedFound = true
-            break
-        end
-    end
+        local isFav = (pet.IsFavorite == true)
+        local isCurrentlySelected = (selectedMap[pet.UUID] == true) or (selectedMap[pet.UUID:gsub("[{}]", "")] == true)
 
-    for _, pet in ipairs(allPets) do
-        -- Jika ada pet favorit, hanya ambil yang favorit atau yang sedang terpilih
-        -- Jika game belum memfavoritkan apapun, tampilkan pet agar pengguna tetap bisa memilih
-        local allowPet = true
-        if anyFavoritedFound then
-            allowPet = (pet.IsFavorite == true) or (selectedMap[pet.UUID] == true)
-        end
-
-        if allowPet then
+        -- Pet hanya ditampilkan jika benar-benar berstatus IsFavorite
+        if isFav or isCurrentlySelected then
             local displayStr = pet.DisplayTitle
             if filter == "" or displayStr:lower():find(filter) or pet.Name:lower():find(filter) then
                 table.insert(filteredPets, pet)
@@ -1218,16 +1335,15 @@ refreshPetSelectionUI = function()
         end
     end
 
-    -- Permintaan 1: Pet yang dipilih/aktif LANGSUNG PINDAH KE ATAS
+    -- [POIN 1] Pet yang dipilih LANGSUNG PINDAH KE ATAS
     table.sort(filteredPets, function(a, b)
-        local aSel = selectedMap[a.UUID] or false
-        local bSel = selectedMap[b.UUID] or false
+        local aSel = (selectedMap[a.UUID] == true) or (selectedMap[a.UUID:gsub("[{}]", "")] == true)
+        local bSel = (selectedMap[b.UUID] == true) or (selectedMap[b.UUID:gsub("[{}]", "")] == true)
         if aSel ~= bSel then
-            return aSel == true -- Yang terpilih (true) ditaruh di paling atas
+            return aSel == true -- Yang terpilih ditaruh paling atas
         end
-        -- Prioritas kedua: pet yang aktif di kebun
         if (a.InGarden or false) ~= (b.InGarden or false) then
-            return (a.InGarden or false) == true
+            return (a.InGarden or false) == true -- Pet yang aktif di kebun ditaruh berikutnya
         end
         return (a.Name or "") < (b.Name or "")
     end)
@@ -1235,10 +1351,11 @@ refreshPetSelectionUI = function()
     local matchedCount = 0
     for _, pet in ipairs(filteredPets) do
         matchedCount = matchedCount + 1
-        local isSelected = selectedMap[pet.UUID] or false
+        local isSelected = (selectedMap[pet.UUID] == true) or (selectedMap[pet.UUID:gsub("[{}]", "")] == true)
         local isInGarden = pet.InGarden or false
 
         local statusPrefix = isSelected and "  [✓] " or "  [  ] "
+        -- [POIN 3] Tanda status jelas: Saat pet aktif di kebun, UI tetap ada dan memunculkan badge ACTIVE
         local gardenBadge = isInGarden and " 🌟 [ACTIVE]" or ""
         local favBadge = pet.IsFavorite and " ⭐" or ""
         local displayStr = statusPrefix .. pet.DisplayTitle .. gardenBadge .. favBadge
@@ -1259,7 +1376,7 @@ refreshPetSelectionUI = function()
         petItem.MouseButton1Click:Connect(function()
             local alreadyIdx = nil
             for idx, selUUID in ipairs(selectedList) do
-                if selUUID == pet.UUID then
+                if selUUID == pet.UUID or selUUID:gsub("[{}]", "") == pet.UUID:gsub("[{}]", "") then
                     alreadyIdx = idx
                     break
                 end
@@ -1283,10 +1400,10 @@ refreshPetSelectionUI = function()
         local emptyLbl = Instance.new("TextLabel", PetScroll)
         emptyLbl.Size = UDim2.new(1, 0, 1, 0)
         emptyLbl.BackgroundTransparency = 1
-        emptyLbl.Text = (filter ~= "") and ("Tidak ada pet cocok: '" .. State.TeamSearchQuery .. "'") or "Tidak ada pet favorit ditemukan di Backpack!"
+        emptyLbl.Text = (filter ~= "") and ("Tidak ada pet cocok: '" .. State.TeamSearchQuery .. "'") or "Hanya pet berstatus FAVORITE (⭐) yang dapat dipilih!"
         emptyLbl.TextColor3 = Color3.fromRGB(255, 120, 120)
         emptyLbl.Font = Enum.Font.GothamMedium
-        emptyLbl.TextSize = 9
+        emptyLbl.TextSize = 8.5
         PetScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     else
         PetScroll.CanvasSize = UDim2.new(0, 0, 0, matchedCount * 27)
@@ -1352,12 +1469,16 @@ local function ExecutePetTeam(teamName)
     
     -- 1. Unequip pet yang ada di garden jika tidak termasuk target team
     local targetLookup = {}
-    for _, uuid in ipairs(targetUUIDs) do targetLookup[uuid] = true end
+    for _, uuid in ipairs(targetUUIDs) do
+        targetLookup[uuid] = true
+        targetLookup[uuid:gsub("[{}]", "")] = true
+    end
     
     local inGarden = GetEquippedPetsInGarden()
     for _, gPet in ipairs(inGarden) do
-        if not targetLookup[gPet.UUID] then
-            UnequipPetByUUID(gPet.UUID)
+        local gUUID = gPet.UUID
+        if not targetLookup[gUUID] and not targetLookup[gUUID:gsub("[{}]", "")] then
+            UnequipPetByUUID(gUUID)
             if delayUneq > 0 then
                 task.wait(delayUneq)
             else
@@ -1366,17 +1487,18 @@ local function ExecutePetTeam(teamName)
         end
     end
     
-    -- 2. Equip pet terpilih yang ada di Backpack
-    local allBackpackPets = GetAllPetsInBackpack()
-    local backpackLookup = {}
-    for _, p in ipairs(allBackpackPets) do
-        backpackLookup[p.UUID] = p
+    -- 2. Equip pet terpilih yang ada di list
+    local allPets = GetAllPetsList()
+    local petsLookup = {}
+    for _, p in ipairs(allPets) do
+        petsLookup[p.UUID] = p
+        petsLookup[p.UUID:gsub("[{}]", "")] = p
     end
     
     for _, uuid in ipairs(targetUUIDs) do
         if not State.IsTeamRunning then break end
-        local pInfo = backpackLookup[uuid]
-        if pInfo then
+        local pInfo = petsLookup[uuid] or petsLookup[uuid:gsub("[{}]", "")]
+        if pInfo and not pInfo.InGarden then
             EquipPetByToolOrUUID(pInfo)
             if delayEq > 0 then
                 task.wait(delayEq)
@@ -1387,6 +1509,10 @@ local function ExecutePetTeam(teamName)
     end
     
     isExecutingTeam = false
+    -- Refresh UI seketika setelah selesai eksekusi agar status [ACTIVE] langsung tampil
+    if refreshPetSelectionUI then
+        task.defer(refreshPetSelectionUI)
+    end
 end
 
 StartBtn.MouseButton1Click:Connect(function()
@@ -1438,7 +1564,6 @@ teamBtn2.Font = Enum.Font.GothamBold
 teamBtn2.TextSize = 8.5
 Instance.new("UICorner", teamBtn2).CornerRadius = UDim.new(0, 6)
 
--- Pet Team Accordion Buttons Integration
 teamBtn1.MouseButton1Click:Connect(function()
     ExecutePetTeam(State.ActiveTeam or "Main Team")
 end)
