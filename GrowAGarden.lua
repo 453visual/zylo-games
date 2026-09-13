@@ -39,7 +39,7 @@ local State = {
     MaxEggPlace = 13,
     FarmEggCount = 0,
     
-    AutoHatch = false,
+    AutoHatch = true, -- Selalu aktif otomatis di background
     PetMinigames = false,
     AutoPickUpPet = false,
     AutoPlacePet = false,
@@ -316,7 +316,7 @@ task.spawn(function()
             else task.wait(0.6) end
         else task.wait(0.3) end
 
-        -- Auto Hatch
+        -- Auto Hatch (Background Logic Aktif)
         if State.AutoHatch then
             local farm = GetFarm()
             local imp = farm and farm:FindFirstChild("Important")
@@ -478,10 +478,10 @@ end)
 local Window = ZyloLib:CreateWindow()
 local Main = Window.Main
 
--- 9 Tabs Resmi ZyloHub (Canvas PagePets 1200 agar leluasa di-scroll)
+-- 9 Tabs Resmi ZyloHub
 local PageHome      = Window:CreateTab("Home", "🏠", 1)
 local PageFarm      = Window:CreateTab("Farm", "🍃", 2, 480)
-local PagePets      = Window:CreateTab("Pets", "🐾", 3, 1200)
+local PagePets      = Window:CreateTab("Pets", "🐾", 3, 1150)
 local PageUtility   = Window:CreateTab("Utility", "🔧", 4, 240)
 local PageShop      = Window:CreateTab("Shop", "🛒", 5)
 local PageConfig    = Window:CreateTab("Config", "⚙️", 6)
@@ -723,33 +723,15 @@ task.spawn(function()
 end)
 
 -- =============================================================
--- [ACCORDION 2: AUTO HATCH DENGAN INTEGRASI PET TEAM MANAGER]
--- Tinggi accordion disesuaikan menjadi 475 agar tombol START & STOP lega
+-- [ACCORDION 2: AUTO HATCH DENGAN PET TEAM MANAGER TERINTEGRASI]
+-- Switch teks atas telah dihilangkan sesuai instruksi Anda.
 -- =============================================================
-local accHatch, bodyHatch = ZyloLib:CreateAccordion(PagePets, "Auto Hatch", false, 475)
+local accHatch, bodyHatch = ZyloLib:CreateAccordion(PagePets, "Auto Hatch", false, 440)
 
--- Baris Auto Hatch Switch Asli
-local ahRow = Instance.new("Frame", bodyHatch)
-ahRow.Size = UDim2.new(1, -24, 0, 32)
-ahRow.Position = UDim2.new(0, 12, 0, 6)
-ahRow.BackgroundColor3 = C.CARD_2
-Instance.new("UICorner", ahRow).CornerRadius = UDim.new(0, 6)
-local ahLbl = Instance.new("TextLabel", ahRow)
-ahLbl.Position = UDim2.new(0, 10, 0, 0)
-ahLbl.Size = UDim2.new(1, -55, 1, 0)
-ahLbl.BackgroundTransparency = 1
-ahLbl.Text = "Otomatis Tetaskan & Claim Telur Siap Panen"
-ahLbl.TextColor3 = C.TEXT_W
-ahLbl.Font = Enum.Font.GothamMedium
-ahLbl.TextSize = 9
-ahLbl.TextXAlignment = Enum.TextXAlignment.Left
-local ahSw = ZyloLib:CreatePillSwitch(ahRow, State.AutoHatch, function(v) State.AutoHatch = v end)
-ahSw.Position = UDim2.new(1, -40, 0.5, -10)
-
--- Container Pet Team Manager (Tinggi 420px memberikan ruang lega ke tombol action)
+-- Container Pet Team Manager (Langsung mengisi bodyHatch dengan rapi)
 local TeamCard = Instance.new("Frame", bodyHatch)
 TeamCard.Name = "PetTeamManagerCard"
-TeamCard.Position = UDim2.new(0, 12, 0, 44)
+TeamCard.Position = UDim2.new(0, 12, 0, 10)
 TeamCard.Size = UDim2.new(1, -24, 0, 420)
 TeamCard.BackgroundColor3 = Color3.fromRGB(10, 13, 24)
 Instance.new("UICorner", TeamCard).CornerRadius = UDim.new(0, 8)
@@ -1008,7 +990,7 @@ for _, petStr in ipairs(dummyPets) do
     piStroke.Color = Color3.fromRGB(35, 42, 65)
 end
 
--- Tombol START & STOP Sesuai Palet ZyloHub (Diberi posisi jelas di y = 330px)
+-- Tombol START & STOP Sesuai Palet ZyloHub
 local BtnRow = Instance.new("Frame", TeamCard)
 BtnRow.Position = UDim2.new(0, 8, 0, 332)
 BtnRow.Size = UDim2.new(1, -16, 0, 32)
