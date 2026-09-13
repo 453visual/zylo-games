@@ -491,37 +491,30 @@ local function GetFarmPetArea()
     return farm:FindFirstChild("PetArea")
 end
 
-local function GetAllPetsInBackpack()
-    local pets = {}
-    local function scan(container)
-        if not container then return end
-        for _, item in ipairs(container:GetChildren()) do
-            if item:IsA("Tool") then
-                local uuid = item:GetAttribute("PET_UUID")
-                local hasPetTool = item:FindFirstChild("PetToolLocal")
-                local hasPetData = item:FindFirstChild("PetData")
-                if uuid or hasPetTool or hasPetData then
-                    local petUUID = uuid or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value) or item.Name
-                    local nameOnly = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
-                    local weight = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "?"
-                    local age = item.Name:match("%[Age%s*(%d+)%]") or item.Name:match("Age%s*(%d+)") or "?"
-                    
-                    table.insert(pets, {
-                        Tool = item,
-                        UUID = petUUID,
-                        FullName = item.Name,
-                        Name = nameOnly,
-                        Weight = weight,
-                        Age = age,
-                        DisplayTitle = nameOnly .. " | Age " .. tostring(age) .. " | " .. tostring(weight) .. " KG"
-                    })
-                end
-            end
+local function IsPetFavorited(item)
+    if not item then return false end
+    -- Check common attributes and child values for favorite in Roblox
+    local isFavAttr = item:GetAttribute("IsFavorite") or item:GetAttribute("Favorite") or item:GetAttribute("FAVORITE") or item:GetAttribute("IsFav") or item:GetAttribute("Fav")
+    if isFavAttr == true or isFavAttr == 1 or isFavAttr == "true" then
+        return true
+    end
+    local favVal = item:FindFirstChild("IsFavorite") or item:FindFirstChild("Favorite") or item:FindFirstChild("FAVORITE") or item:FindFirstChild("Fav")
+    if favVal and (favVal.Value == true or favVal.Value == 1) then
+        return true
+    end
+    -- Check PetData folder if present
+    local petData = item:FindFirstChild("PetData")
+    if petData then
+        local pFav = petData:FindFirstChild("IsFavorite") or petData:FindFirstChild("Favorite") or petData:FindFirstChild("Fav")
+        if pFav and (pFav.Value == true or pFav.Value == 1) then
+            return true
         end
     end
-    scan(LocalPlayer:FindFirstChild("Backpack"))
-    scan(LocalPlayer.Character)
-    return pets
+    -- Check visual heart/favorite indicator inside tool
+    if item:FindFirstChild("FavoriteIcon") or item:FindFirstChild("FavIcon") or item:FindFirstChild("FavoriteGui") then
+        return true
+    end
+    return false
 end
 
 local function GetEquippedPetsInGarden()
@@ -537,16 +530,86 @@ local function GetEquippedPetsInGarden()
                 local owner = obj:GetAttribute("OWNER") or (obj:FindFirstChild("Owner") and obj.Owner.Value)
                 local uuid = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
                 if (not owner or owner == LocalPlayer.Name) and uuid then
+                    local nameOnly = obj.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
+                    local weight = obj.Name:match("%[([%d%.]+)%s*KG%]") or obj.Name:match("([%d%.]+)%s*KG") or "?"
+                    local age = obj.Name:match("%[Age%s*(%d+)%]") or obj.Name:match("Age%s*(%d+)") or "?"
                     table.insert(equipped, {
                         Model = obj,
                         UUID = uuid,
-                        Name = obj.Name
+                        FullName = obj.Name,
+                        Name = nameOnly,
+                        Weight = weight,
+                        Age = age,
+                        DisplayTitle = nameOnly .. " | Age " .. tostring(age) .. " | " .. tostring(weight) .. " KG",
+                        InGarden = true,
+                        IsFavorite = IsPetFavorited(obj)
                     })
                 end
             end
         end
     end
     return equipped
+end
+
+local function GetAllPetsInBackpack(includeGarden)
+    local pets = {}
+    local seenUUIDs = {}
+
+    local function scan(container)
+        if not container then return end
+        for _, item in ipairs(container:GetChildren()) do
+            if item:IsA("Tool") then
+                local uuid = item:GetAttribute("PET_UUID")
+                local hasPetTool = item:FindFirstChild("PetToolLocal")
+                local hasPetData = item:FindFirstChild("PetData")
+                if uuid or hasPetTool or hasPetData then
+                    local petUUID = uuid or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value) or item.Name
+                    local nameOnly = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
+                    local weight = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "?"
+                    local age = item.Name:match("%[Age%s*(%d+)%]") or item.Name:match("Age%s*(%d+)") or "?"
+                    local isFav = IsPetFavorited(item)
+                    
+                    if not seenUUIDs[petUUID] then
+                        seenUUIDs[petUUID] = true
+                        table.insert(pets, {
+                            Tool = item,
+                            UUID = petUUID,
+                            FullName = item.Name,
+                            Name = nameOnly,
+                            Weight = weight,
+                            Age = age,
+                            DisplayTitle = nameOnly .. " | Age " .. tostring(age) .. " | " .. tostring(weight) .. " KG",
+                            InGarden = false,
+                            IsFavorite = isFav
+                        })
+                    end
+                end
+            end
+        end
+    end
+    scan(LocalPlayer:FindFirstChild("Backpack"))
+    scan(LocalPlayer.Character)
+
+    -- Permintaan 3: Sertakan pet yang sedang aktif di kebun jika includeGarden == true
+    if includeGarden then
+        local gardenPets = GetEquippedPetsInGarden()
+        for _, gPet in ipairs(gardenPets) do
+            if not seenUUIDs[gPet.UUID] then
+                seenUUIDs[gPet.UUID] = true
+                table.insert(pets, gPet)
+            else
+                -- Update flag jika sudah ada di list
+                for _, p in ipairs(pets) do
+                    if p.UUID == gPet.UUID then
+                        p.InGarden = true
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    return pets
 end
 
 local function UnequipPetByUUID(uuid)
@@ -1113,69 +1176,114 @@ refreshPetSelectionUI = function()
         end
     end
     
-    local allPets = GetAllPetsInBackpack()
+    -- Permintaan 3: Ambil pet dari backpack + pet yang sedang aktif di kebun
+    local allPets = GetAllPetsInBackpack(true)
     local curTeam = State.ActiveTeam or "Main Team"
     if not State.SelectedPets[curTeam] then
         State.SelectedPets[curTeam] = {}
     end
     local selectedList = State.SelectedPets[curTeam]
     local filter = (State.TeamSearchQuery or ""):lower()
-    local matchedCount = 0
+
+    -- Map pencarian cepat UUID terpilih
+    local selectedMap = {}
+    for _, selUUID in ipairs(selectedList) do
+        selectedMap[selUUID] = true
+    end
+
+    -- Permintaan 2: Filter hanya pet yang sudah difavoritkan (IsFavorite)
+    -- Jika user sedang memilih pet atau pet sudah masuk team, tetap ditampilkan
+    local filteredPets = {}
+    local anyFavoritedFound = false
+    for _, pet in ipairs(allPets) do
+        if pet.IsFavorite then
+            anyFavoritedFound = true
+            break
+        end
+    end
 
     for _, pet in ipairs(allPets) do
-        local displayStr = pet.DisplayTitle
-        if filter == "" or displayStr:lower():find(filter) or pet.Name:lower():find(filter) then
-            matchedCount = matchedCount + 1
-            local isSelected = false
-            for _, selUUID in ipairs(selectedList) do
+        -- Jika ada pet favorit, hanya ambil yang favorit atau yang sedang terpilih
+        -- Jika game belum memfavoritkan apapun, tampilkan pet agar pengguna tetap bisa memilih
+        local allowPet = true
+        if anyFavoritedFound then
+            allowPet = (pet.IsFavorite == true) or (selectedMap[pet.UUID] == true)
+        end
+
+        if allowPet then
+            local displayStr = pet.DisplayTitle
+            if filter == "" or displayStr:lower():find(filter) or pet.Name:lower():find(filter) then
+                table.insert(filteredPets, pet)
+            end
+        end
+    end
+
+    -- Permintaan 1: Pet yang dipilih/aktif LANGSUNG PINDAH KE ATAS
+    table.sort(filteredPets, function(a, b)
+        local aSel = selectedMap[a.UUID] or false
+        local bSel = selectedMap[b.UUID] or false
+        if aSel ~= bSel then
+            return aSel == true -- Yang terpilih (true) ditaruh di paling atas
+        end
+        -- Prioritas kedua: pet yang aktif di kebun
+        if (a.InGarden or false) ~= (b.InGarden or false) then
+            return (a.InGarden or false) == true
+        end
+        return (a.Name or "") < (b.Name or "")
+    end)
+
+    local matchedCount = 0
+    for _, pet in ipairs(filteredPets) do
+        matchedCount = matchedCount + 1
+        local isSelected = selectedMap[pet.UUID] or false
+        local isInGarden = pet.InGarden or false
+
+        local statusPrefix = isSelected and "  [✓] " or "  [  ] "
+        local gardenBadge = isInGarden and " 🌟 [ACTIVE]" or ""
+        local favBadge = pet.IsFavorite and " ⭐" or ""
+        local displayStr = statusPrefix .. pet.DisplayTitle .. gardenBadge .. favBadge
+
+        local petItem = Instance.new("TextButton", PetScroll)
+        petItem.Size = UDim2.new(1, -4, 0, 24)
+        petItem.BackgroundColor3 = isSelected and Color3.fromRGB(36, 18, 58) or (isInGarden and Color3.fromRGB(20, 24, 48) or Color3.fromRGB(16, 21, 42))
+        petItem.Text = displayStr
+        petItem.TextColor3 = isSelected and C.PURPLE_L or (isInGarden and Color3.fromRGB(180, 210, 255) or C.TEXT_M)
+        petItem.Font = Enum.Font.GothamMedium
+        petItem.TextSize = 8.5
+        petItem.TextXAlignment = Enum.TextXAlignment.Left
+        Instance.new("UICorner", petItem).CornerRadius = UDim.new(0, 4)
+        local itemStroke = Instance.new("UIStroke", petItem)
+        itemStroke.Color = isSelected and C.PURPLE or (isInGarden and Color3.fromRGB(70, 90, 160) or C.STROKE)
+        itemStroke.Thickness = isSelected and 1.5 or 1
+
+        petItem.MouseButton1Click:Connect(function()
+            local alreadyIdx = nil
+            for idx, selUUID in ipairs(selectedList) do
                 if selUUID == pet.UUID then
-                    isSelected = true
+                    alreadyIdx = idx
                     break
                 end
             end
 
-            local petItem = Instance.new("TextButton", PetScroll)
-            petItem.Size = UDim2.new(1, -4, 0, 24)
-            petItem.BackgroundColor3 = isSelected and Color3.fromRGB(36, 18, 58) or Color3.fromRGB(16, 21, 42)
-            petItem.Text = (isSelected and "  [✓] " or "  [  ] ") .. displayStr
-            petItem.TextColor3 = isSelected and C.PURPLE_L or C.TEXT_M
-            petItem.Font = Enum.Font.GothamMedium
-            petItem.TextSize = 9
-            petItem.TextXAlignment = Enum.TextXAlignment.Left
-            Instance.new("UICorner", petItem).CornerRadius = UDim.new(0, 4)
-            local itemStroke = Instance.new("UIStroke", petItem)
-            itemStroke.Color = isSelected and C.PURPLE or C.STROKE
-            itemStroke.Thickness = isSelected and 1.5 or 1
-
-            petItem.MouseButton1Click:Connect(function()
-                local alreadyIdx = nil
-                for idx, selUUID in ipairs(selectedList) do
-                    if selUUID == pet.UUID then
-                        alreadyIdx = idx
-                        break
-                    end
-                end
-
-                if alreadyIdx then
-                    table.remove(selectedList, alreadyIdx)
+            if alreadyIdx then
+                table.remove(selectedList, alreadyIdx)
+            else
+                if #selectedList >= 8 then
+                    print("[ZyloHub] Maksimal 8 pet per team sudah tercapai!")
                 else
-                    if #selectedList >= 8 then
-                        print("[ZyloHub] Maksimal 8 pet per team sudah tercapai!")
-                    else
-                        table.insert(selectedList, pet.UUID)
-                    end
+                    table.insert(selectedList, pet.UUID)
                 end
-                updateCounterLabels()
-                refreshPetSelectionUI()
-            end)
-        end
+            end
+            updateCounterLabels()
+            refreshPetSelectionUI()
+        end)
     end
 
     if matchedCount == 0 then
         local emptyLbl = Instance.new("TextLabel", PetScroll)
         emptyLbl.Size = UDim2.new(1, 0, 1, 0)
         emptyLbl.BackgroundTransparency = 1
-        emptyLbl.Text = (filter ~= "") and ("Tidak ada pet cocok: '" .. State.TeamSearchQuery .. "'") or "Tidak ada pet ditemukan di Backpack!"
+        emptyLbl.Text = (filter ~= "") and ("Tidak ada pet cocok: '" .. State.TeamSearchQuery .. "'") or "Tidak ada pet favorit ditemukan di Backpack!"
         emptyLbl.TextColor3 = Color3.fromRGB(255, 120, 120)
         emptyLbl.Font = Enum.Font.GothamMedium
         emptyLbl.TextSize = 9
@@ -1192,6 +1300,16 @@ PetSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
 end)
 
 task.defer(refreshPetSelectionUI)
+
+-- Auto refresh list secara berkala agar status pet di kebun [ACTIVE] selalu sinkron real-time
+task.spawn(function()
+    while true do
+        task.wait(2.5)
+        if refreshPetSelectionUI and PetScroll and PetScroll.Parent then
+            pcall(refreshPetSelectionUI)
+        end
+    end
+end)
 
 -- Action Buttons (START & STOP)
 local BtnRow = Instance.new("Frame", TeamCard)
