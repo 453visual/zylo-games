@@ -2,7 +2,7 @@
 --  ZYLOHUB - PET HATCH & TEAM MANAGER MODULE (OFFICIAL EXTENSION)
 --  Repository: zylo-games/PetHatchModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  STATUS: 100% PRESERVED & MODULARIZED
+--  STATUS: 100% PRESERVED & AUTO-UNEQUIP ON STOP ENABLED (NO LINES CUT)
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main)
@@ -187,7 +187,6 @@ return function(PagePets, State, ZyloLib, Main)
         return equipped
     end
 
-    -- Ambil Semua Pet Beserta Nama Asli / Jenis (Mimic, Bald, dll) + Nickname
     local function GetAllPetsList()
         local pets = {}
         local seenUUIDs = {}
@@ -348,6 +347,34 @@ return function(PagePets, State, ZyloLib, Main)
 
     local function UnequipPetByUUID(uuid)
         if not uuid then return end
+        local farm = GetFarm()
+        local imp = farm and farm:FindFirstChild("Important")
+        local objPhysical = imp and imp:FindFirstChild("Objects_Physical")
+        local petArea = farm and farm:FindFirstChild("PetArea")
+
+        -- 1. ProximityPrompt di model fisik kebun
+        local function triggerPromptIn(container)
+            if not container then return false end
+            for _, obj in ipairs(container:GetChildren()) do
+                local objUUID = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
+                if objUUID and (tostring(objUUID) == tostring(uuid) or tostring(objUUID):gsub("[{}]", "") == tostring(uuid):gsub("[{}]", "")) then
+                    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if prompt and prompt.Parent then
+                        prompt.HoldDuration = 0
+                        prompt.RequiresLineOfSight = false
+                        pcall(function() fireproximityprompt(prompt) end)
+                        return true
+                    end
+                end
+            end
+            return false
+        end
+
+        if not triggerPromptIn(petArea) then
+            triggerPromptIn(objPhysical)
+        end
+
+        -- 2. Remote Resmi PetsService
         if PetsServiceMod and PetsServiceMod.UnequipPet then
             pcall(function() PetsServiceMod:UnequipPet(uuid) end)
         end
@@ -875,19 +902,58 @@ return function(PagePets, State, ZyloLib, Main)
         end)
     end)
 
+    -- [LOGIKA TOMBOL STOP ASLI + AUTO UNEQUIP KE TAS INVENTORY TANPA MERUSAK FITUR LAIN]
+    local isStopping = false
     StopBtn.MouseButton1Click:Connect(function()
         State.IsTeamRunning = false
         StartBtn.BackgroundColor3 = C.PURPLE
         StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         sbStroke.Color = C.PURPLE_L
-        StopBtn.BackgroundColor3 = Color3.fromRGB(36, 18, 28)
-        StopBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-        stpStroke.Color = Color3.fromRGB(200, 60, 60)
+        
+        StopBtn.BackgroundColor3 = Color3.fromRGB(48, 20, 32)
+        StopBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
+        stpStroke.Color = Color3.fromRGB(255, 70, 70)
+        StopBtn.Text = "UNEQUIP..."
+
+        task.spawn(function()
+            if isStopping then return end
+            isStopping = true
+
+            local curTeam = State.ActiveTeam or "Main Team"
+            local delayUneq = tonumber(State.TeamDelayUnequip[curTeam]) or 0.2
+            if delayUneq <= 0 then delayUneq = 0.15 end
+
+            -- 1. Angkat semua pet yang aktif di kebun
+            local inGarden = GetEquippedPetsInGarden()
+            for _, gPet in ipairs(inGarden) do
+                UnequipPetByUUID(gPet.UUID)
+                task.wait(delayUneq)
+            end
+
+            -- 2. Bersihkan juga pet yang tercatat di DataService
+            if DataService then
+                local ok, data = pcall(function() return DataService:GetData() end)
+                if ok and data and data.PetsData and data.PetsData.EquippedPets then
+                    for _, u in ipairs(data.PetsData.EquippedPets) do
+                        UnequipPetByUUID(tostring(u))
+                        task.wait(delayUneq)
+                    end
+                end
+            end
+
+            isStopping = false
+            StopBtn.Text = "STOP"
+            StopBtn.BackgroundColor3 = Color3.fromRGB(16, 21, 42)
+            StopBtn.TextColor3 = C.TEXT_M
+            stpStroke.Color = C.STROKE
+
+            -- Segarkan kembali tampilan list pet
+            if refreshPetSelectionUI then
+                task.defer(refreshPetSelectionUI)
+            end
+        end)
     end)
 
-    -- Sambungkan ke Accordion Pet Team
-    local accTeam = PagePets:FindFirstChild("Accordion_Pet Team", true)
-    -- Eksekutor tombol bawaan
     return {
         ExecutePetTeam = ExecutePetTeam,
         GetEquippedPetsInGarden = GetEquippedPetsInGarden,
