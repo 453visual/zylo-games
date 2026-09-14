@@ -1,7 +1,7 @@
 -- =========================================================================
 --  ZYLOHUB - GROW A GARDEN (v3.5 - SAFE MODULAR EDITION)
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  STATUS: AUTO FARM & AUTO PLACE EGG LOCKED (100% PRESERVED)
+--  STATUS: AUTO FARM & AUTO PLACE EGG LOCKED (100% PRESERVED & PRECISE)
 -- =========================================================================
 
 local Players = game:GetService("Players")
@@ -173,7 +173,7 @@ local BLACKLISTED_KEYWORDS = {
 }
 
 local function isPureSeed(tool)
-    if not tool:IsA("Tool") then return false end
+    if not tool or not tool:IsA("Tool") then return false end
     if tool:FindFirstChild("Item_String") then return false end
     if tool:FindFirstChild("EggData") or tool:FindFirstChild("PetData") then return false end
     local nameLower = tool.Name:lower()
@@ -228,15 +228,45 @@ local function GetOwnedSeeds()
     return seeds
 end
 
+-- =========================================================================
+-- [PRECISE EGG VALIDATOR] 100% AKURAT MEMISAHKAN TELUR DARI PET
+-- =========================================================================
 local function isPureEgg(tool)
-    if not tool:IsA("Tool") then return false end
-    local nameLower = tool.Name:lower()
+    if not tool or not tool:IsA("Tool") then return false end
+
+    -- 1. DETEKSI PASTI JIKA ITU PET (TOLAK SEGERA!)
+    -- Berdasarkan decompile resmi: Semua Pet memiliki PetToolLocal / PET_UUID / PetData
+    if tool:FindFirstChild("PetToolLocal") then return false end
+    if tool:GetAttribute("PET_UUID") ~= nil then return false end
+    if tool:FindFirstChild("PetData") then return false end
+
+    -- Tolak jika memiliki bobot KG atau Usia (Contoh: "Easter Egg Chick [2.07 KG] [Age 1]")
+    local rawName = tool.Name
+    if rawName:find("%[.-KG.-%]") or rawName:find("%[.-Age.-%]") then return false end
+
+    -- 2. TOLAK JIKA MERUPAKAN BENIH / ALAT / HASIL PANEN
+    local nameLower = rawName:lower()
     if nameLower:find("seed") then return false end
     if tool:FindFirstChild("Plant_Name") or tool:GetAttribute("Plant_Name") or tool:GetAttribute("Seed") then return false end
     if tool:FindFirstChild("Item_String") then return false end
     if nameLower:find("eggfruit") or nameLower:find("eggplant") then return false end
-    for _, kw in ipairs(BLACKLISTED_KEYWORDS) do if nameLower:find(kw) then return false end end
-    return tool:FindFirstChild("PetEggToolLocal") or tool:FindFirstChild("EggData") or nameLower:find("egg")
+    for _, kw in ipairs(BLACKLISTED_KEYWORDS) do 
+        if nameLower:find(kw) then return false end 
+    end
+
+    -- 3. VALIDASI TELUR RESMI GAME
+    -- Berdasarkan decompile resmi: Semua Telur asli memiliki PetEggToolLocal
+    if tool:FindFirstChild("PetEggToolLocal") then return true end
+    if tool:FindFirstChild("EggData") then return true end
+
+    -- Fallback nama jika di Backpack hanya terbaca string nama
+    -- Telur asli selalu diakhiri dengan kata 'egg' (contoh: "Common Egg", "Rare Bee Egg x61")
+    local cleanName = rawName:gsub("%[.-%]", ""):gsub("%s*[xX]%d+$", ""):gsub("^%s*(.-)%s*$", "%1"):lower()
+    if cleanName:match("egg$") then
+        return true
+    end
+
+    return false
 end
 
 local function cleanEggTitle(rawName)
