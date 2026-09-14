@@ -2,7 +2,7 @@
 --  ZYLOHUB - PET HATCH & TEAM MANAGER MODULE (OFFICIAL EXTENSION)
 --  Repository: zylo-games/PetHatchModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  STATUS: 100% PRESERVED & COMPLETE BULK PET SELECTION FLOW INTEGRATED
+--  STATUS: 100% COMPLETE PET DATASET + REAL-TIME AUTO SELL ENGINE
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main)
@@ -47,33 +47,50 @@ return function(PagePets, State, ZyloLib, Main)
     State.BulkAction = State.BulkAction or "sell"
     State.ApplyBulkList = (State.ApplyBulkList ~= nil) and State.ApplyBulkList or false
 
-    -- Master List Spesies Pet Grow a Garden
+    -- Master List Lengkap Semua Pet Grow a Garden (Built-in Komplit)
     local MasterPetSpeciesList = {
-        "Mimic Octopus", "Peacock", "Scarlet Macaw", "Capybara", "Ostrich",
-        "Albino Peacock", "Amethyst Beetle", "Bald Eagle", "Bat", "Bee",
-        "Butterfly", "Cat", "Chameleon", "Cow", "Crow", "Dog",
-        "Dragonfly", "Duck", "Fox", "Frog", "Golden Beetle", "Gorilla",
-        "Hedgehog", "Koala", "Lion", "Monkey", "Mouse", "Owl",
-        "Panda", "Penguin", "Pig", "Rabbit", "Raccoon", "Red Panda",
-        "Rhino", "Rooster", "Seal", "Sheep", "Sloth", "Snake",
-        "Squirrel", "Tiger", "Turtle", "Wolf", "Zebra"
+        "Albino Peacock", "Alligator", "Amethyst Beetle", "Ankylosaurus", "Axolotl",
+        "Bald Eagle", "Bat", "Bee", "Brontosaurus", "Brown Bear", "Bull", "Butterfly",
+        "Capybara", "Cat", "Caterpillar", "Chameleon", "Cheetah", "Chicken", "Cow",
+        "Crab", "Crocodile", "Crow", "Deer", "Dilophosaurus", "Dog", "Dolphin",
+        "Dragonfly", "Duck", "Elephant", "Firefly", "Flamingo", "Fox", "Frog",
+        "Giraffe", "Golden Beetle", "Gorilla", "Hedgehog", "Hippo", "Horse",
+        "Hyena", "Iguana", "Kangaroo", "Kitsune", "Koala", "Komodo Dragon",
+        "Lion", "Llama", "Mantis", "Mimic Octopus", "Mole", "Monkey", "Moose",
+        "Mouse", "Ostrich", "Owl", "Panda", "Panther", "Peacock", "Penguin",
+        "Pig", "Polar Bear", "Pterodactyl", "Rabbit", "Raccoon", "Red Panda",
+        "Rhino", "Rooster", "Scarlet Macaw", "Scorpion", "Seagull", "Seal",
+        "Shark", "Sheep", "Sloth", "Snail", "Snake", "Spider", "Spinosaurus",
+        "Squirrel", "Stegosaurus", "Swan", "T-Rex", "Tiger", "Triceratops",
+        "Turtle", "Velociraptor", "Vulture", "Walrus", "Wasp", "Whale",
+        "Wolf", "Yak", "Zebra"
     }
 
-    -- Coba ambil spesies tambahan langsung dari Registry game jika ada
-    pcall(function()
-        local petReg = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("PetServices") and ReplicatedStorage.Modules.PetServices:FindFirstChild("PetRegistry")
-        if petReg then
-            local regMod = require(petReg)
-            if type(regMod) == "table" then
-                for k, _ in pairs(regMod) do
-                    if type(k) == "string" and not table.find(MasterPetSpeciesList, k) then
-                        table.insert(MasterPetSpeciesList, k)
+    -- Auto-Fetch Dinamis dari Module Game Asli agar selalu 100% sinkron
+    local function FetchAllGamePetSpecies()
+        pcall(function()
+            local petServices = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("PetServices")
+            if petServices then
+                for _, child in ipairs(petServices:GetChildren()) do
+                    if child:IsA("ModuleScript") and (child.Name:find("Registry") or child.Name:find("Config") or child.Name:find("List") or child.Name:find("Data")) then
+                        local mod = require(child)
+                        if type(mod) == "table" then
+                            for k, v in pairs(mod) do
+                                local nameCandidate = (type(k) == "string" and k) or (type(v) == "table" and (v.Name or v.Species or v.PetType))
+                                if nameCandidate and type(nameCandidate) == "string" and #nameCandidate > 2 and not nameCandidate:find("Service") and not nameCandidate:find("Event") then
+                                    if not table.find(MasterPetSpeciesList, nameCandidate) then
+                                        table.insert(MasterPetSpeciesList, nameCandidate)
+                                    end
+                                end
+                            end
+                        end
                     end
                 end
             end
-        end
-    end)
-    table.sort(MasterPetSpeciesList)
+        end)
+        table.sort(MasterPetSpeciesList)
+    end
+    FetchAllGamePetSpecies()
 
     -- Default List Pet Config awal
     State.SellPetRules = State.SellPetRules or {
@@ -332,10 +349,13 @@ return function(PagePets, State, ZyloLib, Main)
                     local customNickname = (petData.Name and petData.Name ~= "") and petData.Name or nil
                     local level = petData.Level or 1
                     local weight = "?"
+                    local numWeight = 0
                     if PetUtilities and PetUtilities.CalculateWeight and petData.BaseWeight then
                         local calcW = PetUtilities:CalculateWeight(petData.BaseWeight, level) * 100
-                        weight = string.format("%.2f", math.round(calcW) / 100)
+                        numWeight = math.round(calcW) / 100
+                        weight = string.format("%.2f", numWeight)
                     elseif petData.BaseWeight then
+                        numWeight = tonumber(petData.BaseWeight) or 0
                         weight = tostring(petData.BaseWeight)
                     end
 
@@ -367,6 +387,7 @@ return function(PagePets, State, ZyloLib, Main)
                         Species = speciesName,
                         Nickname = customNickname or "",
                         Weight = weight,
+                        NumericWeight = numWeight,
                         Age = level,
                         DisplayTitle = displayTitle,
                         InGarden = isInGarden,
@@ -404,11 +425,12 @@ return function(PagePets, State, ZyloLib, Main)
                             seenUUIDs[strippedUUID] = true
                             
                             local cleanSpecies = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
-                            local weight = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "?"
+                            local weightStr = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "?"
+                            local numW = tonumber(weightStr) or 0
                             local age = item.Name:match("%[Age%s*(%d+)%]") or item.Name:match("Age%s*(%d+)") or "?"
                             local isFav = IsPetFavorited(cleanUUID, item)
                             local isInGarden = (equippedMap[cleanUUID] == true) or (equippedMap[strippedUUID] == true)
-                            local displayTitle = string.format("%s | Age %s | %s KG", cleanSpecies, tostring(age), tostring(weight))
+                            local displayTitle = string.format("%s | Age %s | %s KG", cleanSpecies, tostring(age), tostring(weightStr))
 
                             table.insert(pets, {
                                 Tool = item,
@@ -417,7 +439,8 @@ return function(PagePets, State, ZyloLib, Main)
                                 Name = cleanSpecies,
                                 Species = cleanSpecies,
                                 Nickname = "",
-                                Weight = weight,
+                                Weight = weightStr,
+                                NumericWeight = numW,
                                 Age = age,
                                 DisplayTitle = displayTitle,
                                 InGarden = isInGarden,
@@ -526,6 +549,97 @@ return function(PagePets, State, ZyloLib, Main)
             EquipCheck(petInfo.Tool)
         end
     end
+
+    -- =============================================================
+    -- [FUNGSI UTAMA]: ENGINE AUTO SELL PET BERDASARKAN ATURAN CONFIG
+    -- =============================================================
+    local isProcessingAutoSell = false
+    local function CheckAndExecuteAutoSell()
+        if isProcessingAutoSell or not State.ApplyBulkList then return end
+        local allPets = GetAllPetsList()
+        local currentTotalPets = #allPets
+        local threshold = tonumber(State.AutoSellThresholdCount) or 24
+
+        -- Hanya berjalan jika total pet mencapai atau melebihi threshold
+        if currentTotalPets < threshold then return end
+
+        isProcessingAutoSell = true
+
+        -- Buat lookup map dari tabel aturan SellPetRules
+        local rulesMap = {}
+        for _, rule in ipairs(State.SellPetRules) do
+            rulesMap[rule.Species:lower()] = {
+                KG = tonumber(rule.KG) or 0,
+                Action = (rule.Action or "SELL"):upper()
+            }
+        end
+
+        local petsToSell = {}
+        for _, pet in ipairs(allPets) do
+            -- PROTEKSI 1: Pet Favorite tidak boleh disentuh/dijual
+            if not pet.IsFavorite then
+                local sName = (pet.Species or pet.Name or ""):lower()
+                local rule = rulesMap[sName]
+                
+                -- Hanya pet yang terdaftar dalam rules yang diproses
+                if rule then
+                    local petWeight = pet.NumericWeight or tonumber(pet.Weight) or 0
+                    local targetKG = rule.KG
+
+                    if targetKG > 0 then
+                        if petWeight < targetKG then
+                            -- Berat < KG -> Eksekusi aksi (SELL / KEEP)
+                            if rule.Action == "SELL" then
+                                table.insert(petsToSell, pet)
+                            end
+                        end
+                        -- Jika petWeight >= targetKG -> Otomatis KEEP (Masuk Bronto)
+                    end
+                end
+            end
+        end
+
+        -- Eksekusi penjualan
+        if #petsToSell > 0 then
+            print("[ZyloHub Auto Sell] Menemukan " .. tostring(#petsToSell) .. " pet yang memenuhi syarat jual.")
+            for _, p in ipairs(petsToSell) do
+                if not State.ApplyBulkList then break end
+
+                -- Unequip dulu jika sedang di kebun sebelum dijual
+                if p.InGarden then
+                    UnequipPetByUUID(p.UUID)
+                    task.wait(0.2)
+                end
+
+                -- Eksekusi Sell ke Server
+                if PetsServiceMod and PetsServiceMod.SellPet then
+                    pcall(function() PetsServiceMod:SellPet(p.UUID) end)
+                end
+                if PetsServiceRemote then
+                    pcall(function() PetsServiceRemote:FireServer("SellPet", p.UUID) end)
+                    pcall(function() PetsServiceRemote:FireServer("Sell", p.UUID) end)
+                end
+
+                if State.SellMode == "Sell One By One" then
+                    task.wait(0.35)
+                else
+                    task.wait(0.08)
+                end
+            end
+        end
+
+        isProcessingAutoSell = false
+    end
+
+    -- Background Loop Pemantau Auto Sell
+    task.spawn(function()
+        while true do
+            task.wait(2.5)
+            if State.ApplyBulkList then
+                pcall(CheckAndExecuteAutoSell)
+            end
+        end
+    end)
 
     -- =============================================================
     -- UI ACCORDION PET TEAM & CONFIG MANAGER
@@ -1197,7 +1311,7 @@ return function(PagePets, State, ZyloLib, Main)
         updateModeButtons()
     end)
 
-    -- [3] Baris Select Pet Type (Dropdown dengan Modal Picker)
+    -- [3] Baris Select Pet Type (Dropdown dengan Modal Picker Lengkap)
     local rowBulkPet = Instance.new("Frame", SellOptionsFrame)
     rowBulkPet.Size = UDim2.new(1, 0, 0, 24)
     rowBulkPet.BackgroundTransparency = 1
@@ -1286,10 +1400,9 @@ return function(PagePets, State, ZyloLib, Main)
         bkaBtn.TextColor3 = (State.BulkAction == "sell") and Color3.fromRGB(255, 110, 110) or Color3.fromRGB(110, 240, 150)
     end)
 
-    -- Komponen List Table dideklarasikan terlebih dahulu agar bisa dipanggil saat Apply
     local renderSellRules = nil
 
-    -- [6] Baris APPLY BULK LIST (ALUR UTAMA PENAMBAHAN PET KE LIST)
+    -- [6] Baris APPLY BULK LIST (ALUR UTAMA MASUKKAN KE LIST & TRIGGER ENGINE)
     local rowBulkApply = Instance.new("Frame", SellOptionsFrame)
     rowBulkApply.Size = UDim2.new(1, 0, 0, 26)
     rowBulkApply.BackgroundTransparency = 1
@@ -1306,7 +1419,6 @@ return function(PagePets, State, ZyloLib, Main)
     local bulkPill = ZyloLib:CreatePillSwitch(rowBulkApply, State.ApplyBulkList, function(v)
         State.ApplyBulkList = v
         if v then
-            -- EKSEKUSI ALUR: Tambahkan pet terpilih ke dalam tabel List Pet
             local speciesToAdd = State.SelectedBulkPetSpecies
             if speciesToAdd and speciesToAdd ~= "" then
                 local found = false
@@ -1478,11 +1590,11 @@ return function(PagePets, State, ZyloLib, Main)
     renderSellRules()
 
     -- =============================================================
-    -- MODAL POPUP: SELECT PET TYPE (PERSIS SEPERTI GAMBAR STEP 5)
+    -- MODAL POPUP: SELECT PET TYPE (DATASET KOMPLIT DENGAN SEARCH)
     -- =============================================================
     local PickerModal = Instance.new("Frame", TeamCard)
-    PickerModal.Size = UDim2.new(0, 240, 0, 260)
-    PickerModal.Position = UDim2.new(0.5, -120, 0.5, -130)
+    PickerModal.Size = UDim2.new(0, 250, 0, 270)
+    PickerModal.Position = UDim2.new(0.5, -125, 0.5, -135)
     PickerModal.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
     PickerModal.ZIndex = 50
     PickerModal.Visible = false
@@ -1500,7 +1612,7 @@ return function(PagePets, State, ZyloLib, Main)
     pmTitle.Position = UDim2.new(0, 10, 0, 0)
     pmTitle.Size = UDim2.new(1, -40, 1, 0)
     pmTitle.BackgroundTransparency = 1
-    pmTitle.Text = "Select Pet Type"
+    pmTitle.Text = "Select Pet Type (" .. tostring(#MasterPetSpeciesList) .. " Pets)"
     pmTitle.TextColor3 = Color3.fromRGB(240, 245, 255)
     pmTitle.Font = Enum.Font.GothamBold
     pmTitle.TextSize = 9.5
@@ -1526,7 +1638,7 @@ return function(PagePets, State, ZyloLib, Main)
     pmSearch.Position = UDim2.new(0, 10, 0, 32)
     pmSearch.Size = UDim2.new(1, -20, 0, 24)
     pmSearch.BackgroundColor3 = Color3.fromRGB(16, 21, 42)
-    pmSearch.PlaceholderText = "Search pet species..."
+    pmSearch.PlaceholderText = "Search pet species (e.g. Mimic, Peacock)..."
     pmSearch.PlaceholderColor3 = Color3.fromRGB(110, 120, 150)
     pmSearch.Text = ""
     pmSearch.TextColor3 = C.TEXT_W
@@ -1582,6 +1694,8 @@ return function(PagePets, State, ZyloLib, Main)
     pmSearch:GetPropertyChangedSignal("Text"):Connect(refreshPickerModalList)
 
     bpDropdown.MouseButton1Click:Connect(function()
+        FetchAllGamePetSpecies()
+        pmTitle.Text = "Select Pet Type (" .. tostring(#MasterPetSpeciesList) .. " Pets)"
         PickerModal.Visible = true
         pmSearch.Text = ""
         refreshPickerModalList()
