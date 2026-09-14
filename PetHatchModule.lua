@@ -2,7 +2,7 @@
 --  ZYLOHUB - PET HATCH & TEAM MANAGER MODULE (OFFICIAL EXTENSION)
 --  Repository: zylo-games/PetHatchModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  STATUS: 100% PRESERVED & EXPANDABLE EGG CONFIG + FIXED VISIBLE BUTTONS
+--  STATUS: 100% PRESERVED & EXPANDABLE SELL CONFIG UI FULLY INTEGRATED
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main)
@@ -32,10 +32,28 @@ return function(PagePets, State, ZyloLib, Main)
         PetUtilities = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("PetServices", 5):WaitForChild("PetUtilities", 5))
     end)
 
-    -- Inisialisasi State Config
+    -- Inisialisasi State Config Telur & Jual
     State.AutoHatch = (State.AutoHatch ~= nil) and State.AutoHatch or false
     State.DontHatchIfNotAllDone = (State.DontHatchIfNotAllDone ~= nil) and State.DontHatchIfNotAllDone or false
     State.EggConfigExpanded = (State.EggConfigExpanded ~= nil) and State.EggConfigExpanded or false
+    State.SellConfigExpanded = (State.SellConfigExpanded ~= nil) and State.SellConfigExpanded or false
+
+    -- State Khusus Sell Config
+    State.AutoSellThresholdCount = State.AutoSellThresholdCount or 24
+    State.SellMode = State.SellMode or "Sell All" -- "Sell One By One" atau "Sell All"
+    State.SellSearchQuery = State.SellSearchQuery or ""
+    State.BulkKG = State.BulkKG or 3
+    State.BulkAction = State.BulkAction or "sell"
+    State.ApplyBulkList = (State.ApplyBulkList ~= nil) and State.ApplyBulkList or false
+
+    -- Default List Pet Config yang biasa digunakan pemain
+    State.SellPetRules = State.SellPetRules or {
+        { Species = "Mimic Octopus", KG = 3, Action = "SELL" },
+        { Species = "Peacock", KG = 3, Action = "SELL" },
+        { Species = "Scarlet Macaw", KG = 3, Action = "SELL" },
+        { Species = "Capybara", KG = 3, Action = "SELL" },
+        { Species = "Ostrich", KG = 3, Action = "SELL" }
+    }
 
     local function GetFarm()
         if not Farms then return nil end
@@ -481,11 +499,10 @@ return function(PagePets, State, ZyloLib, Main)
     end
 
     -- =============================================================
-    -- UI ACCORDION PET TEAM & CONFIG MANAGER (PROPORSIONAL TAMPIL)
+    -- UI ACCORDION PET TEAM & CONFIG MANAGER
     -- =============================================================
     local accHatch, bodyHatch = ZyloLib:CreateAccordion(PagePets, "Auto Hatch & Pet Team Manager", true, 440)
 
-    -- Card Utama (Disesuaikan agar tombol aksi bawah terlihat 100%)
     local TeamCard = Instance.new("Frame", bodyHatch)
     TeamCard.Name = "PetTeamManagerCard"
     TeamCard.Position = UDim2.new(0, 12, 0, 8)
@@ -496,7 +513,7 @@ return function(PagePets, State, ZyloLib, Main)
     tcStroke.Color = C.STROKE
     tcStroke.Thickness = 1
 
-    -- Baris Sub-Tab Navigasi Atas
+    -- Sub-Tab Row
     local SubTabRow = Instance.new("ScrollingFrame", TeamCard)
     SubTabRow.Position = UDim2.new(0, 10, 0, 10)
     SubTabRow.Size = UDim2.new(1, -20, 0, 30)
@@ -516,7 +533,7 @@ return function(PagePets, State, ZyloLib, Main)
     local uqBox = nil
     local refreshPetSelectionUI = nil
 
-    -- Kontainer Tim Views vs Config Views (Diberi ruang yang lapang)
+    -- Kontainer Tim Views vs Config Views
     local TeamViewsContainer = Instance.new("Frame", TeamCard)
     TeamViewsContainer.Position = UDim2.new(0, 0, 0, 44)
     TeamViewsContainer.Size = UDim2.new(1, 0, 1, -98)
@@ -528,7 +545,7 @@ return function(PagePets, State, ZyloLib, Main)
     ConfigContainer.BackgroundTransparency = 1
     ConfigContainer.ScrollBarThickness = 3
     ConfigContainer.ScrollBarImageColor3 = C.PURPLE
-    ConfigContainer.CanvasSize = UDim2.new(0, 0, 0, 260)
+    ConfigContainer.CanvasSize = UDim2.new(0, 0, 0, 320)
     ConfigContainer.Visible = false
 
     local function updateSubTabs()
@@ -602,7 +619,7 @@ return function(PagePets, State, ZyloLib, Main)
     end)
 
     -- =============================================================
-    -- [1] TEAM VIEWS CONTAINER (DELAY SETTINGS & PET SELECTION)
+    -- [1] TEAM VIEWS CONTAINER
     -- =============================================================
     local DelayHeader = Instance.new("Frame", TeamViewsContainer)
     DelayHeader.Position = UDim2.new(0, 10, 0, 2)
@@ -903,7 +920,7 @@ return function(PagePets, State, ZyloLib, Main)
     end)
 
     -- =============================================================
-    -- [2] CONFIG CONTAINER (DENGAN SISTEM HIDE/SHOW EGG CONFIG)
+    -- [2] CONFIG CONTAINER (EGG CONFIG & SELL CONFIG FULL UI)
     -- =============================================================
     local cfgLayout = Instance.new("UIListLayout", ConfigContainer)
     cfgLayout.Padding = UDim.new(0, 8)
@@ -912,13 +929,15 @@ return function(PagePets, State, ZyloLib, Main)
     cfgPad.PaddingLeft = UDim.new(0, 10)
     cfgPad.PaddingRight = UDim.new(0, 10)
 
-    -- [ITEM 1]: EGG CONFIG CARD (DROPDOWN EXPANDABLE)
+    -- -------------------------------------------------------------
+    -- [A] EGG CONFIG CARD (DROPDOWN HIDE / SHOW)
+    -- -------------------------------------------------------------
     local EggConfigCard = Instance.new("Frame", ConfigContainer)
-    EggConfigCard.Size = UDim2.new(1, 0, 0, 38)
+    EggConfigCard.Size = State.EggConfigExpanded and UDim2.new(1, 0, 0, 132) or UDim2.new(1, 0, 0, 38)
     EggConfigCard.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
     Instance.new("UICorner", EggConfigCard).CornerRadius = UDim.new(0, 8)
     local eccStroke = Instance.new("UIStroke", EggConfigCard)
-    eccStroke.Color = C.STROKE
+    eccStroke.Color = State.EggConfigExpanded and C.PURPLE_L or C.STROKE
     eccStroke.Thickness = 1.2
 
     local EggHeaderBtn = Instance.new("TextButton", EggConfigCard)
@@ -945,7 +964,6 @@ return function(PagePets, State, ZyloLib, Main)
     ehArrow.Font = Enum.Font.GothamBold
     ehArrow.TextSize = 9.5
 
-    -- Kontainer Dropdown Opsi Telur (Yang di Hide / Tampilkan)
     local EggOptionsFrame = Instance.new("Frame", EggConfigCard)
     EggOptionsFrame.Position = UDim2.new(0, 8, 0, 42)
     EggOptionsFrame.Size = UDim2.new(1, -16, 0, 84)
@@ -955,7 +973,6 @@ return function(PagePets, State, ZyloLib, Main)
     local eoLayout = Instance.new("UIListLayout", EggOptionsFrame)
     eoLayout.Padding = UDim.new(0, 6)
 
-    -- Toggle 1: Otomatis Tetaskan & Claim Telur Siap Panen
     local rowHatch = Instance.new("Frame", EggOptionsFrame)
     rowHatch.Size = UDim2.new(1, 0, 0, 36)
     rowHatch.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
@@ -973,12 +990,9 @@ return function(PagePets, State, ZyloLib, Main)
     rhLbl.TextSize = 8.5
     rhLbl.TextXAlignment = Enum.TextXAlignment.Left
 
-    local hatchPill = ZyloLib:CreatePillSwitch(rowHatch, State.AutoHatch, function(v)
-        State.AutoHatch = v
-    end)
+    local hatchPill = ZyloLib:CreatePillSwitch(rowHatch, State.AutoHatch, function(v) State.AutoHatch = v end)
     hatchPill.Position = UDim2.new(1, -44, 0.5, -10)
 
-    -- Toggle 2: Don't Hatch If Time Not Done
     local rowSync = Instance.new("Frame", EggOptionsFrame)
     rowSync.Size = UDim2.new(1, 0, 0, 42)
     rowSync.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
@@ -1006,22 +1020,428 @@ return function(PagePets, State, ZyloLib, Main)
     rsSub.TextSize = 7.5
     rsSub.TextXAlignment = Enum.TextXAlignment.Left
 
-    local syncPill = ZyloLib:CreatePillSwitch(rowSync, State.DontHatchIfNotAllDone, function(v)
-        State.DontHatchIfNotAllDone = v
-    end)
+    local syncPill = ZyloLib:CreatePillSwitch(rowSync, State.DontHatchIfNotAllDone, function(v) State.DontHatchIfNotAllDone = v end)
     syncPill.Position = UDim2.new(1, -44, 0.5, -10)
 
-    -- Logika Klik Dropdown: Hide / Show Egg Config
+    local function recalculateCanvasSize()
+        local h = 80
+        if State.EggConfigExpanded then h = h + 100 end
+        if State.SellConfigExpanded then h = h + 450 end
+        ConfigContainer.CanvasSize = UDim2.new(0, 0, 0, h)
+    end
+
     EggHeaderBtn.MouseButton1Click:Connect(function()
         State.EggConfigExpanded = not State.EggConfigExpanded
         ehArrow.Text = State.EggConfigExpanded and "▼" or "▶"
         EggOptionsFrame.Visible = State.EggConfigExpanded
         EggConfigCard.Size = State.EggConfigExpanded and UDim2.new(1, 0, 0, 132) or UDim2.new(1, 0, 0, 38)
         eccStroke.Color = State.EggConfigExpanded and C.PURPLE_L or C.STROKE
-        ConfigContainer.CanvasSize = State.EggConfigExpanded and UDim2.new(0, 0, 0, 310) or UDim2.new(0, 0, 0, 240)
+        recalculateCanvasSize()
     end)
 
-    local function makeSimpleConfigButton(title, descText)
+    -- -------------------------------------------------------------
+    -- [B] SELL CONFIG CARD (DROPDOWN HIDE / SHOW DENGAN FULL UI FITUR)
+    -- -------------------------------------------------------------
+    local SellConfigCard = Instance.new("Frame", ConfigContainer)
+    SellConfigCard.Size = State.SellConfigExpanded and UDim2.new(1, 0, 0, 460) or UDim2.new(1, 0, 0, 38)
+    SellConfigCard.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
+    Instance.new("UICorner", SellConfigCard).CornerRadius = UDim.new(0, 8)
+    local sccStroke = Instance.new("UIStroke", SellConfigCard)
+    sccStroke.Color = State.SellConfigExpanded and C.PURPLE_L or C.STROKE
+    sccStroke.Thickness = 1.2
+
+    local SellHeaderBtn = Instance.new("TextButton", SellConfigCard)
+    SellHeaderBtn.Size = UDim2.new(1, 0, 0, 38)
+    SellHeaderBtn.BackgroundTransparency = 1
+    SellHeaderBtn.Text = ""
+
+    local shTitle = Instance.new("TextLabel", SellHeaderBtn)
+    shTitle.Position = UDim2.new(0, 12, 0, 0)
+    shTitle.Size = UDim2.new(1, -45, 1, 0)
+    shTitle.BackgroundTransparency = 1
+    shTitle.Text = "💰  Sell Config (Favorite Important Pets First)"
+    shTitle.TextColor3 = Color3.fromRGB(240, 245, 255)
+    shTitle.Font = Enum.Font.GothamBold
+    shTitle.TextSize = 9.5
+    shTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+    local shArrow = Instance.new("TextLabel", SellHeaderBtn)
+    shArrow.Position = UDim2.new(1, -30, 0, 0)
+    shArrow.Size = UDim2.new(0, 20, 1, 0)
+    shArrow.BackgroundTransparency = 1
+    shArrow.Text = State.SellConfigExpanded and "▼" or "▶"
+    shArrow.TextColor3 = C.PURPLE_L
+    shArrow.Font = Enum.Font.GothamBold
+    shArrow.TextSize = 9.5
+
+    -- Kontainer Dropdown Opsi Sell Config
+    local SellOptionsFrame = Instance.new("Frame", SellConfigCard)
+    SellOptionsFrame.Position = UDim2.new(0, 8, 0, 42)
+    SellOptionsFrame.Size = UDim2.new(1, -16, 0, 410)
+    SellOptionsFrame.BackgroundTransparency = 1
+    SellOptionsFrame.Visible = State.SellConfigExpanded
+
+    local soLayout = Instance.new("UIListLayout", SellOptionsFrame)
+    soLayout.Padding = UDim.new(0, 6)
+
+    -- [1] Box PETUNJUK Aturan Main
+    local ruleBox = Instance.new("Frame", SellOptionsFrame)
+    ruleBox.Size = UDim2.new(1, 0, 0, 78)
+    ruleBox.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
+    Instance.new("UICorner", ruleBox).CornerRadius = UDim.new(0, 6)
+    local rbStroke = Instance.new("UIStroke", ruleBox)
+    rbStroke.Color = Color3.fromRGB(35, 42, 65)
+
+    local ruleText = Instance.new("TextLabel", ruleBox)
+    ruleText.Position = UDim2.new(0, 8, 0, 4)
+    ruleText.Size = UDim2.new(1, -16, 1, -8)
+    ruleText.BackgroundTransparency = 1
+    ruleText.Text = "<b><font color=\"#C084FC\">PETUNJUK</font></b>\n• Aturan ini <b>hanya diterapkan</b> pada pet yang tercantum di dalam List.\n• Pet yang tidak tercantum di dalam List dianggap <font color=\"#4ADE80\">AMAN</font> (tidak diproses/dijual).\n• <b>KG = 0</b> pet akan di <font color=\"#4ADE80\">KEEP</font>.\n• Apabila <b>KG > 0</b>: Weight < KG mengikuti KEEP/SELL, Weight >= KG <font color=\"#4ADE80\">KEEP (Bronto)</font>."
+    ruleText.RichText = true
+    ruleText.TextColor3 = Color3.fromRGB(200, 210, 235)
+    ruleText.Font = Enum.Font.Gotham
+    ruleText.TextSize = 7.5
+    ruleText.TextWrapped = true
+    ruleText.TextXAlignment = Enum.TextXAlignment.Left
+    ruleText.TextYAlignment = Enum.TextYAlignment.Top
+
+    -- [2] Baris Ambang Batas Jumlah Pet (Auto Sell Aktif Saat Total Pet)
+    local rowThresh = Instance.new("Frame", SellOptionsFrame)
+    rowThresh.Size = UDim2.new(1, 0, 0, 28)
+    rowThresh.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
+    Instance.new("UICorner", rowThresh).CornerRadius = UDim.new(0, 5)
+
+    local rthLbl = Instance.new("TextLabel", rowThresh)
+    rthLbl.Position = UDim2.new(0, 8, 0, 0)
+    rthLbl.Size = UDim2.new(1, -65, 1, 0)
+    rthLbl.BackgroundTransparency = 1
+    rthLbl.Text = "Auto Sell Aktif Saat Total Pet ( Sesuai Config List Dibawah ) :"
+    rthLbl.TextColor3 = Color3.fromRGB(255, 110, 110)
+    rthLbl.Font = Enum.Font.GothamBold
+    rthLbl.TextSize = 8
+    rthLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local rthBox = Instance.new("TextBox", rowThresh)
+    rthBox.Position = UDim2.new(1, -50, 0.5, -10)
+    rthBox.Size = UDim2.new(0, 42, 0, 20)
+    rthBox.BackgroundColor3 = Color3.fromRGB(16, 21, 42)
+    rthBox.Text = tostring(State.AutoSellThresholdCount or 24)
+    rthBox.TextColor3 = C.TEXT_W
+    rthBox.Font = Enum.Font.GothamBold
+    rthBox.TextSize = 9
+    Instance.new("UICorner", rthBox).CornerRadius = UDim.new(0, 4)
+    local rthStroke = Instance.new("UIStroke", rthBox)
+    rthStroke.Color = C.STROKE
+
+    rthBox:GetPropertyChangedSignal("Text"):Connect(function()
+        local val = tonumber(rthBox.Text)
+        if val then State.AutoSellThresholdCount = val end
+    end)
+
+    -- [3] Sell Mode Selector (Sell One By One vs Sell All)
+    local rowMode = Instance.new("Frame", SellOptionsFrame)
+    rowMode.Size = UDim2.new(1, 0, 0, 26)
+    rowMode.BackgroundTransparency = 1
+
+    local smLbl = Instance.new("TextLabel", rowMode)
+    smLbl.Position = UDim2.new(0, 4, 0, 0)
+    smLbl.Size = UDim2.new(0.35, 0, 1, 0)
+    smLbl.BackgroundTransparency = 1
+    smLbl.Text = "Sell Mode"
+    smLbl.TextColor3 = C.TEXT_M
+    smLbl.Font = Enum.Font.GothamMedium
+    smLbl.TextSize = 9
+    smLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local btnOneByOne = Instance.new("TextButton", rowMode)
+    btnOneByOne.Position = UDim2.new(0.36, 0, 0, 0)
+    btnOneByOne.Size = UDim2.new(0.31, 0, 1, 0)
+    btnOneByOne.BackgroundColor3 = (State.SellMode == "Sell One By One") and C.PURPLE or Color3.fromRGB(16, 21, 42)
+    btnOneByOne.Text = "Sell One By One"
+    btnOneByOne.TextColor3 = (State.SellMode == "Sell One By One") and Color3.fromRGB(255, 255, 255) or C.TEXT_M
+    btnOneByOne.Font = Enum.Font.GothamBold
+    btnOneByOne.TextSize = 8
+    Instance.new("UICorner", btnOneByOne).CornerRadius = UDim.new(0, 4)
+
+    local btnSellAll = Instance.new("TextButton", rowMode)
+    btnSellAll.Position = UDim2.new(0.69, 0, 0, 0)
+    btnSellAll.Size = UDim2.new(0.31, 0, 1, 0)
+    btnSellAll.BackgroundColor3 = (State.SellMode == "Sell All") and C.PURPLE or Color3.fromRGB(16, 21, 42)
+    btnSellAll.Text = "Sell All"
+    btnSellAll.TextColor3 = (State.SellMode == "Sell All") and Color3.fromRGB(255, 255, 255) or C.TEXT_M
+    btnSellAll.Font = Enum.Font.GothamBold
+    btnSellAll.TextSize = 8
+    Instance.new("UICorner", btnSellAll).CornerRadius = UDim.new(0, 4)
+
+    local function updateModeButtons()
+        btnOneByOne.BackgroundColor3 = (State.SellMode == "Sell One By One") and C.PURPLE or Color3.fromRGB(16, 21, 42)
+        btnOneByOne.TextColor3 = (State.SellMode == "Sell One By One") and Color3.fromRGB(255, 255, 255) or C.TEXT_M
+        btnSellAll.BackgroundColor3 = (State.SellMode == "Sell All") and C.PURPLE or Color3.fromRGB(16, 21, 42)
+        btnSellAll.TextColor3 = (State.SellMode == "Sell All") and Color3.fromRGB(255, 255, 255) or C.TEXT_M
+    end
+
+    btnOneByOne.MouseButton1Click:Connect(function()
+        State.SellMode = "Sell One By One"
+        updateModeButtons()
+    end)
+    btnSellAll.MouseButton1Click:Connect(function()
+        State.SellMode = "Sell All"
+        updateModeButtons()
+    end)
+
+    -- [4] Search Box Pet di Config
+    local sellSearchBox = Instance.new("TextBox", SellOptionsFrame)
+    sellSearchBox.Size = UDim2.new(1, 0, 0, 22)
+    sellSearchBox.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
+    sellSearchBox.PlaceholderText = "Search..."
+    sellSearchBox.PlaceholderColor3 = Color3.fromRGB(110, 120, 150)
+    sellSearchBox.Text = ""
+    sellSearchBox.TextColor3 = C.TEXT_W
+    sellSearchBox.Font = Enum.Font.Gotham
+    sellSearchBox.TextSize = 8.5
+    Instance.new("UICorner", sellSearchBox).CornerRadius = UDim.new(0, 4)
+    local ssbStroke = Instance.new("UIStroke", sellSearchBox)
+    ssbStroke.Color = Color3.fromRGB(32, 38, 60)
+
+    -- [5] Scroll List Tabel Rules Pet
+    local sellListScroll = Instance.new("ScrollingFrame", SellOptionsFrame)
+    sellListScroll.Size = UDim2.new(1, 0, 0, 130)
+    sellListScroll.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
+    sellListScroll.ScrollBarThickness = 2
+    sellListScroll.ScrollBarImageColor3 = C.PURPLE
+    Instance.new("UICorner", sellListScroll).CornerRadius = UDim.new(0, 6)
+    local slsStroke = Instance.new("UIStroke", sellListScroll)
+    slsStroke.Color = Color3.fromRGB(30, 38, 60)
+
+    local slsLayout = Instance.new("UIListLayout", sellListScroll)
+    slsLayout.Padding = UDim.new(0, 4)
+    local slsPad = Instance.new("UIPadding", sellListScroll)
+    slsPad.PaddingTop = UDim.new(0, 4)
+    slsPad.PaddingLeft = UDim.new(0, 4)
+    slsPad.PaddingRight = UDim.new(0, 4)
+
+    local renderSellRules = nil
+
+    renderSellRules = function()
+        for _, ch in ipairs(sellListScroll:GetChildren()) do
+            if ch:IsA("Frame") then ch:Destroy() end
+        end
+
+        local filter = (State.SellSearchQuery or ""):lower()
+        local count = 0
+
+        for idx, rule in ipairs(State.SellPetRules) do
+            if filter == "" or rule.Species:lower():find(filter) then
+                count = count + 1
+                local item = Instance.new("Frame", sellListScroll)
+                item.Size = UDim2.new(1, 0, 0, 24)
+                item.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
+                Instance.new("UICorner", item).CornerRadius = UDim.new(0, 4)
+
+                local nameLbl = Instance.new("TextLabel", item)
+                nameLbl.Position = UDim2.new(0, 6, 0, 0)
+                nameLbl.Size = UDim2.new(0.32, 0, 1, 0)
+                nameLbl.BackgroundTransparency = 1
+                nameLbl.Text = rule.Species
+                nameLbl.TextColor3 = Color3.fromRGB(240, 245, 255)
+                nameLbl.Font = Enum.Font.GothamMedium
+                nameLbl.TextSize = 8
+                nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+                local badgeLbl = Instance.new("TextLabel", item)
+                badgeLbl.Position = UDim2.new(0.33, 0, 0, 0)
+                badgeLbl.Size = UDim2.new(0.35, 0, 1, 0)
+                badgeLbl.BackgroundTransparency = 1
+                badgeLbl.RichText = true
+                badgeLbl.Text = string.format("<font color=\"#F87171\">&lt; %s %s</font> | <font color=\"#4ADE80\">&gt;= %s BRONTO</font>", tostring(rule.KG), rule.Action, tostring(rule.KG))
+                badgeLbl.Font = Enum.Font.GothamBold
+                badgeLbl.TextSize = 7.5
+                badgeLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+                local kgBox = Instance.new("TextBox", item)
+                kgBox.Position = UDim2.new(0.69, 0, 0.5, -8)
+                kgBox.Size = UDim2.new(0, 26, 0, 16)
+                kgBox.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
+                kgBox.Text = tostring(rule.KG)
+                kgBox.TextColor3 = C.TEXT_W
+                kgBox.Font = Enum.Font.GothamBold
+                kgBox.TextSize = 8
+                Instance.new("UICorner", kgBox).CornerRadius = UDim.new(0, 3)
+
+                kgBox:GetPropertyChangedSignal("Text"):Connect(function()
+                    local val = tonumber(kgBox.Text)
+                    if val then
+                        rule.KG = val
+                        badgeLbl.Text = string.format("<font color=\"#F87171\">&lt; %s %s</font> | <font color=\"#4ADE80\">&gt;= %s BRONTO</font>", tostring(rule.KG), rule.Action, tostring(rule.KG))
+                    end
+                end)
+
+                local actBtn = Instance.new("TextButton", item)
+                actBtn.Position = UDim2.new(0.79, 0, 0.5, -8)
+                actBtn.Size = UDim2.new(0, 34, 0, 16)
+                local isSell = (rule.Action == "SELL")
+                actBtn.BackgroundColor3 = isSell and Color3.fromRGB(120, 24, 40) or Color3.fromRGB(24, 100, 50)
+                actBtn.Text = rule.Action
+                actBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                actBtn.Font = Enum.Font.GothamBold
+                actBtn.TextSize = 7.5
+                Instance.new("UICorner", actBtn).CornerRadius = UDim.new(0, 3)
+
+                actBtn.MouseButton1Click:Connect(function()
+                    rule.Action = (rule.Action == "SELL") and "KEEP" or "SELL"
+                    actBtn.Text = rule.Action
+                    actBtn.BackgroundColor3 = (rule.Action == "SELL") and Color3.fromRGB(120, 24, 40) or Color3.fromRGB(24, 100, 50)
+                    badgeLbl.Text = string.format("<font color=\"#F87171\">&lt; %s %s</font> | <font color=\"#4ADE80\">&gt;= %s BRONTO</font>", tostring(rule.KG), rule.Action, tostring(rule.KG))
+                end)
+
+                local delBtn = Instance.new("TextButton", item)
+                delBtn.Position = UDim2.new(1, -20, 0.5, -8)
+                delBtn.Size = UDim2.new(0, 16, 0, 16)
+                delBtn.BackgroundColor3 = Color3.fromRGB(140, 25, 35)
+                delBtn.Text = "-"
+                delBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                delBtn.Font = Enum.Font.GothamBold
+                delBtn.TextSize = 9
+                Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 3)
+
+                delBtn.MouseButton1Click:Connect(function()
+                    table.remove(State.SellPetRules, idx)
+                    renderSellRules()
+                end)
+            end
+        end
+
+        sellListScroll.CanvasSize = UDim2.new(0, 0, 0, count * 28 + 4)
+    end
+
+    sellSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        State.SellSearchQuery = sellSearchBox.Text
+        renderSellRules()
+    end)
+
+    renderSellRules()
+
+    -- [6] Baris Bulk Pet Type Selection
+    local rowBulkPet = Instance.new("Frame", SellOptionsFrame)
+    rowBulkPet.Size = UDim2.new(1, 0, 0, 24)
+    rowBulkPet.BackgroundTransparency = 1
+
+    local bpLbl = Instance.new("TextLabel", rowBulkPet)
+    bpLbl.Size = UDim2.new(0.4, 0, 1, 0)
+    bpLbl.BackgroundTransparency = 1
+    bpLbl.Text = "Select Pet Type"
+    bpLbl.TextColor3 = C.TEXT_M
+    bpLbl.Font = Enum.Font.GothamMedium
+    bpLbl.TextSize = 8.5
+    bpLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local bpDropdown = Instance.new("TextButton", rowBulkPet)
+    bpDropdown.Position = UDim2.new(0.42, 0, 0, 0)
+    bpDropdown.Size = UDim2.new(0.58, 0, 1, 0)
+    bpDropdown.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
+    bpDropdown.Text = "Select Pet... ▼"
+    bpDropdown.TextColor3 = C.TEXT_W
+    bpDropdown.Font = Enum.Font.GothamMedium
+    bpDropdown.TextSize = 8.5
+    Instance.new("UICorner", bpDropdown).CornerRadius = UDim.new(0, 4)
+    local bpdStroke = Instance.new("UIStroke", bpDropdown)
+    bpdStroke.Color = Color3.fromRGB(35, 42, 65)
+
+    -- [7] Baris KG (Bulk)
+    local rowBulkKG = Instance.new("Frame", SellOptionsFrame)
+    rowBulkKG.Size = UDim2.new(1, 0, 0, 24)
+    rowBulkKG.BackgroundTransparency = 1
+
+    local bkgLbl = Instance.new("TextLabel", rowBulkKG)
+    bkgLbl.Size = UDim2.new(0.6, 0, 1, 0)
+    bkgLbl.BackgroundTransparency = 1
+    bkgLbl.Text = "KG (Bulk)"
+    bkgLbl.TextColor3 = C.TEXT_M
+    bkgLbl.Font = Enum.Font.GothamMedium
+    bkgLbl.TextSize = 8.5
+    bkgLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local bkgBox = Instance.new("TextBox", rowBulkKG)
+    bkgBox.Position = UDim2.new(1, -55, 0, 0)
+    bkgBox.Size = UDim2.new(0, 55, 1, 0)
+    bkgBox.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
+    bkgBox.Text = tostring(State.BulkKG or 0)
+    bkgBox.TextColor3 = C.TEXT_W
+    bkgBox.Font = Enum.Font.GothamBold
+    bkgBox.TextSize = 8.5
+    Instance.new("UICorner", bkgBox).CornerRadius = UDim.new(0, 4)
+    local bkgStroke = Instance.new("UIStroke", bkgBox)
+    bkgStroke.Color = Color3.fromRGB(35, 42, 65)
+
+    bkgBox:GetPropertyChangedSignal("Text"):Connect(function()
+        local val = tonumber(bkgBox.Text)
+        if val then State.BulkKG = val end
+    end)
+
+    -- [8] Baris Below KG Action (Bulk)
+    local rowBulkAct = Instance.new("Frame", SellOptionsFrame)
+    rowBulkAct.Size = UDim2.new(1, 0, 0, 24)
+    rowBulkAct.BackgroundTransparency = 1
+
+    local bkaLbl = Instance.new("TextLabel", rowBulkAct)
+    bkaLbl.Size = UDim2.new(0.6, 0, 1, 0)
+    bkaLbl.BackgroundTransparency = 1
+    bkaLbl.Text = "Below KG Action (Bulk)"
+    bkaLbl.TextColor3 = C.TEXT_M
+    bkaLbl.Font = Enum.Font.GothamMedium
+    bkaLbl.TextSize = 8.5
+    bkaLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local bkaBtn = Instance.new("TextButton", rowBulkAct)
+    bkaBtn.Position = UDim2.new(1, -75, 0, 0)
+    bkaBtn.Size = UDim2.new(0, 75, 1, 0)
+    bkaBtn.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
+    bkaBtn.Text = State.BulkAction .. "  ▼"
+    bkaBtn.TextColor3 = C.TEXT_W
+    bkaBtn.Font = Enum.Font.GothamMedium
+    bkaBtn.TextSize = 8.5
+    Instance.new("UICorner", bkaBtn).CornerRadius = UDim.new(0, 4)
+    local bkaStroke = Instance.new("UIStroke", bkaBtn)
+    bkaStroke.Color = Color3.fromRGB(35, 42, 65)
+
+    bkaBtn.MouseButton1Click:Connect(function()
+        State.BulkAction = (State.BulkAction == "sell") and "keep" or "sell"
+        bkaBtn.Text = State.BulkAction .. "  ▼"
+    end)
+
+    -- [9] Baris APPLY BULK LIST
+    local rowBulkApply = Instance.new("Frame", SellOptionsFrame)
+    rowBulkApply.Size = UDim2.new(1, 0, 0, 26)
+    rowBulkApply.BackgroundTransparency = 1
+
+    local baLbl = Instance.new("TextLabel", rowBulkApply)
+    baLbl.Size = UDim2.new(0.7, 0, 1, 0)
+    baLbl.BackgroundTransparency = 1
+    baLbl.Text = "APPLY BULK LIST"
+    baLbl.TextColor3 = C.TEXT_M
+    baLbl.Font = Enum.Font.GothamBold
+    baLbl.TextSize = 8.5
+    baLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local bulkPill = ZyloLib:CreatePillSwitch(rowBulkApply, State.ApplyBulkList, function(v)
+        State.ApplyBulkList = v
+    end)
+    bulkPill.Position = UDim2.new(1, -44, 0.5, -10)
+
+    -- Logika Klik Dropdown: Hide / Show Sell Config
+    SellHeaderBtn.MouseButton1Click:Connect(function()
+        State.SellConfigExpanded = not State.SellConfigExpanded
+        shArrow.Text = State.SellConfigExpanded and "▼" or "▶"
+        SellOptionsFrame.Visible = State.SellConfigExpanded
+        SellConfigCard.Size = State.SellConfigExpanded and UDim2.new(1, 0, 0, 460) or UDim2.new(1, 0, 0, 38)
+        sccStroke.Color = State.SellConfigExpanded and C.PURPLE_L or C.STROKE
+        recalculateCanvasSize()
+    end)
+
+    -- -------------------------------------------------------------
+    -- [C] SWAP SKILL CONFIG BUTTON
+    -- -------------------------------------------------------------
+    local function makeSimpleConfigButton(title)
         local btn = Instance.new("TextButton", ConfigContainer)
         btn.Size = UDim2.new(1, 0, 0, 38)
         btn.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
@@ -1051,20 +1471,9 @@ return function(PagePets, State, ZyloLib, Main)
         arrow.Font = Enum.Font.GothamBold
         arrow.TextSize = 9.5
 
-        btn.MouseEnter:Connect(function()
-            stroke.Color = C.PURPLE_L
-            btn.BackgroundColor3 = Color3.fromRGB(22, 18, 48)
-        end)
-        btn.MouseLeave:Connect(function()
-            stroke.Color = C.STROKE
-            btn.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
-        end)
-
         return btn
     end
 
-    -- [ITEM 2 & 3]: SELL CONFIG & SWAP SKILL
-    makeSimpleConfigButton("💰  Sell Config (Favorite Important Pets First)")
     makeSimpleConfigButton("🔄  Swap Skill Config")
 
     -- =============================================================
@@ -1167,7 +1576,7 @@ return function(PagePets, State, ZyloLib, Main)
         end)
     end)
 
-    -- LOGIKA TOMBOL STOP DENGAN MULTI-PASS SWEEP AGAR TAK ADA SATU PET PUN TERTINGGAL
+    -- LOGIKA TOMBOL STOP DENGAN MULTI-PASS SWEEP
     local isStopping = false
     StopBtn.MouseButton1Click:Connect(function()
         State.IsTeamRunning = false
@@ -1188,14 +1597,12 @@ return function(PagePets, State, ZyloLib, Main)
             local delayUneq = tonumber(State.TeamDelayUnequip[curTeam]) or 0.2
             if delayUneq <= 0 then delayUneq = 0.1 end
 
-            -- PASS 1: Angkat semua pet yang terdata di kebun saat ini
             local inGarden = GetEquippedPetsInGarden()
             for _, gPet in ipairs(inGarden) do
                 UnequipPetByUUID(gPet.UUID)
                 task.wait(delayUneq)
             end
 
-            -- PASS 2: Sapu bersih UUID dari database DataService
             if DataService then
                 local ok, data = pcall(function() return DataService:GetData() end)
                 if ok and data and data.PetsData and data.PetsData.EquippedPets then
@@ -1208,7 +1615,6 @@ return function(PagePets, State, ZyloLib, Main)
 
             task.wait(0.3)
 
-            -- PASS 3 (FINAL SWEEP): Cek ulang semua model di kebun. Jika masih ada sisa, eksekusi langsung ProximityPrompt di tempat
             local remaining = GetEquippedPetsInGarden()
             for _, remPet in ipairs(remaining) do
                 UnequipPetByUUID(remPet.UUID)
