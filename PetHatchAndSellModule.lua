@@ -3,7 +3,7 @@
 --  Repository: zylo-games/PetHatchAndSellModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  STATUS: 100% PRESERVED AUTO HATCH & REAL-TIME AUTO SELL ENGINE
---  DATASET: ALL 492 CLEAN BASE PET SPECIES (NO HUGE/GIANT/EGG PREFIXES)
+--  DATASET INTEGRATION: ranklee26-glitch/zylo-games/PetDataset.lua (OFFICIAL)
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main, TeamManager)
@@ -39,7 +39,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     State.EggConfigExpanded = (State.EggConfigExpanded ~= nil) and State.EggConfigExpanded or false
     State.SellConfigExpanded = (State.SellConfigExpanded ~= nil) and State.SellConfigExpanded or false
 
-    -- State Khusus Sell Config & Bulk Flow (Default Threshold = 1 agar langsung jalan saat ditest)
+    -- State Khusus Sell Config & Bulk Flow
     State.AutoSellThresholdCount = State.AutoSellThresholdCount or 1
     State.SellMode = State.SellMode or "Sell All"
     State.SellSearchQuery = State.SellSearchQuery or ""
@@ -48,7 +48,17 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     State.BulkAction = State.BulkAction or "sell"
     State.ApplyBulkList = (State.ApplyBulkList ~= nil) and State.ApplyBulkList or false
 
-    -- Master List Spesies Pet (Murni Nama Spesies: Tanpa Awalan Ukuran Huge/GIANT dan Tanpa Kategori Telur)
+    -- [INTEGRASI DATASET GITHUB RESMI ZYLOHUB]
+    local GlobalPetDataset = nil
+    pcall(function()
+        local rawDataset = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/PetDataset.lua")
+        if rawDataset and #rawDataset > 50 then
+            GlobalPetDataset = loadstring(rawDataset)()
+        end
+    end)
+
+    -- Master List Spesies Pet (Diambil langsung dari PetDataset.lua dengan Fallback jika offline)
+    -- Master List Lengkap Seluruh 515 Spesies Pet Resmi Grow a Garden
     local MasterPetSpeciesList = {
         "Amethyst Beetle", "Anglerfish", "Angora Goat", "Ankylosaurus", "Anubis",
         "Apple Gazelle", "Arctic Fox", "Armadillo", "Axolotl", "Bacon Pig",
@@ -99,65 +109,74 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         "Mimic Octopus", "Mistletoad", "Mizuchi", "Mochi Mouse", "Mole",
         "Monitor Lizard", "Monkey", "Moon Cat", "Moon Dragon", "Moon Snail",
         "Moose", "Moss Wyvern", "Moth", "Mummy", "Nautilus",
-        "New Year's Bird", "New Year's Chimp", "New Year's Dragon", "Newt", "Night Horse",
+        "New Year\'s Bird", "New Year\'s Chimp", "New Year\'s Dragon", "Newt", "Night Horse",
         "Night Owl", "Nightjar", "Nihonzaru", "Nurse Bee", "Nutcracker",
         "Nyala", "Opossum", "Orange Tabby", "Orangutan", "Orca",
         "Orchid Mantis", "Ostrich", "Owl", "Oxpecker", "Pachycephalosaurus",
         "Pack Bee", "Pack Mule", "Pancake Mole", "Panda", "Parasaurolophus",
-        "Parasaurolophus ", "Partridge", "Peach Wasp", "Peacock", "Pelican",
-        "Penguin", "Performer Seal", "Peryton", "Petal Bee", "Phoenix",
-        "Pig", "Pine Beetle", "Pink Bunny", "Pink Panda", "Pixie",
-        "Polar Bear", "Praying Mantis", "Prince Wasp", "Professor Bee", "Pterodactyl",
-        "Pumpkin Rat", "Queen Bee", "Quetzal", "Raccoon", "Raiju",
-        "Rainbow Anglerfish", "Rainbow Ankylosaurus", "Rainbow Anubis", "Rainbow Arctic Fox", "Rainbow Armadillo",
-        "Rainbow Bacon Pig", "Rainbow Badger", "Rainbow Barn Owl", "Rainbow Bear on Bike", "Rainbow Birb",
-        "Rainbow Black Bird", "Rainbow Blue Jay", "Rainbow Brown Owl", "Rainbow Bumblebee", "Rainbow Cardinal",
-        "Rainbow Carnival Elephant", "Rainbow Celebration Puppy", "Rainbow Chest Mimic", "Rainbow Chinchilla", "Rainbow Christmas Gorilla",
-        "Rainbow Cicada", "Rainbow Cloud Hound", "Rainbow Cloud Sprite", "Rainbow Corrupted Kitsune", "Rainbow Cuckoo",
-        "Rainbow Dilophosaurus", "Rainbow Elemental Bee", "Rainbow Elephant", "Rainbow Elk", "Rainbow Empress Bee",
-        "Rainbow Farmer Chipmunk", "Rainbow Fire Wisp", "Rainbow Firework Sprite", "Rainbow Fortune Squirrel", "Rainbow French Hen",
-        "Rainbow Frost Dragon", "Rainbow Gardener Bee", "Rainbow Giraffe", "Rainbow Gold Finch", "Rainbow Goose",
-        "Rainbow Griffin", "Rainbow Grizzly Bear", "Rainbow Hotdog Daschund", "Rainbow Hydra", "Rainbow Idol Chipmunk",
-        "Rainbow Iguanodon", "Rainbow Jabberwock", "Rainbow Kirin", "Rainbow Kodama", "Rainbow Krampus",
-        "Rainbow Lobster Thermidor", "Rainbow Mandrake", "Rainbow Maneki-neko", "Rainbow Mantis Shrimp", "Rainbow Mistletoad",
-        "Rainbow Mizuchi", "Rainbow Monitor Lizard", "Rainbow Moon Snail", "Rainbow Moss Wyvern", "Rainbow New Year's Bird",
-        "Rainbow New Year's Chimp", "Rainbow New Year's Dragon", "Rainbow Newt", "Rainbow Nightjar", "Rainbow Nurse Bee",
-        "Rainbow Oxpecker", "Rainbow Pachycephalosaurus", "Rainbow Parasaurolophus", "Rainbow Performer Seal", "Rainbow Phoenix",
-        "Rainbow Pink Bunny", "Rainbow Rhino", "Rainbow Robin", "Rainbow Sand Wyrm", "Rainbow Sheep",
-        "Rainbow Show Pony", "Rainbow Shroomie", "Rainbow Snow Bunny", "Rainbow Spinosaurus", "Rainbow Stag Beetle",
-        "Rainbow Star Wolf", "Rainbow Swan", "Rainbow Thunderbird", "Rainbow Unicycle Monkey", "Rainbow Vine Serpent",
-        "Rainbow Wise Owl", "Rainbow Zebra", "Raptor", "Reaper", "Red Dragon",
-        "Red Fox", "Red Giant Ant", "Red Panda", "Red Rose Fox", "Red Squirrel",
-        "Red-Nosed Reindeer", "Reindeer", "Rhino", "Robin", "Rooster",
-        "Ruby Squid", "Salmon", "Sand Snake", "Sand Wyrm", "Sandcastle Crab",
-        "Santa Bear", "Sapphire Macaw", "Scarab", "Scarlet Macaw", "Sea Anemone",
-        "Sea Otter", "Sea Turtle", "Sea Urchin", "Seagull", "Seahorse",
-        "Seal", "Seedling", "Shadow Cat", "Shark", "Sheckling",
-        "Sheep", "Shiba Inu", "Show Pony", "Shroomie", "Silver Dragonfly",
-        "Silver Monkey", "Silver Piggy", "Smithing Dog", "Snail", "Snake",
-        "Snow Bunny", "Snowman Builder", "Snowman Soldier", "Space Squirrel", "Spaghetti Sloth",
-        "Specter", "Spider", "Spinosaurus", "Spotted Deer", "Spriggan",
-        "Spring Bee", "Squirrel", "Stag Beetle", "Star Wolf", "Starfish",
-        "Starry Lunar Moth", "Starry Moon Dragon", "Starry Night Horse", "Starry Opossum", "Stegosaurus",
-        "Stork", "Sugar Glider", "Summer Kiwi", "Sunny-Side Chicken", "Sushi Bear",
-        "Swan", "T-Rex", "Tanchozuru", "Tanuki", "Tarantula Hawk",
-        "Termite", "Thunderbird", "Tidal Hermit Crab", "Tidal Orca", "Tidal Sea Anemone",
-        "Tidal Seahorse", "Tiger", "Tomb Marmot", "Topaz Snail", "Toucan",
-        "Trapdoor Spider", "Tree Frog", "Triceratops", "Tsuchinoko", "Tsunami Hermit Crab",
-        "Tsunami Orca", "Tsunami Sea Anemone", "Tsunami Seahorse", "Turtle", "Turtle Dove",
-        "Unicycle Monkey", "Vampire Squid", "Vine Serpent", "Walrus", "Wasp",
-        "Water Buffalo", "Wendigo", "Wheat Crow", "White Tiger", "Wind Wyvern",
-        "Wind-Up Rat", "Wise Owl", "Wisp", "Wolf", "Woodpecker",
-        "Woody", "Yeti", "Zebra"
+        "Partridge", "Peach Wasp", "Peacock", "Pelican", "Penguin",
+        "Performer Seal", "Peryton", "Petal Bee", "Phoenix", "Pig",
+        "Pine Beetle", "Pink Bunny", "Pink Panda", "Pixie", "Polar Bear",
+        "Praying Mantis", "Prince Wasp", "Professor Bee", "Pterodactyl", "Pumpkin Rat",
+        "Queen Bee", "Quetzal", "Raccoon", "Raiju", "Rainbow Anglerfish",
+        "Rainbow Ankylosaurus", "Rainbow Anubis", "Rainbow Arctic Fox", "Rainbow Armadillo", "Rainbow Bacon Pig",
+        "Rainbow Badger", "Rainbow Barn Owl", "Rainbow Bear on Bike", "Rainbow Birb", "Rainbow Black Bird",
+        "Rainbow Blue Jay", "Rainbow Brown Owl", "Rainbow Bumblebee", "Rainbow Cardinal", "Rainbow Carnival Elephant",
+        "Rainbow Celebration Puppy", "Rainbow Chest Mimic", "Rainbow Chinchilla", "Rainbow Christmas Gorilla", "Rainbow Cicada",
+        "Rainbow Cloud Hound", "Rainbow Cloud Sprite", "Rainbow Corrupted Kitsune", "Rainbow Cuckoo", "Rainbow Dilophosaurus",
+        "Rainbow Elemental Bee", "Rainbow Elephant", "Rainbow Elk", "Rainbow Empress Bee", "Rainbow Farmer Chipmunk",
+        "Rainbow Fire Wisp", "Rainbow Firework Sprite", "Rainbow Fortune Squirrel", "Rainbow French Hen", "Rainbow Frost Dragon",
+        "Rainbow Gardener Bee", "Rainbow Giraffe", "Rainbow Gold Finch", "Rainbow Goose", "Rainbow Griffin",
+        "Rainbow Grizzly Bear", "Rainbow Hotdog Daschund", "Rainbow Hydra", "Rainbow Idol Chipmunk", "Rainbow Iguanodon",
+        "Rainbow Jabberwock", "Rainbow Kirin", "Rainbow Kodama", "Rainbow Krampus", "Rainbow Lobster Thermidor",
+        "Rainbow Mandrake", "Rainbow Maneki-neko", "Rainbow Mantis Shrimp", "Rainbow Mistletoad", "Rainbow Mizuchi",
+        "Rainbow Monitor Lizard", "Rainbow Moon Snail", "Rainbow Moss Wyvern", "Rainbow New Year\'s Bird", "Rainbow New Year\'s Chimp",
+        "Rainbow New Year\'s Dragon", "Rainbow Newt", "Rainbow Nightjar", "Rainbow Nurse Bee", "Rainbow Oxpecker",
+        "Rainbow Pachycephalosaurus", "Rainbow Parasaurolophus", "Rainbow Performer Seal", "Rainbow Phoenix", "Rainbow Pink Bunny",
+        "Rainbow Rhino", "Rainbow Robin", "Rainbow Sand Wyrm", "Rainbow Sheep", "Rainbow Show Pony",
+        "Rainbow Shroomie", "Rainbow Snow Bunny", "Rainbow Spinosaurus", "Rainbow Stag Beetle", "Rainbow Star Wolf",
+        "Rainbow Swan", "Rainbow Thunderbird", "Rainbow Unicycle Monkey", "Rainbow Vine Serpent", "Rainbow Wise Owl",
+        "Rainbow Zebra", "Raptor", "Reaper", "Red Dragon", "Red Fox",
+        "Red Giant Ant", "Red Panda", "Red Rose Fox", "Red Squirrel", "Red-Nosed Reindeer",
+        "Reindeer", "Rhino", "Robin", "Rooster", "Ruby Squid",
+        "Salmon", "Sand Snake", "Sand Wyrm", "Sandcastle Crab", "Santa Bear",
+        "Sapphire Macaw", "Scarab", "Scarlet Macaw", "Sea Anemone", "Sea Otter",
+        "Sea Turtle", "Sea Urchin", "Seagull", "Seahorse", "Seal",
+        "Seedling", "Shadow Cat", "Shark", "Sheckling", "Sheep",
+        "Shiba Inu", "Show Pony", "Shroomie", "Silver Dragonfly", "Silver Monkey",
+        "Silver Piggy", "Smithing Dog", "Snail", "Snake", "Snow Bunny",
+        "Snowman Builder", "Snowman Soldier", "Space Squirrel", "Spaghetti Sloth", "Specter",
+        "Spider", "Spinosaurus", "Spotted Deer", "Spriggan", "Spring Bee",
+        "Squirrel", "Stag Beetle", "Star Wolf", "Starfish", "Starry Lunar Moth",
+        "Starry Moon Dragon", "Starry Night Horse", "Starry Opossum", "Stegosaurus", "Stork",
+        "Sugar Glider", "Summer Kiwi", "Sunny-Side Chicken", "Sushi Bear", "Swan",
+        "T-Rex", "Tanchozuru", "Tanuki", "Tarantula Hawk", "Termite",
+        "Thunderbird", "Tidal Hermit Crab", "Tidal Orca", "Tidal Sea Anemone", "Tidal Seahorse",
+        "Tiger", "Tomb Marmot", "Topaz Snail", "Toucan", "Trapdoor Spider",
+        "Tree Frog", "Triceratops", "Tsuchinoko", "Tsunami Hermit Crab", "Tsunami Orca",
+        "Tsunami Sea Anemone", "Tsunami Seahorse", "Turtle", "Turtle Dove", "Unicycle Monkey",
+        "Vampire Squid", "Vine Serpent", "Walrus", "Wasp", "Water Buffalo",
+        "Wendigo", "Wheat Crow", "White Tiger", "Wind Wyvern", "Wind-Up Rat",
+        "Wise Owl", "Wisp", "Wolf", "Woodpecker", "Woody",
+        "Yeti", "Zebra",
     }
 
     -- [ENGINE AUTO-DETECT 100% RESMI & AKURAT LANGSUNG DARI MEMORI GAME]
     local function FetchAllGamePetSpecies()
         local function registerPet(name)
             if type(name) == "string" and #name >= 2 then
-                -- Filter keluar awalan ukuran/kategori yang bukan jenis spesies
-                if name:find("^Huge%s") or name:find("^GIANT%s") or name:find("^Egg/") then return end
-                if not name:find("Service") and not name:find("Event") and not name:find("Remote") and not name:find("Tween") and not name:find("Module") then
+                local nLower = string.lower(name)
+                -- Filter 100% akurat: Tolak semua kata 'huge', awalan 'GIANT ', atau kategori 'Egg/'
+                if string.find(nLower, "huge", 1, true) 
+                   or string.find(name, "GIANT ", 1, true) 
+                   or string.find(nLower, "egg/", 1, true) then
+                    return
+                end
+                if not string.find(name, "Service", 1, true) 
+                   and not string.find(name, "Event", 1, true) 
+                   and not string.find(name, "Remote", 1, true) 
+                   and not string.find(name, "Tween", 1, true) 
+                   and not string.find(name, "Module", 1, true) then
                     if not table.find(MasterPetSpeciesList, name) then
                         table.insert(MasterPetSpeciesList, name)
                     end
@@ -268,24 +287,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         return nil
     end
 
-    local function GetFarmPetArea()
-        local farm = GetFarm()
-        if not farm then return nil end
-        return farm:FindFirstChild("PetArea")
-    end
-
-    local function EquipCheck(Tool)
-        local Character = LocalPlayer.Character
-        if not Character then return end
-        local Humanoid = Character:FindFirstChildOfClass("Humanoid")
-        local Backpack = LocalPlayer:FindFirstChild("Backpack")
-        if not Humanoid or not Backpack or not Tool then return end
-        if Tool.Parent == Backpack then
-            Humanoid:EquipTool(Tool)
-            task.wait(0.12)
-        end
-    end
-
     -- [PATEN]: LOOP AUTO HATCH DENGAN DUKUNGAN "DONT HATCH IF TIME NOT DONE" (SYNC HATCH)
     task.spawn(function()
         while true do
@@ -344,6 +345,32 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     end)
 
     -- Proxy Helper ke TeamManager & Fallback Lengkap ke Game DataService
+        -- Helper pembersih nama spesies dari modifier Huge/GIANT dan tag bracket
+    local function CleanSpeciesName(rawName)
+        if type(rawName) ~= "string" then return "Unknown" end
+        local s = rawName
+        s = s:gsub("%s*%[[^%]]*%]", "") -- buang [52.42 KG], [Age 455]
+        s = s:gsub("%s*%([^%)]*%)", "") -- buang (Age 1)
+        s = s:gsub("^[hH][uU][gG][eE]%s+", "") -- buang prefix Huge
+        s = s:gsub("^GIANT%s+", "") -- buang prefix GIANT
+        s = s:gsub("^%s+", ""):gsub("%s+$", "")
+        return s
+    end
+
+    -- Pemanggilan aman untuk RemoteEvent maupun RemoteFunction
+    local function SafeCallRemote(rem, ...)
+        if not rem then return false end
+        local args = { ... }
+        if rem:IsA("RemoteEvent") then
+            local ok, err = pcall(function() rem:FireServer(unpack(args)) end)
+            return ok
+        elseif rem:IsA("RemoteFunction") then
+            local ok, res = pcall(function() return rem:InvokeServer(unpack(args)) end)
+            return ok, res
+        end
+        return false
+    end
+
     local function GetAllPetsList()
         local pets = {}
         local seenUUID = {}
@@ -356,6 +383,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                     for _, p in ipairs(tmPets) do
                         if p and p.UUID and not seenUUID[p.UUID] then
                             seenUUID[p.UUID] = true
+                            p.Species = CleanSpeciesName(p.Species or p.Name)
                             table.insert(pets, p)
                         end
                     end
@@ -363,44 +391,94 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             end)
         end
 
-        -- 2. Fallback langsung ke DataService (Kamus Pet Inventori Pemain Resmi Game)
-        if #pets == 0 then
-            pcall(function()
-                if not DataService then
-                    DataService = require(ReplicatedStorage:WaitForChild("Modules", 3):WaitForChild("DataService", 3))
-                end
-                if DataService and DataService.GetData then
-                    local data = DataService:GetData()
-                    local rawPets = data and (data.Pets or (data.Inventory and data.Inventory.Pets))
-                    if type(rawPets) == "table" then
-                        for k, petObj in pairs(rawPets) do
-                            if type(petObj) == "table" then
-                                local uuid = petObj.UUID or petObj.Id or petObj.petId or k
-                                if uuid and not seenUUID[uuid] then
-                                    seenUUID[uuid] = true
-                                    local rawSpecies = petObj.PetType or petObj.Species or petObj.Name or "Unknown"
-                                    local cleanSpecies = rawSpecies:gsub("^Huge%s+", ""):gsub("^GIANT%s+", "")
-                                    local weight = tonumber(petObj.Weight) or tonumber(petObj.BaseWeight) or tonumber(petObj.NumericWeight) or 1
-                                    local isFav = (petObj.IsFavorite == true) or (petObj.Favorited == true) or (petObj.Favorite == true)
-                                    local inGarden = (petObj.Equipped == true) or (petObj.InGarden == true) or false
+        -- 2. Baca dari DataService (Data Resmi Penyimpanan Game)
+        pcall(function()
+            if not DataService then
+                DataService = require(ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("DataService", 2))
+            end
+            if DataService and DataService.GetData then
+                local data = DataService:GetData()
+                if type(data) == "table" then
+                    local candidateTables = {
+                        data.Pets,
+                        data.Inventory and data.Inventory.Pets,
+                        data.PetInventory,
+                        data.PetData,
+                        data.PetsList,
+                        data.EquippedPets
+                    }
+                    for _, t in ipairs(candidateTables) do
+                        if type(t) == "table" then
+                            for k, petObj in pairs(t) do
+                                if type(petObj) == "table" then
+                                    local uuid = petObj.UUID or petObj.Id or petObj.petId or petObj.PetUUID or (type(k) == "string" and k)
+                                    if uuid and not seenUUID[uuid] then
+                                        seenUUID[uuid] = true
+                                        local rawSpecies = petObj.PetType or petObj.Species or petObj.Name or "Unknown"
+                                        local cleanSpecies = CleanSpeciesName(rawSpecies)
+                                        local weight = tonumber(petObj.Weight) or tonumber(petObj.BaseWeight) or tonumber(petObj.NumericWeight) or 1
+                                        local isFav = (petObj.IsFavorite == true) or (petObj.Favorited == true) or (petObj.Favorite == true) or (petObj.Locked == true)
+                                        local inGarden = (petObj.Equipped == true) or (petObj.InGarden == true) or false
 
-                                    table.insert(pets, {
-                                        UUID = tostring(uuid),
-                                        Species = cleanSpecies,
-                                        RawSpecies = rawSpecies,
-                                        Name = cleanSpecies,
-                                        Weight = weight,
-                                        NumericWeight = weight,
-                                        IsFavorite = isFav,
-                                        InGarden = inGarden
-                                    })
+                                        table.insert(pets, {
+                                            UUID = tostring(uuid),
+                                            Species = cleanSpecies,
+                                            RawSpecies = rawSpecies,
+                                            Name = cleanSpecies,
+                                            Weight = weight,
+                                            NumericWeight = weight,
+                                            IsFavorite = isFav,
+                                            InGarden = inGarden
+                                        })
+                                    end
                                 end
                             end
                         end
                     end
                 end
-            end)
-        end
+            end
+        end)
+
+        -- 3. Deteksi langsung dari Tool di Backpack & Character Pemain (Hotbar)
+        pcall(function()
+            local lp = Players.LocalPlayer
+            local containers = { lp:FindFirstChild("Backpack"), lp.Character }
+            for _, container in ipairs(containers) do
+                if container then
+                    for _, item in ipairs(container:GetChildren()) do
+                        if item:IsA("Tool") then
+                            local uuidAttr = item:GetAttribute("UUID") or item:GetAttribute("PetUUID") or item:GetAttribute("petId") or item:GetAttribute("Id")
+                            local speciesAttr = item:GetAttribute("Species") or item:GetAttribute("PetType")
+                            local weightAttr = item:GetAttribute("Weight") or item:GetAttribute("NumericWeight")
+
+                            local toolName = item.Name
+                            local parsedSpecies = speciesAttr or CleanSpeciesName(toolName)
+                            local parsedWeight = tonumber(weightAttr)
+                            if not parsedWeight then
+                                local wMatch = toolName:match("%[([%d%.]+)%s*[kK]?[gG]?%]")
+                                if wMatch then parsedWeight = tonumber(wMatch) end
+                            end
+
+                            local uuid = uuidAttr or (item:FindFirstChild("UUID") and item.UUID.Value) or item.Name
+                            if uuid and not seenUUID[uuid] and (speciesAttr or weightAttr or toolName:find("%[") or item:FindFirstChild("PetData")) then
+                                seenUUID[uuid] = true
+                                table.insert(pets, {
+                                    UUID = tostring(uuid),
+                                    Species = parsedSpecies,
+                                    RawSpecies = toolName,
+                                    Name = parsedSpecies,
+                                    Weight = parsedWeight or 1,
+                                    NumericWeight = parsedWeight or 1,
+                                    IsFavorite = (item:GetAttribute("Favorite") == true) or (item:GetAttribute("Locked") == true),
+                                    InGarden = (container == lp.Character),
+                                    Tool = item
+                                })
+                            end
+                        end
+                    end
+                end
+            end
+        end)
 
         return pets
     end
@@ -413,84 +491,105 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             pcall(function() PetsServiceMod:UnequipPet(uuid) end)
         end
         if PetsServiceRemote then
-            pcall(function() PetsServiceRemote:FireServer("UnequipPet", uuid) end)
-            pcall(function() PetsServiceRemote:FireServer("Unequip", uuid) end)
+            SafeCallRemote(PetsServiceRemote, "UnequipPet", uuid)
+            SafeCallRemote(PetsServiceRemote, "Unequip", uuid)
         end
+        if GameEvents then
+            SafeCallRemote(GameEvents:FindFirstChild("UnequipPet"), uuid)
+        end
+    end
+
+    -- Pencocokan cerdas spesies terhadap konfigurasi pengguna
+    local function MatchRuleForPet(pet)
+        if not pet or pet.IsFavorite then return nil end
+        local pClean = CleanSpeciesName(pet.Species or pet.Name or ""):lower()
+        local pRaw = (pet.RawSpecies or ""):lower()
+
+        for _, rule in ipairs(State.SellPetRules) do
+            local rClean = CleanSpeciesName(rule.Species or ""):lower()
+            if rClean ~= "" then
+                if pClean == rClean or pRaw:find(rClean, 1, true) or rClean:find(pClean, 1, true) then
+                    return rule
+                end
+            end
+        end
+        return nil
     end
 
     -- =============================================================
     -- [FUNGSI UTAMA]: ENGINE AUTO SELL PET BERDASARKAN ATURAN CONFIG
     -- =============================================================
     local isProcessingAutoSell = false
-    local function CheckAndExecuteAutoSell()
-        if isProcessingAutoSell or not State.ApplyBulkList then return end
+    local function CheckAndExecuteAutoSell(forceSell)
+        if isProcessingAutoSell then return end
         
+        -- Auto sell aktif jika forceSell dipicu, ATAU ApplyBulkList aktif, ATAU terdapat aturan di SellPetRules
+        if not forceSell and not State.ApplyBulkList and #State.SellPetRules == 0 then
+            return
+        end
+
         local allPets = GetAllPetsList()
         local currentTotalPets = #allPets
         local threshold = tonumber(State.AutoSellThresholdCount) or 1
 
-        -- Jika threshold di-set > 1 dan pet belum cukup, tunggu hingga terkumpul
-        if threshold > 1 and currentTotalPets < threshold then
+        -- Jika threshold di-set > 1 dan bukan eksekusi manual paksa, tunggu sampai total pet mencukupi
+        if not forceSell and threshold > 1 and currentTotalPets < threshold then
             return
         end
 
         isProcessingAutoSell = true
 
-        local rulesMap = {}
-        for _, rule in ipairs(State.SellPetRules) do
-            local cleanRuleSpecies = rule.Species:lower():gsub("^huge%s+", ""):gsub("^giant%s+", "")
-            rulesMap[cleanRuleSpecies] = {
-                KG = tonumber(rule.KG) or 0,
-                Action = (rule.Action or "SELL"):upper()
-            }
-        end
-
         local petsToSell = {}
         for _, pet in ipairs(allPets) do
-            if not pet.IsFavorite then
-                local sName = (pet.Species or pet.Name or ""):lower():gsub("^huge%s+", ""):gsub("^giant%s+", "")
-                local rule = rulesMap[sName]
-                
-                if rule then
-                    local petWeight = pet.NumericWeight or tonumber(pet.Weight) or 0
-                    local targetKG = rule.KG
+            local rule = MatchRuleForPet(pet)
+            if rule then
+                local petWeight = pet.NumericWeight or tonumber(pet.Weight) or 0
+                local targetKG = tonumber(rule.KG) or 0
+                local action = (rule.Action or "SELL"):upper()
 
-                    if targetKG > 0 then
-                        if petWeight < targetKG then
-                            if rule.Action == "SELL" then
-                                table.insert(petsToSell, pet)
-                            end
-                        end
-                    end
+                if targetKG > 0 and petWeight < targetKG and action == "SELL" then
+                    table.insert(petsToSell, pet)
                 end
             end
         end
 
         if #petsToSell > 0 then
-            print("[ZyloHub Auto Sell] Menjual " .. tostring(#petsToSell) .. " pet sesuai konfigurasi...")
+            print(string.format("[ZyloHub AutoSell] Menemukan %d pet yang memenuhi syarat jual dari total %d pet!", #petsToSell, currentTotalPets))
             for _, p in ipairs(petsToSell) do
-                if not State.ApplyBulkList then break end
+                if not forceSell and not State.ApplyBulkList and #State.SellPetRules == 0 then break end
 
                 if p.InGarden then
                     UnequipPetByUUID(p.UUID)
                     task.wait(0.2)
                 end
 
-                -- Eksekusi penjualan dengan berbagai metode resmi
+                -- Eksekusi penjualan dengan seluruh jalur resmi game
                 if PetsServiceMod then
                     pcall(function() if PetsServiceMod.SellPet then PetsServiceMod:SellPet(p.UUID) end end)
                     pcall(function() if PetsServiceMod.Sell then PetsServiceMod:Sell(p.UUID) end end)
+                    pcall(function() if PetsServiceMod.SellPets then PetsServiceMod:SellPets({ p.UUID }) end end)
                 end
+
                 if PetsServiceRemote then
-                    pcall(function() PetsServiceRemote:FireServer("SellPet", p.UUID) end)
-                    pcall(function() PetsServiceRemote:FireServer("Sell", p.UUID) end)
+                    SafeCallRemote(PetsServiceRemote, "SellPet", p.UUID)
+                    SafeCallRemote(PetsServiceRemote, "Sell", p.UUID)
+                    SafeCallRemote(PetsServiceRemote, p.UUID)
+                    SafeCallRemote(PetsServiceRemote, { p.UUID })
                 end
-                pcall(function()
-                    local sellRem = GameEvents and (GameEvents:FindFirstChild("SellPet") or GameEvents:FindFirstChild("PetService"))
-                    if sellRem and sellRem:IsA("RemoteEvent") then
-                        sellRem:FireServer("SellPet", p.UUID)
+
+                if GameEvents then
+                    local remotesToCheck = { "SellPet", "SellPets", "PetService", "Sell", "GardenGuide" }
+                    for _, rName in ipairs(remotesToCheck) do
+                        local rem = GameEvents:FindFirstChild(rName)
+                        if rem then
+                            SafeCallRemote(rem, "SellPet", p.UUID)
+                            SafeCallRemote(rem, "Sell", p.UUID)
+                            SafeCallRemote(rem, p.UUID)
+                        end
                     end
-                end)
+                end
+
+                print(string.format("[ZyloHub AutoSell] Berhasil mengirim perintah jual: %s (Berat: %.2f KG, UUID: %s)", p.Species, p.NumericWeight or 0, tostring(p.UUID)))
 
                 if State.SellMode == "Sell One By One" then
                     task.wait(0.35)
@@ -498,16 +597,21 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                     task.wait(0.08)
                 end
             end
+        else
+            if forceSell then
+                print(string.format("[ZyloHub AutoSell] Tidak ada pet yang memenuhi syarat jual. Total pet terdeteksi: %d", currentTotalPets))
+            end
         end
 
         isProcessingAutoSell = false
     end
 
+    -- Background loop untuk auto sell
     task.spawn(function()
         while true do
             task.wait(1.5)
-            if State.ApplyBulkList then
-                pcall(CheckAndExecuteAutoSell)
+            if State.ApplyBulkList or #State.SellPetRules > 0 then
+                pcall(function() CheckAndExecuteAutoSell(false) end)
             end
         end
     end)
@@ -645,7 +749,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     -- [B] SELL CONFIG CARD
     local SellConfigCard = Instance.new("Frame", ConfigContainer)
-    SellConfigCard.Size = State.SellConfigExpanded and UDim2.new(1, 0, 0, 480) or UDim2.new(1, 0, 0, 38)
+    SellConfigCard.Size = State.SellConfigExpanded and UDim2.new(1, 0, 0, 510) or UDim2.new(1, 0, 0, 38)
     SellConfigCard.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
     Instance.new("UICorner", SellConfigCard).CornerRadius = UDim.new(0, 8)
     local sccStroke = Instance.new("UIStroke", SellConfigCard)
@@ -907,6 +1011,27 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     end)
     bulkPill.Position = UDim2.new(1, -44, 0.5, -10)
 
+    -- Tombol Instan Sell Now untuk mempermudah eksekusi & pengujian langsung
+    local btnSellNow = Instance.new("TextButton", SellOptionsFrame)
+    btnSellNow.Size = UDim2.new(1, 0, 0, 24)
+    btnSellNow.BackgroundColor3 = Color3.fromRGB(150, 35, 75)
+    btnSellNow.Text = "⚡  SELL NOW (Jual Pet Sesuai List Sekarang)"
+    btnSellNow.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btnSellNow.Font = Enum.Font.GothamBold
+    btnSellNow.TextSize = 8.5
+    Instance.new("UICorner", btnSellNow).CornerRadius = UDim.new(0, 4)
+    local bsnSt = Instance.new("UIStroke", btnSellNow)
+    bsnSt.Color = Color3.fromRGB(255, 80, 130)
+    bsnSt.Thickness = 1
+    btnSellNow.MouseButton1Click:Connect(function()
+        btnSellNow.Text = "⏳  Memeriksa & Menjual..."
+        task.spawn(function()
+            CheckAndExecuteAutoSell(true)
+            task.wait(1)
+            btnSellNow.Text = "⚡  SELL NOW (Jual Pet Sesuai List Sekarang)"
+        end)
+    end)
+
     -- Search Box
     local sellSearchBox = Instance.new("TextBox", SellOptionsFrame)
     sellSearchBox.Size = UDim2.new(1, 0, 0, 22)
@@ -1049,7 +1174,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     renderSellRules()
 
     -- =============================================================
-    -- MODAL POPUP: SELECT PET TYPE (WITH AUTO-TRIM & TOUCH FIX)
+    -- MODAL POPUP: SELECT PET TYPE (TERHUBUNG KE PETDATASET GITHUB)
     -- =============================================================
     local PickerModal = Instance.new("Frame", TeamCard)
     PickerModal.Size = UDim2.new(0, 250, 0, 270)
@@ -1093,7 +1218,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         PickerModal.Visible = false
     end)
 
-    local pmSearch = Instance.new("TextBox", PickerModal)
+        local pmSearch = Instance.new("TextBox", PickerModal)
     pmSearch.Position = UDim2.new(0, 10, 0, 32)
     pmSearch.Size = UDim2.new(1, -20, 0, 24)
     pmSearch.BackgroundColor3 = Color3.fromRGB(16, 21, 42)
@@ -1127,13 +1252,16 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             if c:IsA("TextButton") or c:IsA("TextLabel") then c:Destroy() end
         end
         local rawText = pmSearch.Text or ""
-        -- Otomatis hapus spasi di awal & akhir agar tidak terganggu auto-correct keyboard HP
         local filter = rawText:lower():gsub("^%s+", ""):gsub("%s+$", "")
         local count = 0
 
         for _, species in ipairs(MasterPetSpeciesList) do
             local sLower = species:lower()
-            if filter == "" or string.find(sLower, filter, 1, true) then
+            -- Filter ketat: pastikan tidak ada Huge, GIANT, atau Egg/ yang lolos ke tampilan
+            if not string.find(sLower, "huge", 1, true) 
+               and not string.find(species, "GIANT ", 1, true) 
+               and not string.find(sLower, "egg/", 1, true) then
+                if filter == "" or string.find(sLower, filter, 1, true) then
                 count = count + 1
                 local isCur = (State.SelectedBulkPetSpecies == species)
                 local b = Instance.new("TextButton", pmScroll)
@@ -1154,6 +1282,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                     bpDropdown.Text = species .. "  ▼"
                     PickerModal.Visible = false
                 end)
+                end
             end
         end
 
@@ -1161,7 +1290,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             local noRes = Instance.new("TextLabel", pmScroll)
             noRes.Size = UDim2.new(1, 0, 0, 30)
             noRes.BackgroundTransparency = 1
-            noRes.Text = "Tidak ditemukan: \"" .. rawText .. "\""
+            noRes.Text = "Tidak ditemukan pet yang cocok: \"" .. rawText .. "\""
             noRes.TextColor3 = Color3.fromRGB(255, 120, 120)
             noRes.Font = Enum.Font.GothamMedium
             noRes.TextSize = 8
@@ -1177,7 +1306,14 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     bpDropdown.MouseButton1Click:Connect(function()
         FetchAllGamePetSpecies()
-        pmTitle.Text = "Select Pet Type (" .. tostring(#MasterPetSpeciesList) .. " Pets)"
+        local validCount = 0
+        for _, s in ipairs(MasterPetSpeciesList) do
+            local sL = string.lower(s)
+            if not string.find(sL, "huge", 1, true) and not string.find(s, "GIANT ", 1, true) and not string.find(sL, "egg/", 1, true) then
+                validCount = validCount + 1
+            end
+        end
+        pmTitle.Text = "Select Pet Type (" .. tostring(validCount) .. " Pets)"
         PickerModal.Visible = true
         pmSearch.Text = ""
         refreshPickerModalList()
@@ -1187,7 +1323,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         State.SellConfigExpanded = not State.SellConfigExpanded
         shArrow.Text = State.SellConfigExpanded and "▼" or "▶"
         SellOptionsFrame.Visible = State.SellConfigExpanded
-        SellConfigCard.Size = State.SellConfigExpanded and UDim2.new(1, 0, 0, 480) or UDim2.new(1, 0, 0, 38)
+        SellConfigCard.Size = State.SellConfigExpanded and UDim2.new(1, 0, 0, 510) or UDim2.new(1, 0, 0, 38)
         sccStroke.Color = State.SellConfigExpanded and C.PURPLE_L or C.STROKE
         recalculateCanvasSize()
     end)
@@ -1230,6 +1366,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     return {
         CheckAndExecuteAutoSell = CheckAndExecuteAutoSell,
-        FetchAllGamePetSpecies = FetchAllGamePetSpecies
+        FetchAllGamePetSpecies = FetchAllGamePetSpecies,
+        Dataset = GlobalPetDataset
     }
 end
