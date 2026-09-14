@@ -3,7 +3,7 @@
 --  Repository: zylo-games/PetHatchAndSellModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  STATUS: 100% PRESERVED AUTO HATCH & REAL-TIME AUTO SELL ENGINE
---  DATASET: EXACT 515 MASTER PET SPECIES OFFICIALLY INTEGRATED
+--  DATASET: DYNAMIC LIVE SYNC FROM REPLICATEDSTORAGE.DATA.PETREGISTRY
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main, TeamManager)
@@ -48,16 +48,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     State.BulkAction = State.BulkAction or "sell"
     State.ApplyBulkList = (State.ApplyBulkList ~= nil) and State.ApplyBulkList or false
 
-    -- [INTEGRASI DATASET GITHUB RESMI ZYLOHUB]
-    local GlobalPetDataset = nil
-    pcall(function()
-        local rawDataset = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/PetDataset.lua?v=" .. tostring(os.time()))
-        if rawDataset and #rawDataset > 50 then
-            GlobalPetDataset = loadstring(rawDataset)()
-        end
-    end)
-
-    -- Master List Lengkap Seluruh 515 Spesies Pet Resmi Grow a Garden (100% Akurat Dari Decompile Asli)
+    -- Master List Lengkap Seluruh 515 Spesies Pet Resmi Game (Baseline Lengkap)
     local MasterPetSpeciesList = {
         "Amethyst Beetle", "Anglerfish", "Angora Goat", "Ankylosaurus", "Anubis",
         "Apple Gazelle", "Arctic Fox", "Armadillo", "Axolotl", "Bacon Pig",
@@ -174,21 +165,45 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         "Yak", "Yeti", "Zebra"
     }
 
-    -- Auto-Fetch Dinamis dari Module Game Asli agar selalu sinkron jika ada update live
+    -- [ENGINE AUTO-DETECT 100% RESMI & AKURAT LANGSUNG DARI MEMORI GAME]
     local function FetchAllGamePetSpecies()
+        local function registerPet(name)
+            if type(name) == "string" and #name >= 2 then
+                if not name:find("Service") and not name:find("Event") and not name:find("Remote") and not name:find("Tween") and not name:find("Module") then
+                    if not table.find(MasterPetSpeciesList, name) then
+                        table.insert(MasterPetSpeciesList, name)
+                    end
+                end
+            end
+        end
+
+        -- 1. Baca langsung dari Kamus Induk Resmi Game: ReplicatedStorage.Data.PetRegistry.PetList
         pcall(function()
-            local petServices = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("PetServices")
-            if petServices then
-                for _, child in ipairs(petServices:GetChildren()) do
-                    if child:IsA("ModuleScript") and (child.Name:find("Registry") or child.Name:find("Config") or child.Name:find("List") or child.Name:find("Data")) then
-                        local mod = require(child)
-                        if type(mod) == "table" then
-                            for k, v in pairs(mod) do
-                                local nameCandidate = (type(k) == "string" and k) or (type(v) == "table" and (v.Name or v.Species or v.PetType))
-                                if nameCandidate and type(nameCandidate) == "string" and #nameCandidate > 2 and not nameCandidate:find("Service") and not nameCandidate:find("Event") then
-                                    if not table.find(MasterPetSpeciesList, nameCandidate) then
-                                        table.insert(MasterPetSpeciesList, nameCandidate)
-                                    end
+            local petReg = ReplicatedStorage:FindFirstChild("Data") and ReplicatedStorage.Data:FindFirstChild("PetRegistry")
+            if petReg then
+                local petListMod = petReg:FindFirstChild("PetList")
+                if petListMod then
+                    local pList = require(petListMod)
+                    if type(pList) == "table" then
+                        for k, v in pairs(pList) do
+                            registerPet(k)
+                            if type(v) == "table" then
+                                if v.Name then registerPet(v.Name) end
+                                if v.Species then registerPet(v.Species) end
+                            end
+                        end
+                    end
+                end
+                
+                -- Baca juga daftar telur resmi game (PetEggs)
+                local petEggsMod = petReg:FindFirstChild("PetEggs")
+                if petEggsMod then
+                    local pEggs = require(petEggsMod)
+                    if type(pEggs) == "table" then
+                        for _, eggData in pairs(pEggs) do
+                            if type(eggData) == "table" and eggData.RarityData and type(eggData.RarityData.Items) == "table" then
+                                for petInEgg, _ in pairs(eggData.RarityData.Items) do
+                                    registerPet(petInEgg)
                                 end
                             end
                         end
@@ -196,6 +211,49 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                 end
             end
         end)
+
+        -- 2. Baca dari PetTraitsData (Sea Anemone, Tsunami Sea Anemone, dll)
+        pcall(function()
+            local modules = ReplicatedStorage:FindFirstChild("Modules")
+            local traitsMod = modules and modules:FindFirstChild("PetTraitsData")
+            if traitsMod then
+                local traits = require(traitsMod)
+                if type(traits) == "table" then
+                    for _, group in pairs(traits) do
+                        if type(group) == "table" then
+                            for item, isVal in pairs(group) do
+                                if type(item) == "string" then registerPet(item) end
+                                if type(isVal) == "string" then registerPet(isVal) end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+
+        -- 3. Sinkronkan dari PetServices Modules jika ada pet khusus lainnya
+        pcall(function()
+            local petServices = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("PetServices")
+            if petServices then
+                for _, child in ipairs(petServices:GetChildren()) do
+                    if child:IsA("ModuleScript") then
+                        pcall(function()
+                            local mod = require(child)
+                            if type(mod) == "table" then
+                                for k, v in pairs(mod) do
+                                    registerPet(k)
+                                    if type(v) == "table" then
+                                        if v.Name then registerPet(v.Name) end
+                                        if v.Species then registerPet(v.Species) end
+                                    end
+                                end
+                            end
+                        end)
+                    end
+                end
+            end
+        end)
+
         table.sort(MasterPetSpeciesList)
     end
     FetchAllGamePetSpecies()
@@ -928,7 +986,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     renderSellRules()
 
     -- =============================================================
-    -- MODAL POPUP: SELECT PET TYPE (515 PET RESMI LENGKAP)
+    -- MODAL POPUP: SELECT PET TYPE (DYNAMIC LIVE SYNC DARI GAME)
     -- =============================================================
     local PickerModal = Instance.new("Frame", TeamCard)
     PickerModal.Size = UDim2.new(0, 250, 0, 270)
@@ -1086,7 +1144,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     return {
         CheckAndExecuteAutoSell = CheckAndExecuteAutoSell,
-        FetchAllGamePetSpecies = FetchAllGamePetSpecies,
-        Dataset = GlobalPetDataset
+        FetchAllGamePetSpecies = FetchAllGamePetSpecies
     }
 end
