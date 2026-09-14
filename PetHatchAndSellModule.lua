@@ -3,6 +3,7 @@
 --  Repository: zylo-games/PetHatchAndSellModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  STATUS: 100% PRESERVED AUTO HATCH & REAL-TIME AUTO SELL ENGINE
+--  DATASET INTEGRATION: ranklee26-glitch/zylo-games/PetDataset.lua (OFFICIAL)
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main, TeamManager)
@@ -47,26 +48,42 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     State.BulkAction = State.BulkAction or "sell"
     State.ApplyBulkList = (State.ApplyBulkList ~= nil) and State.ApplyBulkList or false
 
-    -- Master List Lengkap Semua Pet Grow a Garden (Built-in Komplit)
-    local MasterPetSpeciesList = {
-        "Albino Peacock", "Alligator", "Amethyst Beetle", "Ankylosaurus", "Axolotl",
-        "Bald Eagle", "Bat", "Bee", "Brontosaurus", "Brown Bear", "Bull", "Butterfly",
-        "Capybara", "Cat", "Caterpillar", "Chameleon", "Cheetah", "Chicken", "Cow",
-        "Crab", "Crocodile", "Crow", "Deer", "Dilophosaurus", "Dog", "Dolphin",
-        "Dragonfly", "Duck", "Elephant", "Firefly", "Flamingo", "Fox", "Frog",
-        "Giraffe", "Golden Beetle", "Gorilla", "Hedgehog", "Hippo", "Horse",
-        "Hyena", "Iguana", "Kangaroo", "Kitsune", "Koala", "Komodo Dragon",
-        "Lion", "Llama", "Mantis", "Mimic Octopus", "Mole", "Monkey", "Moose",
-        "Mouse", "Ostrich", "Owl", "Panda", "Panther", "Peacock", "Penguin",
-        "Pig", "Polar Bear", "Pterodactyl", "Rabbit", "Raccoon", "Red Panda",
-        "Rhino", "Rooster", "Scarlet Macaw", "Scorpion", "Seagull", "Seal",
-        "Shark", "Sheep", "Sloth", "Snail", "Snake", "Spider", "Spinosaurus",
-        "Squirrel", "Stegosaurus", "Swan", "T-Rex", "Tiger", "Triceratops",
-        "Turtle", "Velociraptor", "Vulture", "Walrus", "Wasp", "Whale",
-        "Wolf", "Yak", "Zebra"
-    }
+    -- [INTEGRASI DATASET GITHUB RESMI ZYLOHUB]
+    local GlobalPetDataset = nil
+    pcall(function()
+        local rawDataset = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/PetDataset.lua")
+        if rawDataset and #rawDataset > 50 then
+            GlobalPetDataset = loadstring(rawDataset)()
+        end
+    end)
 
-    -- Auto-Fetch Dinamis dari Module Game Asli agar selalu 100% sinkron
+    -- Master List Spesies Pet (Diambil langsung dari PetDataset.lua dengan Fallback jika offline)
+    local MasterPetSpeciesList = {}
+    if GlobalPetDataset and GlobalPetDataset.AllPets and #GlobalPetDataset.AllPets > 0 then
+        for _, p in ipairs(GlobalPetDataset.AllPets) do
+            table.insert(MasterPetSpeciesList, p)
+        end
+    else
+        MasterPetSpeciesList = {
+            "Albino Peacock", "Alligator", "Amethyst Beetle", "Ankylosaurus", "Axolotl",
+            "Bald Eagle", "Bat", "Bee", "Brontosaurus", "Brown Bear", "Bull", "Butterfly",
+            "Capybara", "Cat", "Caterpillar", "Chameleon", "Cheetah", "Chicken", "Cow",
+            "Crab", "Crocodile", "Crow", "Deer", "Dilophosaurus", "Dog", "Dolphin",
+            "Dragonfly", "Duck", "Elephant", "Firefly", "Flamingo", "Fox", "Frog",
+            "Giraffe", "Golden Beetle", "Gorilla", "Hedgehog", "Hippo", "Horse",
+            "Hyena", "Iguana", "Kangaroo", "Kitsune", "Koala", "Komodo Dragon",
+            "Lion", "Llama", "Mantis", "Mimic Octopus", "Mole", "Monkey", "Moose",
+            "Mouse", "Ostrich", "Owl", "Panda", "Panther", "Peacock", "Penguin",
+            "Pig", "Polar Bear", "Pterodactyl", "Rabbit", "Raccoon", "Red Panda",
+            "Rhino", "Rooster", "Scarlet Macaw", "Scorpion", "Seagull", "Seal",
+            "Shark", "Sheep", "Sloth", "Snail", "Snake", "Spider", "Spinosaurus",
+            "Squirrel", "Stegosaurus", "Swan", "T-Rex", "Tiger", "Triceratops",
+            "Turtle", "Velociraptor", "Vulture", "Walrus", "Wasp", "Whale",
+            "Wolf", "Yak", "Zebra"
+        }
+    end
+
+    -- Auto-Fetch Dinamis dari Module Game Asli agar selalu sinkron jika ada update live
     local function FetchAllGamePetSpecies()
         pcall(function()
             local petServices = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("PetServices")
@@ -112,24 +129,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             end
         end
         return nil
-    end
-
-    local function GetFarmPetArea()
-        local farm = GetFarm()
-        if not farm then return nil end
-        return farm:FindFirstChild("PetArea")
-    end
-
-    local function EquipCheck(Tool)
-        local Character = LocalPlayer.Character
-        if not Character then return end
-        local Humanoid = Character:FindFirstChildOfClass("Humanoid")
-        local Backpack = LocalPlayer:FindFirstChild("Backpack")
-        if not Humanoid or not Backpack or not Tool then return end
-        if Tool.Parent == Backpack then
-            Humanoid:EquipTool(Tool)
-            task.wait(0.12)
-        end
     end
 
     -- [PATEN]: LOOP AUTO HATCH DENGAN DUKUNGAN "DONT HATCH IF TIME NOT DONE" (SYNC HATCH)
@@ -213,12 +212,10 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         local currentTotalPets = #allPets
         local threshold = tonumber(State.AutoSellThresholdCount) or 24
 
-        -- Hanya berjalan jika total pet mencapai atau melebihi threshold
         if currentTotalPets < threshold then return end
 
         isProcessingAutoSell = true
 
-        -- Buat lookup map dari tabel aturan SellPetRules
         local rulesMap = {}
         for _, rule in ipairs(State.SellPetRules) do
             rulesMap[rule.Species:lower()] = {
@@ -229,42 +226,35 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
         local petsToSell = {}
         for _, pet in ipairs(allPets) do
-            -- PROTEKSI 1: Pet Favorite tidak boleh disentuh/dijual
             if not pet.IsFavorite then
                 local sName = (pet.Species or pet.Name or ""):lower()
                 local rule = rulesMap[sName]
                 
-                -- Hanya pet yang terdaftar dalam rules yang diproses
                 if rule then
                     local petWeight = pet.NumericWeight or tonumber(pet.Weight) or 0
                     local targetKG = rule.KG
 
                     if targetKG > 0 then
                         if petWeight < targetKG then
-                            -- Berat < KG -> Eksekusi aksi (SELL / KEEP)
                             if rule.Action == "SELL" then
                                 table.insert(petsToSell, pet)
                             end
                         end
-                        -- Jika petWeight >= targetKG -> Otomatis KEEP (Masuk Bronto)
                     end
                 end
             end
         end
 
-        -- Eksekusi penjualan
         if #petsToSell > 0 then
             print("[ZyloHub Auto Sell] Menemukan " .. tostring(#petsToSell) .. " pet yang memenuhi syarat jual.")
             for _, p in ipairs(petsToSell) do
                 if not State.ApplyBulkList then break end
 
-                -- Unequip dulu jika sedang di kebun sebelum dijual
                 if p.InGarden then
                     UnequipPetByUUID(p.UUID)
                     task.wait(0.2)
                 end
 
-                -- Eksekusi Sell ke Server
                 if PetsServiceMod and PetsServiceMod.SellPet then
                     pcall(function() PetsServiceMod:SellPet(p.UUID) end)
                 end
@@ -284,7 +274,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         isProcessingAutoSell = false
     end
 
-    -- Background Loop Pemantau Auto Sell
     task.spawn(function()
         while true do
             task.wait(2.5)
@@ -294,12 +283,10 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         end
     end)
 
-    -- Target Container: Memasang ke ConfigContainer dari PetTeamManager
     local ConfigContainer = TeamManager and TeamManager.ConfigContainer
     local TeamCard = TeamManager and TeamManager.TeamCard
 
     if not ConfigContainer then
-        -- Fallback jika dijalankan standalone tanpa TeamManager
         local accHatchFallback, bodyHatchFallback = ZyloLib:CreateAccordion(PagePets, "Auto Hatch & Sell Settings", true, 380)
         ConfigContainer = Instance.new("ScrollingFrame", bodyHatchFallback)
         ConfigContainer.Size = UDim2.new(1, 0, 1, 0)
@@ -310,7 +297,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     end
 
     -- =============================================================
-    -- [2] CONFIG CONTAINER (EGG CONFIG & SELL CONFIG FULL UI)
+    -- CONFIG CONTAINER (EGG CONFIG & SELL CONFIG FULL UI)
     -- =============================================================
     local cfgLayout = Instance.new("UIListLayout", ConfigContainer)
     cfgLayout.Padding = UDim.new(0, 8)
@@ -319,9 +306,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     cfgPad.PaddingLeft = UDim.new(0, 10)
     cfgPad.PaddingRight = UDim.new(0, 10)
 
-    -- -------------------------------------------------------------
-    -- [A] EGG CONFIG CARD (DROPDOWN HIDE / SHOW)
-    -- -------------------------------------------------------------
+    -- [A] EGG CONFIG CARD
     local EggConfigCard = Instance.new("Frame", ConfigContainer)
     EggConfigCard.Size = State.EggConfigExpanded and UDim2.new(1, 0, 0, 132) or UDim2.new(1, 0, 0, 38)
     EggConfigCard.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
@@ -429,9 +414,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         recalculateCanvasSize()
     end)
 
-    -- -------------------------------------------------------------
-    -- [B] SELL CONFIG CARD (LENGKAP DENGAN FLOW BULK KE LIST)
-    -- -------------------------------------------------------------
+    -- [B] SELL CONFIG CARD
     local SellConfigCard = Instance.new("Frame", ConfigContainer)
     SellConfigCard.Size = State.SellConfigExpanded and UDim2.new(1, 0, 0, 480) or UDim2.new(1, 0, 0, 38)
     SellConfigCard.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
@@ -464,7 +447,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     shArrow.Font = Enum.Font.GothamBold
     shArrow.TextSize = 9.5
 
-    -- Kontainer Isi Sell Config
     local SellOptionsFrame = Instance.new("Frame", SellConfigCard)
     SellOptionsFrame.Position = UDim2.new(0, 8, 0, 42)
     SellOptionsFrame.Size = UDim2.new(1, -16, 0, 430)
@@ -474,7 +456,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     local soLayout = Instance.new("UIListLayout", SellOptionsFrame)
     soLayout.Padding = UDim.new(0, 6)
 
-    -- [1] Baris Ambang Batas Jumlah Pet (Auto Sell Aktif Saat Total Pet)
+    -- Threshold Row
     local rowThresh = Instance.new("Frame", SellOptionsFrame)
     rowThresh.Size = UDim2.new(1, 0, 0, 28)
     rowThresh.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
@@ -507,7 +489,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         if val then State.AutoSellThresholdCount = val end
     end)
 
-    -- [2] Sell Mode Selector (Sell One By One vs Sell All)
+    -- Sell Mode Selector
     local rowMode = Instance.new("Frame", SellOptionsFrame)
     rowMode.Size = UDim2.new(1, 0, 0, 26)
     rowMode.BackgroundTransparency = 1
@@ -558,7 +540,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         updateModeButtons()
     end)
 
-    -- [3] Baris Select Pet Type (Dropdown dengan Modal Picker Lengkap)
+    -- Dropdown Select Pet Type
     local rowBulkPet = Instance.new("Frame", SellOptionsFrame)
     rowBulkPet.Size = UDim2.new(1, 0, 0, 24)
     rowBulkPet.BackgroundTransparency = 1
@@ -584,7 +566,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     local bpdStroke = Instance.new("UIStroke", bpDropdown)
     bpdStroke.Color = Color3.fromRGB(35, 42, 65)
 
-    -- [4] Baris KG (Bulk)
+    -- KG (Bulk)
     local rowBulkKG = Instance.new("Frame", SellOptionsFrame)
     rowBulkKG.Size = UDim2.new(1, 0, 0, 24)
     rowBulkKG.BackgroundTransparency = 1
@@ -615,7 +597,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         if val then State.BulkKG = val end
     end)
 
-    -- [5] Baris Below KG Action (Bulk)
+    -- Below KG Action
     local rowBulkAct = Instance.new("Frame", SellOptionsFrame)
     rowBulkAct.Size = UDim2.new(1, 0, 0, 24)
     rowBulkAct.BackgroundTransparency = 1
@@ -649,7 +631,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     local renderSellRules = nil
 
-    -- [6] Baris APPLY BULK LIST (ALUR UTAMA MASUKKAN KE LIST & TRIGGER ENGINE)
+    -- Apply Bulk List Switch
     local rowBulkApply = Instance.new("Frame", SellOptionsFrame)
     rowBulkApply.Size = UDim2.new(1, 0, 0, 26)
     rowBulkApply.BackgroundTransparency = 1
@@ -695,7 +677,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     end)
     bulkPill.Position = UDim2.new(1, -44, 0.5, -10)
 
-    -- [7] Search Box Pet di Config
+    -- Search Box
     local sellSearchBox = Instance.new("TextBox", SellOptionsFrame)
     sellSearchBox.Size = UDim2.new(1, 0, 0, 22)
     sellSearchBox.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
@@ -709,7 +691,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     local ssbStroke = Instance.new("UIStroke", sellSearchBox)
     ssbStroke.Color = Color3.fromRGB(32, 38, 60)
 
-    -- [8] Scroll List Tabel Rules Pet
+    -- Scroll List Table
     local sellListScroll = Instance.new("ScrollingFrame", SellOptionsFrame)
     sellListScroll.Size = UDim2.new(1, 0, 0, 136)
     sellListScroll.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
@@ -837,7 +819,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     renderSellRules()
 
     -- =============================================================
-    -- MODAL POPUP: SELECT PET TYPE (DATASET KOMPLIT DENGAN SEARCH)
+    -- MODAL POPUP: SELECT PET TYPE (TERHUBUNG KE PETDATASET GITHUB)
     -- =============================================================
     local PickerModal = Instance.new("Frame", TeamCard)
     PickerModal.Size = UDim2.new(0, 250, 0, 270)
@@ -948,7 +930,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         refreshPickerModalList()
     end)
 
-    -- Logika Klik Dropdown: Hide / Show Sell Config
     SellHeaderBtn.MouseButton1Click:Connect(function()
         State.SellConfigExpanded = not State.SellConfigExpanded
         shArrow.Text = State.SellConfigExpanded and "▼" or "▶"
@@ -958,9 +939,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         recalculateCanvasSize()
     end)
 
-    -- -------------------------------------------------------------
     -- [C] SWAP SKILL CONFIG BUTTON
-    -- -------------------------------------------------------------
     local function makeSimpleConfigButton(title)
         local btn = Instance.new("TextButton", ConfigContainer)
         btn.Size = UDim2.new(1, 0, 0, 38)
@@ -998,6 +977,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     return {
         CheckAndExecuteAutoSell = CheckAndExecuteAutoSell,
-        FetchAllGamePetSpecies = FetchAllGamePetSpecies
+        FetchAllGamePetSpecies = FetchAllGamePetSpecies,
+        Dataset = GlobalPetDataset
     }
 end
