@@ -2,7 +2,7 @@
 --  ZYLOHUB - PET HATCH & TEAM MANAGER MODULE (OFFICIAL EXTENSION)
 --  Repository: zylo-games/PetHatchModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  FEATURES: 4 Team Managers + Complete Modular CONFIG UI (Egg, Sell, Swap)
+--  STATUS: EGG CONFIG SUBMENU + SYNC ALL HATCHING (NO LINES CUT)
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main)
@@ -32,8 +32,10 @@ return function(PagePets, State, ZyloLib, Main)
         PetUtilities = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("PetServices", 5):WaitForChild("PetUtilities", 5))
     end)
 
-    -- Inisialisasi State Config
-    State.ActiveConfigSubView = State.ActiveConfigSubView or "Menu" -- "Menu", "EggConfig", "SellConfig", "SwapSkillConfig"
+    -- Inisialisasi State Config Baru
+    State.AutoHatch = (State.AutoHatch ~= nil) and State.AutoHatch or false
+    State.DontHatchIfNotAllDone = (State.DontHatchIfNotAllDone ~= nil) and State.DontHatchIfNotAllDone or false
+    State.ActiveConfigSubView = "Menu" -- "Menu", "EggConfig", "SellConfig", "SwapSkillConfig"
 
     local function GetFarm()
         if not Farms then return nil end
@@ -66,21 +68,58 @@ return function(PagePets, State, ZyloLib, Main)
         end
     end
 
-    -- Loop Auto Hatch
+    -- [FITUR CERDAS]: LOOP AUTO HATCH DENGAN DUKUNGAN "DONT HATCH IF TIME NOT DONE" (SYNC HATCH)
     task.spawn(function()
         while true do
             if State.AutoHatch then
                 local farm = GetFarm()
                 local imp = farm and farm:FindFirstChild("Important")
                 local objPhysical = imp and imp:FindFirstChild("Objects_Physical")
+                
                 if objPhysical then
-                    for _, eggModel in ipairs(objPhysical:GetChildren()) do
-                        if not State.AutoHatch then break end
-                        local prompt = eggModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-                        if prompt and prompt.Enabled then
-                            prompt.HoldDuration = 0
-                            fireproximityprompt(prompt)
-                            task.wait(0.1)
+                    local eggsInGarden = {}
+                    for _, obj in ipairs(objPhysical:GetChildren()) do
+                        local p = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        local isEgg = false
+                        local nameLower = obj.Name:lower()
+                        if nameLower:find("egg") or (p and p.ActionText:lower():find("hatch")) then
+                            isEgg = true
+                        end
+                        if isEgg and p then
+                            table.insert(eggsInGarden, { Model = obj, Prompt = p })
+                        end
+                    end
+
+                    -- Cek sinkronisasi waktu jika fitur "Dont Hatch if Time Done" dinyalakan
+                    local canHatchNow = true
+                    if State.DontHatchIfNotAllDone and #eggsInGarden > 0 then
+                        for _, egg in ipairs(eggsInGarden) do
+                            -- Di game Grow a Garden, telur yang belum selesai cooldown prompt-nya Disabled atau ada teks hitung mundur
+                            local isPromptReady = egg.Prompt.Enabled
+                            local billboard = egg.Model:FindFirstChildWhichIsA("BillboardGui", true)
+                            local timeLabel = billboard and billboard:FindFirstChildWhichIsA("TextLabel", true)
+                            if timeLabel and (timeLabel.Text:find(":") or timeLabel.Text:lower():find("m") or timeLabel.Text:lower():find("s")) and not timeLabel.Text:lower():find("ready") then
+                                isPromptReady = false
+                            end
+
+                            if not isPromptReady then
+                                canHatchNow = false
+                                break -- Tahan! Masih ada minimal satu telur yang sedang cooldown
+                            end
+                        end
+                    end
+
+                    -- Eksekusi penetasan jika kondisi terpenuhi
+                    if canHatchNow and #eggsInGarden > 0 then
+                        for _, egg in ipairs(eggsInGarden) do
+                            if not State.AutoHatch then break end
+                            local p = egg.Prompt
+                            if p and p.Enabled then
+                                p.HoldDuration = 0
+                                p.RequiresLineOfSight = false
+                                pcall(function() fireproximityprompt(p) end)
+                                task.wait(0.08)
+                            end
                         end
                     end
                 end
@@ -445,37 +484,22 @@ return function(PagePets, State, ZyloLib, Main)
     end
 
     -- =============================================================
-    -- UI ACCORDION AUTO HATCH & PET TEAM MANAGER
+    -- UI ACCORDION PET TEAM & CONFIG MANAGER (CLEAN DESIGN)
     -- =============================================================
-    local accHatch, bodyHatch = ZyloLib:CreateAccordion(PagePets, "Auto Hatch", false, 435)
-    local ahRow = Instance.new("Frame", bodyHatch)
-    ahRow.Size = UDim2.new(1, -24, 0, 28)
-    ahRow.Position = UDim2.new(0, 12, 0, 6)
-    ahRow.BackgroundColor3 = C.CARD_2
-    Instance.new("UICorner", ahRow).CornerRadius = UDim.new(0, 6)
-    local ahLbl = Instance.new("TextLabel", ahRow)
-    ahLbl.Position = UDim2.new(0, 8, 0, 0)
-    ahLbl.Size = UDim2.new(1, -45, 1, 0)
-    ahLbl.BackgroundTransparency = 1
-    ahLbl.Text = "Otomatis Tetaskan & Claim Telur Siap Panen"
-    ahLbl.TextColor3 = C.TEXT_W
-    ahLbl.Font = Enum.Font.GothamMedium
-    ahLbl.TextSize = 8.5
-    ahLbl.TextXAlignment = Enum.TextXAlignment.Left
-    local ahSw = ZyloLib:CreatePillSwitch(ahRow, State.AutoHatch, function(v) State.AutoHatch = v end)
-    ahSw.Position = UDim2.new(1, -40, 0.5, -10)
+    local accHatch, bodyHatch = ZyloLib:CreateAccordion(PagePets, "Auto Hatch & Pet Team Manager", true, 410)
 
-    -- Card Pet Team Manager
+    -- Card Pet Team Manager Utama
     local TeamCard = Instance.new("Frame", bodyHatch)
     TeamCard.Name = "PetTeamManagerCard"
-    TeamCard.Position = UDim2.new(0, 12, 0, 40)
-    TeamCard.Size = UDim2.new(1, -24, 0, 350)
+    TeamCard.Position = UDim2.new(0, 12, 0, 8)
+    TeamCard.Size = UDim2.new(1, -24, 0, 390)
     TeamCard.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
     Instance.new("UICorner", TeamCard).CornerRadius = UDim.new(0, 8)
     local tcStroke = Instance.new("UIStroke", TeamCard)
     tcStroke.Color = C.STROKE
     tcStroke.Thickness = 1
 
+    -- Baris Sub-Tab Navigasi Atas
     local SubTabRow = Instance.new("ScrollingFrame", TeamCard)
     SubTabRow.Position = UDim2.new(0, 10, 0, 10)
     SubTabRow.Size = UDim2.new(1, -20, 0, 30)
@@ -506,6 +530,8 @@ return function(PagePets, State, ZyloLib, Main)
     ConfigContainer.Size = UDim2.new(1, 0, 1, -86)
     ConfigContainer.BackgroundTransparency = 1
     ConfigContainer.Visible = false
+
+    local updateConfigSubViews = nil
 
     local function updateSubTabs()
         local isConfigActive = (State.ActiveTeam == "Config")
@@ -538,6 +564,10 @@ return function(PagePets, State, ZyloLib, Main)
             end
             if refreshPetSelectionUI then
                 refreshPetSelectionUI()
+            end
+        else
+            if updateConfigSubViews then
+                updateConfigSubViews()
             end
         end
     end
@@ -879,7 +909,7 @@ return function(PagePets, State, ZyloLib, Main)
     end)
 
     -- =============================================================
-    -- [2] CONFIG CONTAINER (EGG, SELL, & SWAP SKILL VIEWS)
+    -- [2] CONFIG CONTAINER (MODULAR SUB-VIEW WITH EGG CONFIG)
     -- =============================================================
     local ConfigMenuView = Instance.new("Frame", ConfigContainer)
     ConfigMenuView.Size = UDim2.new(1, 0, 1, 0)
@@ -892,7 +922,105 @@ return function(PagePets, State, ZyloLib, Main)
     cmPad.PaddingLeft = UDim.new(0, 12)
     cmPad.PaddingRight = UDim.new(0, 12)
 
-    local function makeConfigCardButton(title, descText, clickCallback)
+    -- Sub-View Khusus EGG CONFIG
+    local EggConfigSubView = Instance.new("Frame", ConfigContainer)
+    EggConfigSubView.Size = UDim2.new(1, 0, 1, 0)
+    EggConfigSubView.BackgroundTransparency = 1
+    EggConfigSubView.Visible = false
+
+    local ecLayout = Instance.new("UIListLayout", EggConfigSubView)
+    ecLayout.Padding = UDim.new(0, 8)
+    local ecPad = Instance.new("UIPadding", EggConfigSubView)
+    ecPad.PaddingTop = UDim.new(0, 6)
+    ecPad.PaddingLeft = UDim.new(0, 12)
+    ecPad.PaddingRight = UDim.new(0, 12)
+
+    -- Header Back Button di Egg Config
+    local backBtn = Instance.new("TextButton", EggConfigSubView)
+    backBtn.Size = UDim2.new(1, 0, 0, 26)
+    backBtn.BackgroundColor3 = Color3.fromRGB(16, 21, 42)
+    backBtn.Text = " ⬅  Kembali ke Menu Config"
+    backBtn.TextColor3 = C.PURPLE_L
+    backBtn.Font = Enum.Font.GothamBold
+    backBtn.TextSize = 9
+    backBtn.TextXAlignment = Enum.TextXAlignment.Left
+    Instance.new("UICorner", backBtn).CornerRadius = UDim.new(0, 6)
+    local bbStroke = Instance.new("UIStroke", backBtn)
+    bbStroke.Color = C.STROKE
+
+    backBtn.MouseButton1Click:Connect(function()
+        State.ActiveConfigSubView = "Menu"
+        updateConfigSubViews()
+    end)
+
+    -- [EGG CONFIG ITEM 1]: Otomatis Tetaskan & Claim Telur Siap Panen (Dipindahkan ke sini secara mulus)
+    local rowHatchToggle = Instance.new("Frame", EggConfigSubView)
+    rowHatchToggle.Size = UDim2.new(1, 0, 0, 36)
+    rowHatchToggle.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
+    Instance.new("UICorner", rowHatchToggle).CornerRadius = UDim.new(0, 6)
+    local rhtStroke = Instance.new("UIStroke", rowHatchToggle)
+    rhtStroke.Color = C.STROKE
+
+    local rhtLbl = Instance.new("TextLabel", rowHatchToggle)
+    rhtLbl.Position = UDim2.new(0, 10, 0, 0)
+    rhtLbl.Size = UDim2.new(1, -55, 1, 0)
+    rhtLbl.BackgroundTransparency = 1
+    rhtLbl.Text = "Otomatis Tetaskan & Claim Telur Siap Panen"
+    rhtLbl.TextColor3 = C.TEXT_W
+    rhtLbl.Font = Enum.Font.GothamMedium
+    rhtLbl.TextSize = 8.5
+    rhtLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local hatchPill = ZyloLib:CreatePillSwitch(rowHatchToggle, State.AutoHatch, function(v)
+        State.AutoHatch = v
+    end)
+    hatchPill.Position = UDim2.new(1, -44, 0.5, -10)
+
+    -- [EGG CONFIG ITEM 2]: "Don't Hatch if Time Done" (Sync Hatching Semua Telur Bersamaan)
+    local rowSyncToggle = Instance.new("Frame", EggConfigSubView)
+    rowSyncToggle.Size = UDim2.new(1, 0, 0, 44)
+    rowSyncToggle.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
+    Instance.new("UICorner", rowSyncToggle).CornerRadius = UDim.new(0, 6)
+    local rstStroke = Instance.new("UIStroke", rowSyncToggle)
+    rstStroke.Color = C.STROKE
+
+    local rstTitle = Instance.new("TextLabel", rowSyncToggle)
+    rstTitle.Position = UDim2.new(0, 10, 0, 4)
+    rstTitle.Size = UDim2.new(1, -55, 0, 16)
+    rstTitle.BackgroundTransparency = 1
+    rstTitle.Text = "Don't Hatch If Time Not Done"
+    rstTitle.TextColor3 = C.TEXT_W
+    rstTitle.Font = Enum.Font.GothamBold
+    rstTitle.TextSize = 9
+    rstTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+    local rstSub = Instance.new("TextLabel", rowSyncToggle)
+    rstSub.Position = UDim2.new(0, 10, 0, 20)
+    rstSub.Size = UDim2.new(1, -55, 0, 18)
+    rstSub.BackgroundTransparency = 1
+    rstSub.Text = "Tunggu semua telur selesai cooldown baru di-hatch barengan"
+    rstSub.TextColor3 = C.TEXT_M
+    rstSub.Font = Enum.Font.GothamMedium
+    rstSub.TextSize = 7.5
+    rstSub.TextXAlignment = Enum.TextXAlignment.Left
+
+    local syncPill = ZyloLib:CreatePillSwitch(rowSyncToggle, State.DontHatchIfNotAllDone, function(v)
+        State.DontHatchIfNotAllDone = v
+    end)
+    syncPill.Position = UDim2.new(1, -44, 0.5, -10)
+
+    -- Fungsi pergantian sub-view dalam tab config
+    updateConfigSubViews = function()
+        if State.ActiveConfigSubView == "EggConfig" then
+            ConfigMenuView.Visible = false
+            EggConfigSubView.Visible = true
+        else
+            ConfigMenuView.Visible = true
+            EggConfigSubView.Visible = false
+        end
+    end
+
+    local function makeConfigCardButton(title, clickCallback)
         local btn = Instance.new("TextButton", ConfigMenuView)
         btn.Size = UDim2.new(1, 0, 0, 42)
         btn.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
@@ -936,29 +1064,19 @@ return function(PagePets, State, ZyloLib, Main)
         return btn
     end
 
-    -- 3 Menu Konfigurasi Sesuai Referensi Gambar Anda
-    local btnEggCfg = makeConfigCardButton("🥚  Egg Config", "Pengaturan Tipe & Prioritas Telur", function()
-        print("[ZyloHub] Membuka Egg Config...")
+    -- 3 Menu Konfigurasi Utama
+    makeConfigCardButton("🥚  Egg Config", function()
+        State.ActiveConfigSubView = "EggConfig"
+        updateConfigSubViews()
     end)
 
-    local btnSellCfg = makeConfigCardButton("💰  Sell Config (Favorite Important Pets First)", "Pengaturan Jual Otomatis & Proteksi Pet", function()
+    makeConfigCardButton("💰  Sell Config (Favorite Important Pets First)", function()
         print("[ZyloHub] Membuka Sell Config...")
     end)
 
-    local btnSwapCfg = makeConfigCardButton("🔄  Swap Skill Config", "Pengaturan Rotasi Skill & Re-roll Pasif", function()
+    makeConfigCardButton("🔄  Swap Skill Config", function()
         print("[ZyloHub] Membuka Swap Skill Config...")
     end)
-
-    -- Status Info di dalam tab Config
-    local cfgInfo = Instance.new("TextLabel", ConfigMenuView)
-    cfgInfo.Size = UDim2.new(1, 0, 0, 36)
-    cfgInfo.BackgroundTransparency = 1
-    cfgInfo.Text = "✨ UI Config Mode Aktif: Silakan klik opsi di atas untuk membuka pengaturan sub-fitur."
-    cfgInfo.TextColor3 = Color3.fromRGB(140, 160, 210)
-    cfgInfo.Font = Enum.Font.GothamMedium
-    cfgInfo.TextSize = 8.5
-    cfgInfo.TextWrapped = true
-    cfgInfo.TextXAlignment = Enum.TextXAlignment.Left
 
     -- =============================================================
     -- [3] BOTTOM ACTION BAR (START & STOP MULTI-PASS RECALL)
