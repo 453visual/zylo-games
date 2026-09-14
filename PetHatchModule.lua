@@ -2,7 +2,7 @@
 --  ZYLOHUB - PET HATCH & TEAM MANAGER MODULE (OFFICIAL EXTENSION)
 --  Repository: zylo-games/PetHatchModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  STATUS: 100% PRESERVED & PERFECT MULTI-PASS AUTO-UNEQUIP ON STOP
+--  STATUS: 100% PRESERVED & FPS-OPTIMIZED (NO LAG / NO STUTTER)
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main)
@@ -165,7 +165,6 @@ return function(PagePets, State, ZyloLib, Main)
                 local owner = obj:GetAttribute("OWNER") or (obj:FindFirstChild("Owner") and obj.Owner.Value)
                 local uuid = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
                 
-                -- Deteksi tambahan jika UUID ada di dalam atribut sub-komponen
                 if not uuid then
                     for _, sub in ipairs(obj:GetChildren()) do
                         local sU = sub:GetAttribute("UUID") or sub:GetAttribute("PET_UUID")
@@ -205,7 +204,6 @@ return function(PagePets, State, ZyloLib, Main)
             end
         end
         
-        -- Deteksi container PetsPhysical di workspace
         checkContainer(workspace:FindFirstChild("PetsPhysical"))
 
         return equipped
@@ -374,7 +372,6 @@ return function(PagePets, State, ZyloLib, Main)
         local sUuid = tostring(uuid)
         local stripped = sUuid:gsub("[{}]", "")
 
-        -- 1. ProximityPrompt di semua kontainer fisik
         local containers = {}
         local farm = GetFarm()
         if farm then
@@ -418,7 +415,6 @@ return function(PagePets, State, ZyloLib, Main)
             end
         end
 
-        -- 2. Panggil Remote Resmi PetsService
         if PetsServiceMod and PetsServiceMod.UnequipPet then
             pcall(function() PetsServiceMod:UnequipPet(uuid) end)
             pcall(function() PetsServiceMod:UnequipPet(stripped) end)
@@ -842,10 +838,11 @@ return function(PagePets, State, ZyloLib, Main)
 
     task.defer(refreshPetSelectionUI)
 
+    -- [OPTIMASI FPS & MICRO-STUTTER]: Loop cerdas diperhalus ke 6 detik dan hanya berjalan saat GUI aktif
     task.spawn(function()
         while true do
-            task.wait(2.5)
-            if refreshPetSelectionUI and PetScroll and PetScroll.Parent then
+            task.wait(6.0)
+            if refreshPetSelectionUI and PetScroll and PetScroll.Parent and PetScroll.Visible then
                 pcall(refreshPetSelectionUI)
             end
         end
@@ -948,7 +945,7 @@ return function(PagePets, State, ZyloLib, Main)
         end)
     end)
 
-    -- [SEMPURNA]: LOGIKA TOMBOL STOP DENGAN DUAL-PASS SWEEP AGAR TAK ADA SATU PET PUN TERTINGGAL
+    -- [SEMPURNA & INSTAN]: LOGIKA TOMBOL STOP DENGAN MULTI-PASS SWEEP TANPA MEMOTONG APAPUN
     local isStopping = false
     StopBtn.MouseButton1Click:Connect(function()
         State.IsTeamRunning = false
@@ -987,7 +984,6 @@ return function(PagePets, State, ZyloLib, Main)
                 end
             end
 
-            -- Jeda singkat untuk sinkronisasi server game
             task.wait(0.3)
 
             -- PASS 3 (FINAL SWEEP): Cek ulang semua model di kebun. Jika masih ada sisa, eksekusi langsung ProximityPrompt di tempat
@@ -1010,7 +1006,7 @@ return function(PagePets, State, ZyloLib, Main)
             StopBtn.TextColor3 = C.TEXT_M
             stpStroke.Color = C.STROKE
 
-            -- Refresh seketika agar status [ACTIVE] hilang 100%
+            -- Refresh seketika saat itu juga
             if refreshPetSelectionUI then
                 task.defer(refreshPetSelectionUI)
             end
