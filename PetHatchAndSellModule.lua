@@ -3,7 +3,7 @@
 --  Repository: zylo-games/PetHatchAndSellModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  STATUS: 100% PRESERVED AUTO HATCH & REAL-TIME AUTO SELL ENGINE
---  DATASET: ALL 526+ OFFICIAL GAME PETS FULLY EMBEDDED DIRECTLY
+--  DATASET: ALL 492 CLEAN BASE PET SPECIES (NO HUGE/GIANT/EGG PREFIXES)
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main, TeamManager)
@@ -39,8 +39,8 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     State.EggConfigExpanded = (State.EggConfigExpanded ~= nil) and State.EggConfigExpanded or false
     State.SellConfigExpanded = (State.SellConfigExpanded ~= nil) and State.SellConfigExpanded or false
 
-    -- State Khusus Sell Config & Bulk Flow
-    State.AutoSellThresholdCount = State.AutoSellThresholdCount or 24
+    -- State Khusus Sell Config & Bulk Flow (Default Threshold = 1 agar langsung jalan saat ditest)
+    State.AutoSellThresholdCount = State.AutoSellThresholdCount or 1
     State.SellMode = State.SellMode or "Sell All"
     State.SellSearchQuery = State.SellSearchQuery or ""
     State.SelectedBulkPetSpecies = State.SelectedBulkPetSpecies or "Mimic Octopus"
@@ -48,7 +48,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     State.BulkAction = State.BulkAction or "sell"
     State.ApplyBulkList = (State.ApplyBulkList ~= nil) and State.ApplyBulkList or false
 
-    -- Master List Lengkap Seluruh Spesies Pet Resmi Game (Termasuk Sea Anemone, Tsunami Sea Anemone, dll)
+    -- Master List Spesies Pet (Murni Nama Spesies: Tanpa Awalan Ukuran Huge/GIANT dan Tanpa Kategori Telur)
     local MasterPetSpeciesList = {
         "Amethyst Beetle", "Anglerfish", "Angora Goat", "Ankylosaurus", "Anubis",
         "Apple Gazelle", "Arctic Fox", "Armadillo", "Axolotl", "Bacon Pig",
@@ -56,147 +56,107 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         "Beanstalk Bear", "Bear Bee", "Bear on Bike", "Bearded Dragon", "Beaver",
         "Bee", "Birb", "Bison", "Black Bird", "Black Bunny",
         "Black Cat", "Black Spotty Dragon", "Blood Hedgehog", "Blood Kiwi", "Blood Owl",
-        "Blue Butterfly", "Blue Jay", "Blue Ringed Octopus", "Blue Tang", "Bobcat",
-        "Bone Dog", "Bongo Antelope", "Brontosaurus", "Brown Bear", "Brown Owl",
-        "Bull", "Bullfrog", "Bumblebee", "Bunny", "Butterfly",
-        "Camel", "Canary", "Cape Buffalo", "Capybara", "Cat",
-        "Caterpillar", "Chameleon", "Cheetah", "Chicken", "Chicken Zombie",
-        "Chimpanzee", "Chinchilla", "Chipmunk", "Chocolate Bunny", "Chocolate Cow",
-        "Chocolate Duck", "Chocolate Frog", "Chocolate Hedgehog", "Chocolate Pig", "Christmas Gorilla",
-        "Christmas Spirit", "Cloud Sprite", "Clownfish", "Cobra", "Cockatoo",
-        "Cocoa Cat", "Cooked Turkey", "Cookie Cow", "Cow", "Crab",
-        "Crocodile", "Crow", "Cuckoo", "Dairy Cow", "Dalmatian",
-        "Dark Spriggan", "Deer", "Dilophosaurus", "Dingo", "Dinosaur",
-        "Disco Bee", "Doctor Dog", "Dodo", "Dog", "Dolphin",
-        "Donkey", "Dragonfly", "Duck", "Eagle", "Easter Bunny",
-        "Easter Egg Chick", "Echo Frog", "Echo Gecko", "Echo Owl", "Eel",
-        "Eggnog Chick", "Elemental Bee", "Elephant", "Emperor Penguin", "Empress Bee",
-        "Emu", "Falcon", "Fennec Fox", "Ferret", "Festive Ice Golem",
-        "Festive Moose", "Festive Nutcracker", "Festive Partridge", "Festive Reindeer", "Festive Santa Bear",
-        "Festive Turtle Dove", "Festive Wendigo", "Festive Yeti", "FestiveFrost Squirrel", "Firefly",
-        "Flame Bee", "Flamingo", "Flying Squirrel", "Fox", "French Fry Ferret",
-        "French Hen", "Frog", "Frost Dragon", "Frost Squirrel", "GIANT Badger",
-        "GIANT Barn Owl", "GIANT Grizzly Bear", "GIANT Robin", "GIANT Snowman Builder", "GIANT Snowman Soldier",
-        "GIANT Swan", "Gardener Bee", "Gazelle", "Gecko", "Ghost Bear",
-        "Ghost Cat", "Ghost Dog", "Ghost Dragon", "Ghost Fox", "Ghost Owl",
-        "Ghost Wolf", "Ghostly Bat", "Ghostly Black Cat", "Ghostly Bone Dog", "Ghostly Dark Spriggan",
-        "Ghostly Headless Horseman", "Ghostly Mummy", "Ghostly Scarab", "Ghostly Spider", "Ghostly Tomb Marmot",
-        "Giant Ant", "Giant Beetle", "Giant Caterpillar", "Giant Centipede", "Giant Dragonfly",
-        "Giant Mantis", "Giant Moth", "Giant Panda", "Giant Snail", "Giant Spider",
-        "Gift Rat", "Gilded Choc Chocolate Bunny", "Gilded Choc Easter Bunny", "Gilded Choc Easter Egg Chick", "Gilded Choc Marshmallow Lamb",
-        "Giraffe", "Glow Squid", "Glow Worm", "Goat", "Goblin",
-        "Gold Finch", "Golden Beetle", "Golden Butterfly", "Golden Chicken", "Golden Cow",
-        "Golden Dragon", "Golden Eagle", "Golden Egg Pet", "Golden Fox", "Golden Frog",
-        "Golden Goose", "Golden Monkey", "Golden Owl", "Golden Panda", "Golden Peacock",
-        "Golden Pig", "Golden Rabbit", "Golden Sheep", "Golden Tiger", "Golden Wolf",
-        "Goose", "Gopher", "Gorilla", "Gorilla Chef", "Grasshopper",
-        "Green Beetle", "Green Bird", "Green Butterfly", "Green Caterpillar", "Green Frog",
-        "Green Lizard", "Green Snake", "Grizzly Bear", "Guinea Pig", "Gummy Bear",
-        "Hamster", "Hawk", "Headless Horseman", "Hedgehog", "Hermit Crab",
-        "Hex Serpent", "Hippocampus", "Hippo", "Honey Bee", "Hootsie Roll",
-        "Horse", "Hotdog Daschund", "Huge Albino Peacock", "Huge Alligator", "Huge Amethyst Beetle",
-        "Huge Ankylosaurus", "Huge Anubis", "Huge Apple Gazelle", "Huge Arctic Fox", "Huge Armadillo",
-        "Huge Axolotl", "Huge Bacon Pig", "Huge Badger", "Huge Bagel Bunny", "Huge Bald Eagle",
-        "Huge Barn Owl", "Huge Bat", "Huge Beanstalk Bear", "Huge Bear Bee", "Huge Bear on Bike",
-        "Huge Bearded Dragon", "Huge Beaver", "Huge Bee", "Huge Birb", "Huge Bison",
-        "Huge Black Bird", "Huge Black Bunny", "Huge Black Cat", "Huge Black Spotty Dragon", "Huge Blood Hedgehog",
-        "Huge Blood Kiwi", "Huge Blood Owl", "Huge Blue Butterfly", "Huge Blue Jay", "Huge Blue Ringed Octopus",
-        "Huge Blue Tang", "Huge Bobcat", "Huge Bongo Antelope", "Huge Brontosaurus", "Huge Brown Bear",
-        "Huge Brown Owl", "Huge Bull", "Huge Bullfrog", "Huge Bunny", "Huge Butterfly",
-        "Huge Camel", "Huge Canary", "Huge Capybara", "Huge Cat", "Huge Caterpillar",
-        "Huge Chameleon", "Huge Cheetah", "Huge Chicken", "Huge Chicken Zombie", "Huge Chimpanzee",
-        "Huge Chinchilla", "Huge Chipmunk", "Huge Chocolate Bunny", "Huge Cloud Sprite", "Huge Clownfish",
-        "Huge Cobra", "Huge Cockatoo", "Huge Cow", "Huge Crab", "Huge Crocodile",
-        "Huge Crow", "Huge Cuckoo", "Huge Dairy Cow", "Huge Dalmatian", "Huge Deer",
-        "Huge Dilophosaurus", "Huge Dingo", "Huge Dinosaur", "Huge Disco Bee", "Huge Doctor Dog",
-        "Huge Dodo", "Huge Dog", "Huge Dolphin", "Huge Donkey", "Huge Dragonfly",
-        "Huge Duck", "Huge Eagle", "Huge Eel", "Huge Elephant", "Huge Emperor Penguin",
-        "Huge Emu", "Huge Falcon", "Huge Fennec Fox", "Huge Ferret", "Huge Firefly",
-        "Huge Flamingo", "Huge Flying Squirrel", "Huge Fox", "Huge Frog", "Huge Gazelle",
-        "Huge Gecko", "Huge Ghost Bear", "Huge Ghost Cat", "Huge Ghost Dog", "Huge Giant Panda",
-        "Huge Giraffe", "Huge Glow Squid", "Huge Goat", "Huge Gold Finch", "Huge Golden Beetle",
-        "Huge Golden Goose", "Huge Goose", "Huge Gopher", "Huge Gorilla", "Huge Grasshopper",
-        "Huge Grizzly Bear", "Huge Guinea Pig", "Huge Hamster", "Huge Hawk", "Huge Hedgehog",
-        "Huge Hermit Crab", "Huge Hippo", "Huge Honey Bee", "Huge Horse", "Huge Hummingbird",
-        "Huge Hyena", "Huge Iguana", "Huge Jabberwock", "Huge Jackal", "Huge Jellyfish",
-        "Huge Kangaroo", "Huge Killer Whale", "Huge King Cobra", "Huge Kitsune", "Huge Kiwi",
-        "Huge Koala", "Huge Komodo Dragon", "Huge Ladybug", "Huge Lemur", "Huge Leopard",
-        "Huge Lion", "Huge Llama", "Huge Lobster", "Huge Lynx", "Huge Macaw",
-        "Huge Magpie", "Huge Mallard Duck", "Huge Mantis", "Huge Meerkat", "Huge Mimic Octopus",
-        "Huge Mole", "Huge Mongoose", "Huge Monkey", "Huge Moose", "Huge Mosquito",
-        "Huge Moth", "Huge Mouse", "Huge Narwhal", "Huge Night Owl", "Huge Octopus",
-        "Huge Okapi", "Huge Opossum", "Huge Orange Tabby", "Huge Orangutan", "Huge Ostrich",
-        "Huge Otter", "Huge Owl", "Huge Panda", "Huge Panther", "Huge Parrot",
-        "Huge Peacock", "Huge Pelican", "Huge Penguin", "Huge Petal Bee", "Huge Phoenix",
-        "Huge Pig", "Huge Pigeon", "Huge Piranha", "Huge Platypus", "Huge Polar Bear",
-        "Huge Poodle", "Huge Porcupine", "Huge Possum", "Huge Pterodactyl", "Huge Pufferfish",
-        "Huge Pug", "Huge Queen Bee", "Huge Rabbit", "Huge Raccoon", "Huge Rainbow Cloud Sprite",
-        "Huge Rainbow Jabberwock", "Huge Ram", "Huge Rat", "Huge Rattlesnake", "Huge Raven",
-        "Huge Red Fox", "Huge Red Panda", "Huge Rhino", "Huge Rooster", "Huge Salamander",
-        "Huge Sand Dollar", "Huge Scarlet Macaw", "Huge Scorpion", "Huge Sea Horse", "Huge Sea Lion",
-        "Huge Sea Otter", "Huge Sea Turtle", "Huge Seagull", "Huge Seal", "Huge Shark",
-        "Huge Sheep", "Huge Shiba Inu", "Huge Silver Monkey", "Huge Skunk", "Huge Sloth",
-        "Huge Snail", "Huge Snake", "Huge Snow Leopard", "Huge Snowy Owl", "Huge Sparrow",
-        "Huge Spider", "Huge Spinosaurus", "Huge Spotted Deer", "Huge Squid", "Huge Squirrel",
-        "Huge Starfish", "Huge Stegosaurus", "Huge Stingray", "Huge Swan", "Huge Swordfish",
-        "Huge T-Rex", "Huge Tanuki", "Huge Tapir", "Huge Tarantula", "Huge Tarantula Hawk",
-        "Huge Tiger", "Huge Toad", "Huge Tortoise", "Huge Toucan", "Huge Tree Frog",
-        "Huge Triceratops", "Huge Turkey", "Huge Turtle", "Huge Unicorn", "Huge Velociraptor",
-        "Huge Vine Serpent", "Huge Viper", "Huge Vulture", "Huge Walrus", "Huge Warthog",
-        "Huge Wasp", "Huge Weasel", "Huge Whale", "Huge Whale Shark", "Huge White Tiger",
-        "Huge Wild Boar", "Huge Wise Owl", "Huge Wisp", "Huge Wolf", "Huge Wombat",
-        "Huge Woodpecker", "Huge Woody", "Huge Yak", "Huge Yeti", "Huge Zebra",
-        "Hummingbird", "Hyacinth Macaw", "Hyena", "Ice Golem", "Iguana",
-        "Iguanodon", "Jabberwock", "Jackal", "Jellyfish", "Kangaroo",
-        "Killer Whale", "King Cobra", "Kitsune", "Kiwi", "Koala",
-        "Komodo Dragon", "Krampus", "Ladybug", "Lemur", "Leopard",
-        "Lich", "Lion", "Llama", "Lobster", "Lobster Thermidor",
-        "Lunar Moth", "Lynx", "Macaw", "Magpie", "Mallard",
-        "Mallard Duck", "Manta Ray", "Mantis", "Marmot", "Marshmallow Lamb",
-        "Meerkat", "Mimic Octopus", "Mistletoad", "Mochi Mouse", "Mole",
-        "Mongoose", "Monkey", "Moon Cat", "Moon Dragon", "Moose",
-        "Mosquito", "Moth", "Mouse", "Mummy", "Narwhal",
-        "Nautilus", "Night Horse", "Night Owl", "Nurse Bee", "Nutcracker",
-        "Octopus", "Okapi", "Opossum", "Orange Tabby", "Orangutan",
-        "Orchid Mantis", "Orca", "Ostrich", "Otter", "Owl",
-        "Oxpecker", "Pachycephalosaurus", "Pancake Mole", "Panda", "Panther",
-        "Parasaurolophus", "Parrot", "Partridge", "Peacock", "Pelican",
-        "Penguin", "Petal Bee", "Phoenix", "Pig", "Pigeon",
-        "Pine Beetle", "Piranha", "Platypus", "Polar Bear", "Poodle",
-        "Porcupine", "Possum", "Professor Bee", "Pterodactyl", "Pufferfish",
-        "Pug", "Pumpkin Rat", "Queen Bee", "Rabbit", "Raccoon",
-        "Rainbow Arctic Fox", "Rainbow Christmas Gorilla", "Rainbow Cloud Sprite", "Rainbow Elephant", "Rainbow French Hen",
-        "Rainbow Frost Dragon", "Rainbow Giraffe", "Rainbow Jabberwock", "Rainbow Krampus", "Rainbow Mistletoad",
-        "Rainbow Oxpecker", "Rainbow Rhino", "Rainbow Snow Bunny", "Rainbow Stag Beetle", "Rainbow Zebra",
-        "Ram", "Raptor", "Rat", "Rattlesnake", "Raven",
-        "Reaper", "Red Fox", "Red Panda", "Red Squirrel", "Red-Nosed Reindeer",
-        "Reindeer", "Rhino", "Robin", "Rooster", "Salamander",
-        "Salmon", "Sand Dollar", "Sandcastle Crab", "Santa Bear", "Scarlet Macaw",
-        "Scarab", "Scorpion", "Sea Anemone", "Sea Horse", "Sea Lion",
+        "Blue Jay", "Blue Whale", "Bone Dog", "Brontosaurus", "Brown Mouse",
+        "Brown Owl", "Bumblebee", "Bunny", "Butterfly", "Cactus Mouse",
+        "Calico", "Camel", "Canary", "Candy Squirrel", "Cape Buffalo",
+        "Capybara", "Cardinal", "Carnival Elephant", "Carpenter Bee", "Cat",
+        "Caterpillar", "Celebration Puppy", "Champion Beetle", "Cheetah", "Chest Mimic",
+        "Chicken", "Chicken Zombie", "Chimera", "Chimpanzee", "Chinchilla",
+        "Chipmunk", "Chocolate Bunny", "Christmas Gorilla", "Christmas Spirit", "Chubby Chipmunk",
+        "Cicada", "Clam", "Cloud Hound", "Cloud Sprite", "Cockatrice",
+        "Cocoa Cat", "Cooked Owl", "Cornling", "Corrupted Kitsune", "Corrupted Kodama",
+        "Cow", "Crab", "Crocodile", "Crow", "Cuckoo",
+        "Dairy Cow", "Dark Spriggan", "Deer", "Desert Tortoise", "Diamond Dragonfly",
+        "Diamond Panther", "Dilophosaurus", "Disco Bee", "Dog", "Dolphin",
+        "Dragonfly", "Drake", "Easter Bunny", "Easter Egg Chick", "Echo Frog",
+        "Eggnog Chick", "Electric Eel", "Elemental Bee", "Elephant", "Elk",
+        "Emerald Snake", "Empress Bee", "Farmer Chipmunk", "Fennec Fox", "Festive Frost Squirrel",
+        "Festive Ice Golem", "Festive Moose", "Festive Nutcracker", "Festive Partridge", "Festive Reindeer",
+        "Festive Santa Bear", "Festive Turtle Dove", "Festive Wendigo", "Festive Yeti", "FestiveFrost Squirrel",
+        "Fire Wisp", "Firefly", "Firework Sprite", "Flame Bear", "Flame Bee",
+        "Flamingo", "Football", "Fortune Squirrel", "French Fry Ferret", "French Hen",
+        "Frog", "Frost Dragon", "Frost Squirrel", "Gardener Bee", "Gecko",
+        "Geode Turtle", "German Shepherd", "Ghost Bear", "Ghostly Bat", "Ghostly Black Cat",
+        "Ghostly Bone Dog", "Ghostly Dark Spriggan", "Ghostly Headless Horseman", "Ghostly Mummy", "Ghostly Scarab",
+        "Ghostly Spider", "Ghostly Tomb Marmot", "Giant Ant", "Giant Scorpion", "Gift Rat",
+        "Gilded Choc Chocolate Bunny", "Gilded Choc Easter Bunny", "Gilded Choc Easter Egg Chick", "Gilded Choc Gummy Bear", "Gilded Choc Hootsie Roll",
+        "Gilded Choc Jerboa", "Gilded Choc Marshmallow Lamb", "Gilded Choc Nyala", "Gilded Choc Peryton", "Gilded Choc Spring Bee",
+        "Giraffe", "Glass Cat", "Glass Dog", "Glimmering Sprite", "Gnome",
+        "Goat", "Goblin", "Goblin Miner", "Gold Finch", "Golden Bee",
+        "Golden Goose", "Golden Lab", "Golden Piggy", "Golem", "Goose",
+        "Gorilla Chef", "Green Bean", "Grey Mouse", "Griffin", "Grizzly Bear",
+        "Gummy Bear", "Hamster", "Harvest Golem", "Headless Horseman", "Hedgehog",
+        "Hermit Crab", "Hex Serpent", "Hippo", "Hippocampus", "Honey Badger",
+        "Honey Bee", "Hootsie Roll", "Hotdog Daschund", "Hummingbird", "Hyacinth Macaw",
+        "Hydra", "Hyena", "Hyrax", "Ice Golem", "Idol Chipmunk",
+        "Iguana", "Iguanodon", "Imp", "Jabberwock", "Jackalope",
+        "Jellyfish", "Jerboa", "Junkbot", "Kappa", "King Bee",
+        "Kirin", "Kitsune", "Kiwi", "Kodama", "Koi",
+        "Krampus", "Ladybug", "Leaf Insect", "Lemon Lion", "Lich",
+        "Lion", "Lioness", "Lobster Thermidor", "Lunar Moth", "Lyrebird",
+        "Magpie", "Mallard", "Mandrake", "Maneki-neko", "Manta Ray",
+        "Mantis Shrimp", "Marmot", "Marshmallow Lamb", "Meerkat", "Messenger Pigeon",
+        "Mimic Octopus", "Mistletoad", "Mizuchi", "Mochi Mouse", "Mole",
+        "Monitor Lizard", "Monkey", "Moon Cat", "Moon Dragon", "Moon Snail",
+        "Moose", "Moss Wyvern", "Moth", "Mummy", "Nautilus",
+        "New Year's Bird", "New Year's Chimp", "New Year's Dragon", "Newt", "Night Horse",
+        "Night Owl", "Nightjar", "Nihonzaru", "Nurse Bee", "Nutcracker",
+        "Nyala", "Opossum", "Orange Tabby", "Orangutan", "Orca",
+        "Orchid Mantis", "Ostrich", "Owl", "Oxpecker", "Pachycephalosaurus",
+        "Pack Bee", "Pack Mule", "Pancake Mole", "Panda", "Parasaurolophus",
+        "Parasaurolophus ", "Partridge", "Peach Wasp", "Peacock", "Pelican",
+        "Penguin", "Performer Seal", "Peryton", "Petal Bee", "Phoenix",
+        "Pig", "Pine Beetle", "Pink Bunny", "Pink Panda", "Pixie",
+        "Polar Bear", "Praying Mantis", "Prince Wasp", "Professor Bee", "Pterodactyl",
+        "Pumpkin Rat", "Queen Bee", "Quetzal", "Raccoon", "Raiju",
+        "Rainbow Anglerfish", "Rainbow Ankylosaurus", "Rainbow Anubis", "Rainbow Arctic Fox", "Rainbow Armadillo",
+        "Rainbow Bacon Pig", "Rainbow Badger", "Rainbow Barn Owl", "Rainbow Bear on Bike", "Rainbow Birb",
+        "Rainbow Black Bird", "Rainbow Blue Jay", "Rainbow Brown Owl", "Rainbow Bumblebee", "Rainbow Cardinal",
+        "Rainbow Carnival Elephant", "Rainbow Celebration Puppy", "Rainbow Chest Mimic", "Rainbow Chinchilla", "Rainbow Christmas Gorilla",
+        "Rainbow Cicada", "Rainbow Cloud Hound", "Rainbow Cloud Sprite", "Rainbow Corrupted Kitsune", "Rainbow Cuckoo",
+        "Rainbow Dilophosaurus", "Rainbow Elemental Bee", "Rainbow Elephant", "Rainbow Elk", "Rainbow Empress Bee",
+        "Rainbow Farmer Chipmunk", "Rainbow Fire Wisp", "Rainbow Firework Sprite", "Rainbow Fortune Squirrel", "Rainbow French Hen",
+        "Rainbow Frost Dragon", "Rainbow Gardener Bee", "Rainbow Giraffe", "Rainbow Gold Finch", "Rainbow Goose",
+        "Rainbow Griffin", "Rainbow Grizzly Bear", "Rainbow Hotdog Daschund", "Rainbow Hydra", "Rainbow Idol Chipmunk",
+        "Rainbow Iguanodon", "Rainbow Jabberwock", "Rainbow Kirin", "Rainbow Kodama", "Rainbow Krampus",
+        "Rainbow Lobster Thermidor", "Rainbow Mandrake", "Rainbow Maneki-neko", "Rainbow Mantis Shrimp", "Rainbow Mistletoad",
+        "Rainbow Mizuchi", "Rainbow Monitor Lizard", "Rainbow Moon Snail", "Rainbow Moss Wyvern", "Rainbow New Year's Bird",
+        "Rainbow New Year's Chimp", "Rainbow New Year's Dragon", "Rainbow Newt", "Rainbow Nightjar", "Rainbow Nurse Bee",
+        "Rainbow Oxpecker", "Rainbow Pachycephalosaurus", "Rainbow Parasaurolophus", "Rainbow Performer Seal", "Rainbow Phoenix",
+        "Rainbow Pink Bunny", "Rainbow Rhino", "Rainbow Robin", "Rainbow Sand Wyrm", "Rainbow Sheep",
+        "Rainbow Show Pony", "Rainbow Shroomie", "Rainbow Snow Bunny", "Rainbow Spinosaurus", "Rainbow Stag Beetle",
+        "Rainbow Star Wolf", "Rainbow Swan", "Rainbow Thunderbird", "Rainbow Unicycle Monkey", "Rainbow Vine Serpent",
+        "Rainbow Wise Owl", "Rainbow Zebra", "Raptor", "Reaper", "Red Dragon",
+        "Red Fox", "Red Giant Ant", "Red Panda", "Red Rose Fox", "Red Squirrel",
+        "Red-Nosed Reindeer", "Reindeer", "Rhino", "Robin", "Rooster",
+        "Ruby Squid", "Salmon", "Sand Snake", "Sand Wyrm", "Sandcastle Crab",
+        "Santa Bear", "Sapphire Macaw", "Scarab", "Scarlet Macaw", "Sea Anemone",
         "Sea Otter", "Sea Turtle", "Sea Urchin", "Seagull", "Seahorse",
-        "Seal", "Shark", "Sheep", "Shiba Inu", "Silver Monkey",
-        "Skunk", "Sloth", "Snail", "Snake", "Snow Bunny",
-        "Snow Leopard", "Snowman Builder", "Snowman Soldier", "Snowy Owl", "Space Squirrel",
-        "Spaghetti Sloth", "Sparrow", "Specter", "Spider", "Spinosaurus",
-        "Spotted Deer", "Spring Bee", "Squid", "Squirrel", "Stag Beetle",
-        "Starfish", "Starry Lunar Moth", "Starry Moon Dragon", "Starry Night Horse", "Starry Opossum",
-        "Stegosaurus", "Stingray", "Stork", "Sugar Glider", "Summer Kiwi",
-        "Sunny-Side Chicken", "Sushi Bear", "Swan", "Swordfish", "T-Rex",
-        "Tanuki", "Tapir", "Tarantula", "Tarantula Hawk", "Tidal Sea Anemone",
-        "Tiger", "Toad", "Tomb Marmot", "Tortoise", "Toucan",
-        "Tree Frog", "Triceratops", "Tsunami Hermit Crab", "Tsunami Orca", "Tsunami Sea Anemone",
-        "Tsunami Seahorse", "Turkey", "Turtle", "Turtle Dove", "Unicorn",
-        "Vampire Squid", "Velociraptor", "Vine Serpent", "Viper", "Vulture",
-        "Walrus", "Warthog", "Wasp", "Weasel", "Wendigo",
-        "Whale", "Whale Shark", "White Tiger", "Wild Boar", "Wise Owl",
-        "Wisp", "Wolf", "Wombat", "Woodpecker", "Woody",
-        "Yak", "Yeti", "Zebra"
+        "Seal", "Seedling", "Shadow Cat", "Shark", "Sheckling",
+        "Sheep", "Shiba Inu", "Show Pony", "Shroomie", "Silver Dragonfly",
+        "Silver Monkey", "Silver Piggy", "Smithing Dog", "Snail", "Snake",
+        "Snow Bunny", "Snowman Builder", "Snowman Soldier", "Space Squirrel", "Spaghetti Sloth",
+        "Specter", "Spider", "Spinosaurus", "Spotted Deer", "Spriggan",
+        "Spring Bee", "Squirrel", "Stag Beetle", "Star Wolf", "Starfish",
+        "Starry Lunar Moth", "Starry Moon Dragon", "Starry Night Horse", "Starry Opossum", "Stegosaurus",
+        "Stork", "Sugar Glider", "Summer Kiwi", "Sunny-Side Chicken", "Sushi Bear",
+        "Swan", "T-Rex", "Tanchozuru", "Tanuki", "Tarantula Hawk",
+        "Termite", "Thunderbird", "Tidal Hermit Crab", "Tidal Orca", "Tidal Sea Anemone",
+        "Tidal Seahorse", "Tiger", "Tomb Marmot", "Topaz Snail", "Toucan",
+        "Trapdoor Spider", "Tree Frog", "Triceratops", "Tsuchinoko", "Tsunami Hermit Crab",
+        "Tsunami Orca", "Tsunami Sea Anemone", "Tsunami Seahorse", "Turtle", "Turtle Dove",
+        "Unicycle Monkey", "Vampire Squid", "Vine Serpent", "Walrus", "Wasp",
+        "Water Buffalo", "Wendigo", "Wheat Crow", "White Tiger", "Wind Wyvern",
+        "Wind-Up Rat", "Wise Owl", "Wisp", "Wolf", "Woodpecker",
+        "Woody", "Yeti", "Zebra"
     }
 
     -- [ENGINE AUTO-DETECT 100% RESMI & AKURAT LANGSUNG DARI MEMORI GAME]
     local function FetchAllGamePetSpecies()
         local function registerPet(name)
             if type(name) == "string" and #name >= 2 then
+                -- Filter keluar awalan ukuran/kategori yang bukan jenis spesies
+                if name:find("^Huge%s") or name:find("^GIANT%s") or name:find("^Egg/") then return end
                 if not name:find("Service") and not name:find("Event") and not name:find("Remote") and not name:find("Tween") and not name:find("Module") then
                     if not table.find(MasterPetSpeciesList, name) then
                         table.insert(MasterPetSpeciesList, name)
@@ -254,6 +214,29 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                                 if type(isVal) == "string" then registerPet(isVal) end
                             end
                         end
+                    end
+                end
+            end
+        end)
+
+        -- 3. Sinkronkan dari PetServices Modules jika ada pet khusus lainnya
+        pcall(function()
+            local petServices = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("PetServices")
+            if petServices then
+                for _, child in ipairs(petServices:GetChildren()) do
+                    if child:IsA("ModuleScript") then
+                        pcall(function()
+                            local mod = require(child)
+                            if type(mod) == "table" then
+                                for k, v in pairs(mod) do
+                                    registerPet(k)
+                                    if type(v) == "table" then
+                                        if v.Name then registerPet(v.Name) end
+                                        if v.Species then registerPet(v.Species) end
+                                    end
+                                end
+                            end
+                        end)
                     end
                 end
             end
@@ -360,17 +343,78 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         end
     end)
 
-    -- Proxy Helper ke TeamManager jika tersedia
+    -- Proxy Helper ke TeamManager & Fallback Lengkap ke Game DataService
     local function GetAllPetsList()
+        local pets = {}
+        local seenUUID = {}
+
+        -- 1. Coba dari TeamManager jika tersedia
         if TeamManager and TeamManager.GetAllPetsList then
-            return TeamManager.GetAllPetsList()
+            pcall(function()
+                local tmPets = TeamManager.GetAllPetsList()
+                if type(tmPets) == "table" and #tmPets > 0 then
+                    for _, p in ipairs(tmPets) do
+                        if p and p.UUID and not seenUUID[p.UUID] then
+                            seenUUID[p.UUID] = true
+                            table.insert(pets, p)
+                        end
+                    end
+                end
+            end)
         end
-        return {}
+
+        -- 2. Fallback langsung ke DataService (Kamus Pet Inventori Pemain Resmi Game)
+        if #pets == 0 then
+            pcall(function()
+                if not DataService then
+                    DataService = require(ReplicatedStorage:WaitForChild("Modules", 3):WaitForChild("DataService", 3))
+                end
+                if DataService and DataService.GetData then
+                    local data = DataService:GetData()
+                    local rawPets = data and (data.Pets or (data.Inventory and data.Inventory.Pets))
+                    if type(rawPets) == "table" then
+                        for k, petObj in pairs(rawPets) do
+                            if type(petObj) == "table" then
+                                local uuid = petObj.UUID or petObj.Id or petObj.petId or k
+                                if uuid and not seenUUID[uuid] then
+                                    seenUUID[uuid] = true
+                                    local rawSpecies = petObj.PetType or petObj.Species or petObj.Name or "Unknown"
+                                    local cleanSpecies = rawSpecies:gsub("^Huge%s+", ""):gsub("^GIANT%s+", "")
+                                    local weight = tonumber(petObj.Weight) or tonumber(petObj.BaseWeight) or tonumber(petObj.NumericWeight) or 1
+                                    local isFav = (petObj.IsFavorite == true) or (petObj.Favorited == true) or (petObj.Favorite == true)
+                                    local inGarden = (petObj.Equipped == true) or (petObj.InGarden == true) or false
+
+                                    table.insert(pets, {
+                                        UUID = tostring(uuid),
+                                        Species = cleanSpecies,
+                                        RawSpecies = rawSpecies,
+                                        Name = cleanSpecies,
+                                        Weight = weight,
+                                        NumericWeight = weight,
+                                        IsFavorite = isFav,
+                                        InGarden = inGarden
+                                    })
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+
+        return pets
     end
 
     local function UnequipPetByUUID(uuid)
         if TeamManager and TeamManager.UnequipPetByUUID then
-            return TeamManager.UnequipPetByUUID(uuid)
+            pcall(function() TeamManager.UnequipPetByUUID(uuid) end)
+        end
+        if PetsServiceMod and PetsServiceMod.UnequipPet then
+            pcall(function() PetsServiceMod:UnequipPet(uuid) end)
+        end
+        if PetsServiceRemote then
+            pcall(function() PetsServiceRemote:FireServer("UnequipPet", uuid) end)
+            pcall(function() PetsServiceRemote:FireServer("Unequip", uuid) end)
         end
     end
 
@@ -380,17 +424,22 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     local isProcessingAutoSell = false
     local function CheckAndExecuteAutoSell()
         if isProcessingAutoSell or not State.ApplyBulkList then return end
+        
         local allPets = GetAllPetsList()
         local currentTotalPets = #allPets
-        local threshold = tonumber(State.AutoSellThresholdCount) or 24
+        local threshold = tonumber(State.AutoSellThresholdCount) or 1
 
-        if currentTotalPets < threshold then return end
+        -- Jika threshold di-set > 1 dan pet belum cukup, tunggu hingga terkumpul
+        if threshold > 1 and currentTotalPets < threshold then
+            return
+        end
 
         isProcessingAutoSell = true
 
         local rulesMap = {}
         for _, rule in ipairs(State.SellPetRules) do
-            rulesMap[rule.Species:lower()] = {
+            local cleanRuleSpecies = rule.Species:lower():gsub("^huge%s+", ""):gsub("^giant%s+", "")
+            rulesMap[cleanRuleSpecies] = {
                 KG = tonumber(rule.KG) or 0,
                 Action = (rule.Action or "SELL"):upper()
             }
@@ -399,7 +448,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         local petsToSell = {}
         for _, pet in ipairs(allPets) do
             if not pet.IsFavorite then
-                local sName = (pet.Species or pet.Name or ""):lower()
+                local sName = (pet.Species or pet.Name or ""):lower():gsub("^huge%s+", ""):gsub("^giant%s+", "")
                 local rule = rulesMap[sName]
                 
                 if rule then
@@ -418,7 +467,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         end
 
         if #petsToSell > 0 then
-            print("[ZyloHub Auto Sell] Menemukan " .. tostring(#petsToSell) .. " pet yang memenuhi syarat jual.")
+            print("[ZyloHub Auto Sell] Menjual " .. tostring(#petsToSell) .. " pet sesuai konfigurasi...")
             for _, p in ipairs(petsToSell) do
                 if not State.ApplyBulkList then break end
 
@@ -427,13 +476,21 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                     task.wait(0.2)
                 end
 
-                if PetsServiceMod and PetsServiceMod.SellPet then
-                    pcall(function() PetsServiceMod:SellPet(p.UUID) end)
+                -- Eksekusi penjualan dengan berbagai metode resmi
+                if PetsServiceMod then
+                    pcall(function() if PetsServiceMod.SellPet then PetsServiceMod:SellPet(p.UUID) end end)
+                    pcall(function() if PetsServiceMod.Sell then PetsServiceMod:Sell(p.UUID) end end)
                 end
                 if PetsServiceRemote then
                     pcall(function() PetsServiceRemote:FireServer("SellPet", p.UUID) end)
                     pcall(function() PetsServiceRemote:FireServer("Sell", p.UUID) end)
                 end
+                pcall(function()
+                    local sellRem = GameEvents and (GameEvents:FindFirstChild("SellPet") or GameEvents:FindFirstChild("PetService"))
+                    if sellRem and sellRem:IsA("RemoteEvent") then
+                        sellRem:FireServer("SellPet", p.UUID)
+                    end
+                end)
 
                 if State.SellMode == "Sell One By One" then
                     task.wait(0.35)
@@ -448,7 +505,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     task.spawn(function()
         while true do
-            task.wait(2.5)
+            task.wait(1.5)
             if State.ApplyBulkList then
                 pcall(CheckAndExecuteAutoSell)
             end
@@ -648,7 +705,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     rthBox.Position = UDim2.new(1, -50, 0.5, -10)
     rthBox.Size = UDim2.new(0, 42, 0, 20)
     rthBox.BackgroundColor3 = Color3.fromRGB(16, 21, 42)
-    rthBox.Text = tostring(State.AutoSellThresholdCount or 24)
+    rthBox.Text = tostring(State.AutoSellThresholdCount or 1)
     rthBox.TextColor3 = C.TEXT_W
     rthBox.Font = Enum.Font.GothamBold
     rthBox.TextSize = 9
@@ -844,6 +901,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                     renderSellRules()
                 end
                 print("[ZyloHub] Berhasil apply pet ke list:", speciesToAdd)
+                task.spawn(CheckAndExecuteAutoSell)
             end
         end
     end)
