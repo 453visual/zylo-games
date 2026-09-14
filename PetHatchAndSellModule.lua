@@ -3,7 +3,7 @@
 --  Repository: zylo-games/PetHatchAndSellModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  STATUS: 100% PRESERVED AUTO HATCH & REAL-TIME AUTO SELL ENGINE
---  DATASET: DYNAMIC LIVE SYNC FROM REPLICATEDSTORAGE.DATA.PETREGISTRY
+--  DATASET: ALL 526+ OFFICIAL GAME PETS FULLY EMBEDDED DIRECTLY
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main, TeamManager)
@@ -48,7 +48,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     State.BulkAction = State.BulkAction or "sell"
     State.ApplyBulkList = (State.ApplyBulkList ~= nil) and State.ApplyBulkList or false
 
-    -- Master List Lengkap Seluruh 515 Spesies Pet Resmi Game (Baseline Lengkap)
+    -- Master List Lengkap Seluruh Spesies Pet Resmi Game (Termasuk Sea Anemone, Tsunami Sea Anemone, dll)
     local MasterPetSpeciesList = {
         "Amethyst Beetle", "Anglerfish", "Angora Goat", "Ankylosaurus", "Anubis",
         "Apple Gazelle", "Arctic Fox", "Armadillo", "Axolotl", "Bacon Pig",
@@ -57,109 +57,137 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         "Bee", "Birb", "Bison", "Black Bird", "Black Bunny",
         "Black Cat", "Black Spotty Dragon", "Blood Hedgehog", "Blood Kiwi", "Blood Owl",
         "Blue Butterfly", "Blue Jay", "Blue Ringed Octopus", "Blue Tang", "Bobcat",
-        "Bongo Antelope", "Brontosaurus", "Brown Bear", "Brown Owl", "Bull",
-        "Bullfrog", "Bunny", "Butterfly", "Camel", "Canary",
-        "Capybara", "Cat", "Caterpillar", "Chameleon", "Cheetah",
-        "Chicken", "Chicken Zombie", "Chimpanzee", "Chinchilla", "Chipmunk",
-        "Chocolate Bunny", "Chocolate Cow", "Chocolate Duck", "Chocolate Frog", "Chocolate Hedgehog",
-        "Chocolate Pig", "Cloud Sprite", "Clownfish", "Cobra", "Cockatoo",
-        "Cooked Turkey", "Cookie Cow", "Cow", "Crab", "Crocodile",
-        "Crow", "Cuckoo", "Dairy Cow", "Dalmatian", "Deer",
-        "Dilophosaurus", "Dingo", "Dinosaur", "Disco Bee", "Doctor Dog",
-        "Dodo", "Dog", "Dolphin", "Donkey", "Dragonfly",
-        "Duck", "Eagle", "Echo Frog", "Echo Gecko", "Echo Owl",
-        "Eel", "Elephant", "Emperor Penguin", "Emu", "Falcon",
-        "Fennec Fox", "Ferret", "Firefly", "Flamingo", "Flying Squirrel",
-        "Fox", "Frog", "Gazelle", "Gecko", "Ghost Bear",
+        "Bone Dog", "Bongo Antelope", "Brontosaurus", "Brown Bear", "Brown Owl",
+        "Bull", "Bullfrog", "Bumblebee", "Bunny", "Butterfly",
+        "Camel", "Canary", "Cape Buffalo", "Capybara", "Cat",
+        "Caterpillar", "Chameleon", "Cheetah", "Chicken", "Chicken Zombie",
+        "Chimpanzee", "Chinchilla", "Chipmunk", "Chocolate Bunny", "Chocolate Cow",
+        "Chocolate Duck", "Chocolate Frog", "Chocolate Hedgehog", "Chocolate Pig", "Christmas Gorilla",
+        "Christmas Spirit", "Cloud Sprite", "Clownfish", "Cobra", "Cockatoo",
+        "Cocoa Cat", "Cooked Turkey", "Cookie Cow", "Cow", "Crab",
+        "Crocodile", "Crow", "Cuckoo", "Dairy Cow", "Dalmatian",
+        "Dark Spriggan", "Deer", "Dilophosaurus", "Dingo", "Dinosaur",
+        "Disco Bee", "Doctor Dog", "Dodo", "Dog", "Dolphin",
+        "Donkey", "Dragonfly", "Duck", "Eagle", "Easter Bunny",
+        "Easter Egg Chick", "Echo Frog", "Echo Gecko", "Echo Owl", "Eel",
+        "Eggnog Chick", "Elemental Bee", "Elephant", "Emperor Penguin", "Empress Bee",
+        "Emu", "Falcon", "Fennec Fox", "Ferret", "Festive Ice Golem",
+        "Festive Moose", "Festive Nutcracker", "Festive Partridge", "Festive Reindeer", "Festive Santa Bear",
+        "Festive Turtle Dove", "Festive Wendigo", "Festive Yeti", "FestiveFrost Squirrel", "Firefly",
+        "Flame Bee", "Flamingo", "Flying Squirrel", "Fox", "French Fry Ferret",
+        "French Hen", "Frog", "Frost Dragon", "Frost Squirrel", "GIANT Badger",
+        "GIANT Barn Owl", "GIANT Grizzly Bear", "GIANT Robin", "GIANT Snowman Builder", "GIANT Snowman Soldier",
+        "GIANT Swan", "Gardener Bee", "Gazelle", "Gecko", "Ghost Bear",
         "Ghost Cat", "Ghost Dog", "Ghost Dragon", "Ghost Fox", "Ghost Owl",
-        "Ghost Wolf", "Giant Ant", "Giant Beetle", "Giant Caterpillar", "Giant Centipede",
-        "Giant Dragonfly", "Giant Mantis", "Giant Moth", "Giant Panda", "Giant Snail",
-        "Giant Spider", "Giraffe", "Glow Squid", "Glow Worm", "Goat",
+        "Ghost Wolf", "Ghostly Bat", "Ghostly Black Cat", "Ghostly Bone Dog", "Ghostly Dark Spriggan",
+        "Ghostly Headless Horseman", "Ghostly Mummy", "Ghostly Scarab", "Ghostly Spider", "Ghostly Tomb Marmot",
+        "Giant Ant", "Giant Beetle", "Giant Caterpillar", "Giant Centipede", "Giant Dragonfly",
+        "Giant Mantis", "Giant Moth", "Giant Panda", "Giant Snail", "Giant Spider",
+        "Gift Rat", "Gilded Choc Chocolate Bunny", "Gilded Choc Easter Bunny", "Gilded Choc Easter Egg Chick", "Gilded Choc Marshmallow Lamb",
+        "Giraffe", "Glow Squid", "Glow Worm", "Goat", "Goblin",
         "Gold Finch", "Golden Beetle", "Golden Butterfly", "Golden Chicken", "Golden Cow",
         "Golden Dragon", "Golden Eagle", "Golden Egg Pet", "Golden Fox", "Golden Frog",
         "Golden Goose", "Golden Monkey", "Golden Owl", "Golden Panda", "Golden Peacock",
         "Golden Pig", "Golden Rabbit", "Golden Sheep", "Golden Tiger", "Golden Wolf",
-        "Goose", "Gopher", "Gorilla", "Grasshopper", "Green Beetle",
-        "Green Bird", "Green Butterfly", "Green Caterpillar", "Green Frog", "Green Lizard",
-        "Green Snake", "Grizzly Bear", "Guinea Pig", "Hamster", "Hawk",
-        "Hedgehog", "Hermit Crab", "Hippo", "Honey Bee", "Horse",
-        "Huge Albino Peacock", "Huge Alligator", "Huge Amethyst Beetle", "Huge Ankylosaurus", "Huge Anubis",
-        "Huge Apple Gazelle", "Huge Arctic Fox", "Huge Armadillo", "Huge Axolotl", "Huge Bacon Pig",
-        "Huge Badger", "Huge Bagel Bunny", "Huge Bald Eagle", "Huge Barn Owl", "Huge Bat",
-        "Huge Beanstalk Bear", "Huge Bear Bee", "Huge Bear on Bike", "Huge Bearded Dragon", "Huge Beaver",
-        "Huge Bee", "Huge Birb", "Huge Bison", "Huge Black Bird", "Huge Black Bunny",
-        "Huge Black Cat", "Huge Black Spotty Dragon", "Huge Blood Hedgehog", "Huge Blood Kiwi", "Huge Blood Owl",
-        "Huge Blue Butterfly", "Huge Blue Jay", "Huge Blue Ringed Octopus", "Huge Blue Tang", "Huge Bobcat",
-        "Huge Bongo Antelope", "Huge Brontosaurus", "Huge Brown Bear", "Huge Brown Owl", "Huge Bull",
-        "Huge Bullfrog", "Huge Bunny", "Huge Butterfly", "Huge Camel", "Huge Canary",
-        "Huge Capybara", "Huge Cat", "Huge Caterpillar", "Huge Chameleon", "Huge Cheetah",
-        "Huge Chicken", "Huge Chicken Zombie", "Huge Chimpanzee", "Huge Chinchilla", "Huge Chipmunk",
-        "Huge Chocolate Bunny", "Huge Cloud Sprite", "Huge Clownfish", "Huge Cobra", "Huge Cockatoo",
-        "Huge Cow", "Huge Crab", "Huge Crocodile", "Huge Crow", "Huge Cuckoo",
-        "Huge Dairy Cow", "Huge Dalmatian", "Huge Deer", "Huge Dilophosaurus", "Huge Dingo",
-        "Huge Dinosaur", "Huge Disco Bee", "Huge Doctor Dog", "Huge Dodo", "Huge Dog",
-        "Huge Dolphin", "Huge Donkey", "Huge Dragonfly", "Huge Duck", "Huge Eagle",
-        "Huge Eel", "Huge Elephant", "Huge Emperor Penguin", "Huge Emu", "Huge Falcon",
-        "Huge Fennec Fox", "Huge Ferret", "Huge Firefly", "Huge Flamingo", "Huge Flying Squirrel",
-        "Huge Fox", "Huge Frog", "Huge Gazelle", "Huge Gecko", "Huge Ghost Bear",
-        "Huge Ghost Cat", "Huge Ghost Dog", "Huge Giant Panda", "Huge Giraffe", "Huge Glow Squid",
-        "Huge Goat", "Huge Gold Finch", "Huge Golden Beetle", "Huge Golden Goose", "Huge Goose",
-        "Huge Gopher", "Huge Gorilla", "Huge Grasshopper", "Huge Grizzly Bear", "Huge Guinea Pig",
-        "Huge Hamster", "Huge Hawk", "Huge Hedgehog", "Huge Hermit Crab", "Huge Hippo",
-        "Huge Honey Bee", "Huge Horse", "Huge Hummingbird", "Huge Hyena", "Huge Iguana",
-        "Huge Jabberwock", "Huge Jackal", "Huge Jellyfish", "Huge Kangaroo", "Huge Killer Whale",
-        "Huge King Cobra", "Huge Kitsune", "Huge Kiwi", "Huge Koala", "Huge Komodo Dragon",
-        "Huge Ladybug", "Huge Lemur", "Huge Leopard", "Huge Lion", "Huge Llama",
-        "Huge Lobster", "Huge Lynx", "Huge Macaw", "Huge Magpie", "Huge Mallard Duck",
-        "Huge Mantis", "Huge Meerkat", "Huge Mimic Octopus", "Huge Mole", "Huge Mongoose",
-        "Huge Monkey", "Huge Moose", "Huge Mosquito", "Huge Moth", "Huge Mouse",
-        "Huge Narwhal", "Huge Night Owl", "Huge Octopus", "Huge Okapi", "Huge Opossum",
-        "Huge Orange Tabby", "Huge Orangutan", "Huge Ostrich", "Huge Otter", "Huge Owl",
-        "Huge Panda", "Huge Panther", "Huge Parrot", "Huge Peacock", "Huge Pelican",
-        "Huge Penguin", "Huge Petal Bee", "Huge Phoenix", "Huge Pig", "Huge Pigeon",
-        "Huge Piranha", "Huge Platypus", "Huge Polar Bear", "Huge Poodle", "Huge Porcupine",
-        "Huge Possum", "Huge Pterodactyl", "Huge Pufferfish", "Huge Pug", "Huge Queen Bee",
-        "Huge Rabbit", "Huge Raccoon", "Huge Rainbow Cloud Sprite", "Huge Rainbow Jabberwock", "Huge Ram",
-        "Huge Rat", "Huge Rattlesnake", "Huge Raven", "Huge Red Fox", "Huge Red Panda",
-        "Huge Rhino", "Huge Rooster", "Huge Salamander", "Huge Sand Dollar", "Huge Scarlet Macaw",
-        "Huge Scorpion", "Huge Sea Horse", "Huge Sea Lion", "Huge Sea Otter", "Huge Sea Turtle",
-        "Huge Seagull", "Huge Seal", "Huge Shark", "Huge Sheep", "Huge Shiba Inu",
-        "Huge Silver Monkey", "Huge Skunk", "Huge Sloth", "Huge Snail", "Huge Snake",
-        "Huge Snow Leopard", "Huge Snowy Owl", "Huge Sparrow", "Huge Spider", "Huge Spinosaurus",
-        "Huge Spotted Deer", "Huge Squid", "Huge Squirrel", "Huge Starfish", "Huge Stegosaurus",
-        "Huge Stingray", "Huge Swan", "Huge Swordfish", "Huge T-Rex", "Huge Tanuki",
-        "Huge Tapir", "Huge Tarantula", "Huge Tarantula Hawk", "Huge Tiger", "Huge Toad",
-        "Huge Tortoise", "Huge Toucan", "Huge Tree Frog", "Huge Triceratops", "Huge Turkey",
-        "Huge Turtle", "Huge Unicorn", "Huge Velociraptor", "Huge Vine Serpent", "Huge Viper",
-        "Huge Vulture", "Huge Walrus", "Huge Warthog", "Huge Wasp", "Huge Weasel",
-        "Huge Whale", "Huge Whale Shark", "Huge White Tiger", "Huge Wild Boar", "Huge Wise Owl",
-        "Huge Wisp", "Huge Wolf", "Huge Wombat", "Huge Woodpecker", "Huge Woody",
-        "Huge Yak", "Huge Yeti", "Huge Zebra", "Hummingbird", "Hyena",
-        "Iguana", "Jabberwock", "Jackal", "Jellyfish", "Kangaroo",
+        "Goose", "Gopher", "Gorilla", "Gorilla Chef", "Grasshopper",
+        "Green Beetle", "Green Bird", "Green Butterfly", "Green Caterpillar", "Green Frog",
+        "Green Lizard", "Green Snake", "Grizzly Bear", "Guinea Pig", "Gummy Bear",
+        "Hamster", "Hawk", "Headless Horseman", "Hedgehog", "Hermit Crab",
+        "Hex Serpent", "Hippocampus", "Hippo", "Honey Bee", "Hootsie Roll",
+        "Horse", "Hotdog Daschund", "Huge Albino Peacock", "Huge Alligator", "Huge Amethyst Beetle",
+        "Huge Ankylosaurus", "Huge Anubis", "Huge Apple Gazelle", "Huge Arctic Fox", "Huge Armadillo",
+        "Huge Axolotl", "Huge Bacon Pig", "Huge Badger", "Huge Bagel Bunny", "Huge Bald Eagle",
+        "Huge Barn Owl", "Huge Bat", "Huge Beanstalk Bear", "Huge Bear Bee", "Huge Bear on Bike",
+        "Huge Bearded Dragon", "Huge Beaver", "Huge Bee", "Huge Birb", "Huge Bison",
+        "Huge Black Bird", "Huge Black Bunny", "Huge Black Cat", "Huge Black Spotty Dragon", "Huge Blood Hedgehog",
+        "Huge Blood Kiwi", "Huge Blood Owl", "Huge Blue Butterfly", "Huge Blue Jay", "Huge Blue Ringed Octopus",
+        "Huge Blue Tang", "Huge Bobcat", "Huge Bongo Antelope", "Huge Brontosaurus", "Huge Brown Bear",
+        "Huge Brown Owl", "Huge Bull", "Huge Bullfrog", "Huge Bunny", "Huge Butterfly",
+        "Huge Camel", "Huge Canary", "Huge Capybara", "Huge Cat", "Huge Caterpillar",
+        "Huge Chameleon", "Huge Cheetah", "Huge Chicken", "Huge Chicken Zombie", "Huge Chimpanzee",
+        "Huge Chinchilla", "Huge Chipmunk", "Huge Chocolate Bunny", "Huge Cloud Sprite", "Huge Clownfish",
+        "Huge Cobra", "Huge Cockatoo", "Huge Cow", "Huge Crab", "Huge Crocodile",
+        "Huge Crow", "Huge Cuckoo", "Huge Dairy Cow", "Huge Dalmatian", "Huge Deer",
+        "Huge Dilophosaurus", "Huge Dingo", "Huge Dinosaur", "Huge Disco Bee", "Huge Doctor Dog",
+        "Huge Dodo", "Huge Dog", "Huge Dolphin", "Huge Donkey", "Huge Dragonfly",
+        "Huge Duck", "Huge Eagle", "Huge Eel", "Huge Elephant", "Huge Emperor Penguin",
+        "Huge Emu", "Huge Falcon", "Huge Fennec Fox", "Huge Ferret", "Huge Firefly",
+        "Huge Flamingo", "Huge Flying Squirrel", "Huge Fox", "Huge Frog", "Huge Gazelle",
+        "Huge Gecko", "Huge Ghost Bear", "Huge Ghost Cat", "Huge Ghost Dog", "Huge Giant Panda",
+        "Huge Giraffe", "Huge Glow Squid", "Huge Goat", "Huge Gold Finch", "Huge Golden Beetle",
+        "Huge Golden Goose", "Huge Goose", "Huge Gopher", "Huge Gorilla", "Huge Grasshopper",
+        "Huge Grizzly Bear", "Huge Guinea Pig", "Huge Hamster", "Huge Hawk", "Huge Hedgehog",
+        "Huge Hermit Crab", "Huge Hippo", "Huge Honey Bee", "Huge Horse", "Huge Hummingbird",
+        "Huge Hyena", "Huge Iguana", "Huge Jabberwock", "Huge Jackal", "Huge Jellyfish",
+        "Huge Kangaroo", "Huge Killer Whale", "Huge King Cobra", "Huge Kitsune", "Huge Kiwi",
+        "Huge Koala", "Huge Komodo Dragon", "Huge Ladybug", "Huge Lemur", "Huge Leopard",
+        "Huge Lion", "Huge Llama", "Huge Lobster", "Huge Lynx", "Huge Macaw",
+        "Huge Magpie", "Huge Mallard Duck", "Huge Mantis", "Huge Meerkat", "Huge Mimic Octopus",
+        "Huge Mole", "Huge Mongoose", "Huge Monkey", "Huge Moose", "Huge Mosquito",
+        "Huge Moth", "Huge Mouse", "Huge Narwhal", "Huge Night Owl", "Huge Octopus",
+        "Huge Okapi", "Huge Opossum", "Huge Orange Tabby", "Huge Orangutan", "Huge Ostrich",
+        "Huge Otter", "Huge Owl", "Huge Panda", "Huge Panther", "Huge Parrot",
+        "Huge Peacock", "Huge Pelican", "Huge Penguin", "Huge Petal Bee", "Huge Phoenix",
+        "Huge Pig", "Huge Pigeon", "Huge Piranha", "Huge Platypus", "Huge Polar Bear",
+        "Huge Poodle", "Huge Porcupine", "Huge Possum", "Huge Pterodactyl", "Huge Pufferfish",
+        "Huge Pug", "Huge Queen Bee", "Huge Rabbit", "Huge Raccoon", "Huge Rainbow Cloud Sprite",
+        "Huge Rainbow Jabberwock", "Huge Ram", "Huge Rat", "Huge Rattlesnake", "Huge Raven",
+        "Huge Red Fox", "Huge Red Panda", "Huge Rhino", "Huge Rooster", "Huge Salamander",
+        "Huge Sand Dollar", "Huge Scarlet Macaw", "Huge Scorpion", "Huge Sea Horse", "Huge Sea Lion",
+        "Huge Sea Otter", "Huge Sea Turtle", "Huge Seagull", "Huge Seal", "Huge Shark",
+        "Huge Sheep", "Huge Shiba Inu", "Huge Silver Monkey", "Huge Skunk", "Huge Sloth",
+        "Huge Snail", "Huge Snake", "Huge Snow Leopard", "Huge Snowy Owl", "Huge Sparrow",
+        "Huge Spider", "Huge Spinosaurus", "Huge Spotted Deer", "Huge Squid", "Huge Squirrel",
+        "Huge Starfish", "Huge Stegosaurus", "Huge Stingray", "Huge Swan", "Huge Swordfish",
+        "Huge T-Rex", "Huge Tanuki", "Huge Tapir", "Huge Tarantula", "Huge Tarantula Hawk",
+        "Huge Tiger", "Huge Toad", "Huge Tortoise", "Huge Toucan", "Huge Tree Frog",
+        "Huge Triceratops", "Huge Turkey", "Huge Turtle", "Huge Unicorn", "Huge Velociraptor",
+        "Huge Vine Serpent", "Huge Viper", "Huge Vulture", "Huge Walrus", "Huge Warthog",
+        "Huge Wasp", "Huge Weasel", "Huge Whale", "Huge Whale Shark", "Huge White Tiger",
+        "Huge Wild Boar", "Huge Wise Owl", "Huge Wisp", "Huge Wolf", "Huge Wombat",
+        "Huge Woodpecker", "Huge Woody", "Huge Yak", "Huge Yeti", "Huge Zebra",
+        "Hummingbird", "Hyacinth Macaw", "Hyena", "Ice Golem", "Iguana",
+        "Iguanodon", "Jabberwock", "Jackal", "Jellyfish", "Kangaroo",
         "Killer Whale", "King Cobra", "Kitsune", "Kiwi", "Koala",
-        "Komodo Dragon", "Ladybug", "Lemur", "Leopard", "Lion",
-        "Llama", "Lobster", "Lynx", "Macaw", "Magpie",
-        "Mallard Duck", "Mantis", "Meerkat", "Mimic Octopus", "Mole",
-        "Mongoose", "Monkey", "Moose", "Mosquito", "Moth",
-        "Mouse", "Narwhal", "Night Owl", "Octopus", "Okapi",
-        "Opossum", "Orangutan", "Ostrich", "Otter", "Owl",
-        "Panda", "Panther", "Parrot", "Peacock", "Pelican",
+        "Komodo Dragon", "Krampus", "Ladybug", "Lemur", "Leopard",
+        "Lich", "Lion", "Llama", "Lobster", "Lobster Thermidor",
+        "Lunar Moth", "Lynx", "Macaw", "Magpie", "Mallard",
+        "Mallard Duck", "Manta Ray", "Mantis", "Marmot", "Marshmallow Lamb",
+        "Meerkat", "Mimic Octopus", "Mistletoad", "Mochi Mouse", "Mole",
+        "Mongoose", "Monkey", "Moon Cat", "Moon Dragon", "Moose",
+        "Mosquito", "Moth", "Mouse", "Mummy", "Narwhal",
+        "Nautilus", "Night Horse", "Night Owl", "Nurse Bee", "Nutcracker",
+        "Octopus", "Okapi", "Opossum", "Orange Tabby", "Orangutan",
+        "Orchid Mantis", "Orca", "Ostrich", "Otter", "Owl",
+        "Oxpecker", "Pachycephalosaurus", "Pancake Mole", "Panda", "Panther",
+        "Parasaurolophus", "Parrot", "Partridge", "Peacock", "Pelican",
         "Penguin", "Petal Bee", "Phoenix", "Pig", "Pigeon",
-        "Piranha", "Platypus", "Polar Bear", "Poodle", "Porcupine",
-        "Possum", "Pterodactyl", "Pufferfish", "Pug", "Queen Bee",
-        "Rabbit", "Raccoon", "Rainbow Cloud Sprite", "Rainbow Jabberwock", "Ram",
-        "Rat", "Rattlesnake", "Raven", "Red Fox", "Red Panda",
-        "Rhino", "Rooster", "Salamander", "Sand Dollar", "Scarlet Macaw",
-        "Scorpion", "Sea Horse", "Sea Lion", "Sea Otter", "Sea Turtle",
-        "Seagull", "Seal", "Shark", "Sheep", "Shiba Inu",
-        "Silver Monkey", "Skunk", "Sloth", "Snail", "Snake",
-        "Snow Leopard", "Snowy Owl", "Sparrow", "Spider", "Spinosaurus",
-        "Spotted Deer", "Squid", "Squirrel", "Starfish", "Stegosaurus",
-        "Stingray", "Swan", "Swordfish", "T-Rex", "Tanuki",
-        "Tapir", "Tarantula", "Tarantula Hawk", "Tiger", "Toad",
-        "Tortoise", "Toucan", "Tree Frog", "Triceratops", "Turkey",
-        "Turtle", "Unicorn", "Velociraptor", "Vine Serpent", "Viper",
-        "Vulture", "Walrus", "Warthog", "Wasp", "Weasel",
+        "Pine Beetle", "Piranha", "Platypus", "Polar Bear", "Poodle",
+        "Porcupine", "Possum", "Professor Bee", "Pterodactyl", "Pufferfish",
+        "Pug", "Pumpkin Rat", "Queen Bee", "Rabbit", "Raccoon",
+        "Rainbow Arctic Fox", "Rainbow Christmas Gorilla", "Rainbow Cloud Sprite", "Rainbow Elephant", "Rainbow French Hen",
+        "Rainbow Frost Dragon", "Rainbow Giraffe", "Rainbow Jabberwock", "Rainbow Krampus", "Rainbow Mistletoad",
+        "Rainbow Oxpecker", "Rainbow Rhino", "Rainbow Snow Bunny", "Rainbow Stag Beetle", "Rainbow Zebra",
+        "Ram", "Raptor", "Rat", "Rattlesnake", "Raven",
+        "Reaper", "Red Fox", "Red Panda", "Red Squirrel", "Red-Nosed Reindeer",
+        "Reindeer", "Rhino", "Robin", "Rooster", "Salamander",
+        "Salmon", "Sand Dollar", "Sandcastle Crab", "Santa Bear", "Scarlet Macaw",
+        "Scarab", "Scorpion", "Sea Anemone", "Sea Horse", "Sea Lion",
+        "Sea Otter", "Sea Turtle", "Sea Urchin", "Seagull", "Seahorse",
+        "Seal", "Shark", "Sheep", "Shiba Inu", "Silver Monkey",
+        "Skunk", "Sloth", "Snail", "Snake", "Snow Bunny",
+        "Snow Leopard", "Snowman Builder", "Snowman Soldier", "Snowy Owl", "Space Squirrel",
+        "Spaghetti Sloth", "Sparrow", "Specter", "Spider", "Spinosaurus",
+        "Spotted Deer", "Spring Bee", "Squid", "Squirrel", "Stag Beetle",
+        "Starfish", "Starry Lunar Moth", "Starry Moon Dragon", "Starry Night Horse", "Starry Opossum",
+        "Stegosaurus", "Stingray", "Stork", "Sugar Glider", "Summer Kiwi",
+        "Sunny-Side Chicken", "Sushi Bear", "Swan", "Swordfish", "T-Rex",
+        "Tanuki", "Tapir", "Tarantula", "Tarantula Hawk", "Tidal Sea Anemone",
+        "Tiger", "Toad", "Tomb Marmot", "Tortoise", "Toucan",
+        "Tree Frog", "Triceratops", "Tsunami Hermit Crab", "Tsunami Orca", "Tsunami Sea Anemone",
+        "Tsunami Seahorse", "Turkey", "Turtle", "Turtle Dove", "Unicorn",
+        "Vampire Squid", "Velociraptor", "Vine Serpent", "Viper", "Vulture",
+        "Walrus", "Warthog", "Wasp", "Weasel", "Wendigo",
         "Whale", "Whale Shark", "White Tiger", "Wild Boar", "Wise Owl",
         "Wisp", "Wolf", "Wombat", "Woodpecker", "Woody",
         "Yak", "Yeti", "Zebra"
@@ -226,29 +254,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                                 if type(isVal) == "string" then registerPet(isVal) end
                             end
                         end
-                    end
-                end
-            end
-        end)
-
-        -- 3. Sinkronkan dari PetServices Modules jika ada pet khusus lainnya
-        pcall(function()
-            local petServices = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("PetServices")
-            if petServices then
-                for _, child in ipairs(petServices:GetChildren()) do
-                    if child:IsA("ModuleScript") then
-                        pcall(function()
-                            local mod = require(child)
-                            if type(mod) == "table" then
-                                for k, v in pairs(mod) do
-                                    registerPet(k)
-                                    if type(v) == "table" then
-                                        if v.Name then registerPet(v.Name) end
-                                        if v.Species then registerPet(v.Species) end
-                                    end
-                                end
-                            end
-                        end)
                     end
                 end
             end
@@ -986,7 +991,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     renderSellRules()
 
     -- =============================================================
-    -- MODAL POPUP: SELECT PET TYPE (DYNAMIC LIVE SYNC DARI GAME)
+    -- MODAL POPUP: SELECT PET TYPE (WITH AUTO-TRIM & TOUCH FIX)
     -- =============================================================
     local PickerModal = Instance.new("Frame", TeamCard)
     PickerModal.Size = UDim2.new(0, 250, 0, 270)
@@ -1034,14 +1039,19 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     pmSearch.Position = UDim2.new(0, 10, 0, 32)
     pmSearch.Size = UDim2.new(1, -20, 0, 24)
     pmSearch.BackgroundColor3 = Color3.fromRGB(16, 21, 42)
-    pmSearch.PlaceholderText = "Search pet species (e.g. Mimic, Peacock)..."
+    pmSearch.PlaceholderText = "Search pet species (e.g. Anemone, Mimic)..."
     pmSearch.PlaceholderColor3 = Color3.fromRGB(110, 120, 150)
     pmSearch.Text = ""
     pmSearch.TextColor3 = C.TEXT_W
     pmSearch.Font = Enum.Font.Gotham
     pmSearch.TextSize = 9
+    pmSearch.TextXAlignment = Enum.TextXAlignment.Left
+    pmSearch.ClearTextOnFocus = false
     pmSearch.ZIndex = 51
     Instance.new("UICorner", pmSearch).CornerRadius = UDim.new(0, 5)
+    local pmSearchPad = Instance.new("UIPadding", pmSearch)
+    pmSearchPad.PaddingLeft = UDim.new(0, 8)
+    pmSearchPad.PaddingRight = UDim.new(0, 8)
 
     local pmScroll = Instance.new("ScrollingFrame", PickerModal)
     pmScroll.Position = UDim2.new(0, 10, 0, 62)
@@ -1056,12 +1066,16 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     local function refreshPickerModalList()
         for _, c in ipairs(pmScroll:GetChildren()) do
-            if c:IsA("TextButton") then c:Destroy() end
+            if c:IsA("TextButton") or c:IsA("TextLabel") then c:Destroy() end
         end
-        local filter = pmSearch.Text:lower()
+        local rawText = pmSearch.Text or ""
+        -- Otomatis hapus spasi di awal & akhir agar tidak terganggu auto-correct keyboard HP
+        local filter = rawText:lower():gsub("^%s+", ""):gsub("%s+$", "")
         local count = 0
+
         for _, species in ipairs(MasterPetSpeciesList) do
-            if filter == "" or species:lower():find(filter) then
+            local sLower = species:lower()
+            if filter == "" or string.find(sLower, filter, 1, true) then
                 count = count + 1
                 local isCur = (State.SelectedBulkPetSpecies == species)
                 local b = Instance.new("TextButton", pmScroll)
@@ -1084,10 +1098,24 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                 end)
             end
         end
-        pmScroll.CanvasSize = UDim2.new(0, 0, 0, count * 28)
+
+        if count == 0 then
+            local noRes = Instance.new("TextLabel", pmScroll)
+            noRes.Size = UDim2.new(1, 0, 0, 30)
+            noRes.BackgroundTransparency = 1
+            noRes.Text = "Tidak ditemukan: \"" .. rawText .. "\""
+            noRes.TextColor3 = Color3.fromRGB(255, 120, 120)
+            noRes.Font = Enum.Font.GothamMedium
+            noRes.TextSize = 8
+            noRes.ZIndex = 52
+            pmScroll.CanvasSize = UDim2.new(0, 0, 0, 35)
+        else
+            pmScroll.CanvasSize = UDim2.new(0, 0, 0, count * 28 + 10)
+        end
     end
 
     pmSearch:GetPropertyChangedSignal("Text"):Connect(refreshPickerModalList)
+    pmSearch.FocusLost:Connect(refreshPickerModalList)
 
     bpDropdown.MouseButton1Click:Connect(function()
         FetchAllGamePetSpecies()
