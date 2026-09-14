@@ -2,7 +2,7 @@
 --  ZYLOHUB - PET HATCH & TEAM MANAGER MODULE (OFFICIAL EXTENSION)
 --  Repository: zylo-games/PetHatchModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  STATUS: 100% PRESERVED & AUTO-UNEQUIP ON STOP ENABLED (NO LINES CUT)
+--  STATUS: 100% PRESERVED & PERFECT MULTI-PASS AUTO-UNEQUIP ON STOP
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main)
@@ -156,22 +156,35 @@ return function(PagePets, State, ZyloLib, Main)
 
     local function GetEquippedPetsInGarden()
         local equipped = {}
+        local seenUUID = {}
         local farm = GetFarm()
-        if not farm then return equipped end
         
-        local containers = { farm:FindFirstChild("PetArea"), farm:FindFirstChild("Important") and farm.Important:FindFirstChild("Objects_Physical") }
-        for _, cont in ipairs(containers) do
-            if cont then
-                for _, obj in ipairs(cont:GetChildren()) do
-                    local owner = obj:GetAttribute("OWNER") or (obj:FindFirstChild("Owner") and obj.Owner.Value)
-                    local uuid = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
-                    if (not owner or owner == LocalPlayer.Name) and uuid then
+        local function checkContainer(cont)
+            if not cont then return end
+            for _, obj in ipairs(cont:GetChildren()) do
+                local owner = obj:GetAttribute("OWNER") or (obj:FindFirstChild("Owner") and obj.Owner.Value)
+                local uuid = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
+                
+                -- Deteksi tambahan jika UUID ada di dalam atribut sub-komponen
+                if not uuid then
+                    for _, sub in ipairs(obj:GetChildren()) do
+                        local sU = sub:GetAttribute("UUID") or sub:GetAttribute("PET_UUID")
+                        if sU then uuid = sU break end
+                    end
+                end
+
+                if (not owner or owner == LocalPlayer.Name or owner == LocalPlayer.UserId) and uuid then
+                    local sUuid = tostring(uuid)
+                    if not seenUUID[sUuid] and not seenUUID[sUuid:gsub("[{}]", "")] then
+                        seenUUID[sUuid] = true
+                        seenUUID[sUuid:gsub("[{}]", "")] = true
+
                         local nameOnly = obj.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
                         local weight = obj.Name:match("%[([%d%.]+)%s*KG%]") or obj.Name:match("([%d%.]+)%s*KG") or "?"
                         local age = obj.Name:match("%[Age%s*(%d+)%]") or obj.Name:match("Age%s*(%d+)") or "?"
                         table.insert(equipped, {
                             Model = obj,
-                            UUID = tostring(uuid),
+                            UUID = sUuid,
                             FullName = obj.Name,
                             Name = nameOnly,
                             Weight = weight,
@@ -184,6 +197,17 @@ return function(PagePets, State, ZyloLib, Main)
                 end
             end
         end
+
+        if farm then
+            checkContainer(farm:FindFirstChild("PetArea"))
+            if farm:FindFirstChild("Important") then
+                checkContainer(farm.Important:FindFirstChild("Objects_Physical"))
+            end
+        end
+        
+        -- Deteksi container PetsPhysical di workspace
+        checkContainer(workspace:FindFirstChild("PetsPhysical"))
+
         return equipped
     end
 
@@ -347,39 +371,61 @@ return function(PagePets, State, ZyloLib, Main)
 
     local function UnequipPetByUUID(uuid)
         if not uuid then return end
-        local farm = GetFarm()
-        local imp = farm and farm:FindFirstChild("Important")
-        local objPhysical = imp and imp:FindFirstChild("Objects_Physical")
-        local petArea = farm and farm:FindFirstChild("PetArea")
+        local sUuid = tostring(uuid)
+        local stripped = sUuid:gsub("[{}]", "")
 
-        -- 1. ProximityPrompt di model fisik kebun
-        local function triggerPromptIn(container)
-            if not container then return false end
-            for _, obj in ipairs(container:GetChildren()) do
-                local objUUID = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
-                if objUUID and (tostring(objUUID) == tostring(uuid) or tostring(objUUID):gsub("[{}]", "") == tostring(uuid):gsub("[{}]", "")) then
-                    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-                    if prompt and prompt.Parent then
-                        prompt.HoldDuration = 0
-                        prompt.RequiresLineOfSight = false
-                        pcall(function() fireproximityprompt(prompt) end)
-                        return true
+        -- 1. ProximityPrompt di semua kontainer fisik
+        local containers = {}
+        local farm = GetFarm()
+        if farm then
+            table.insert(containers, farm:FindFirstChild("PetArea"))
+            if farm:FindFirstChild("Important") then
+                table.insert(containers, farm.Important:FindFirstChild("Objects_Physical"))
+            end
+        end
+        table.insert(containers, workspace:FindFirstChild("PetsPhysical"))
+
+        for _, cont in ipairs(containers) do
+            if cont then
+                for _, obj in ipairs(cont:GetChildren()) do
+                    local objUUID = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
+                    local match = false
+                    if objUUID then
+                        local oStr = tostring(objUUID)
+                        if oStr == sUuid or oStr:gsub("[{}]", "") == stripped then
+                            match = true
+                        end
+                    end
+                    if not match then
+                        for _, sub in ipairs(obj:GetChildren()) do
+                            local subU = sub:GetAttribute("UUID") or sub:GetAttribute("PET_UUID")
+                            if subU and (tostring(subU) == sUuid or tostring(subU):gsub("[{}]", "") == stripped) then
+                                match = true
+                                break
+                            end
+                        end
+                    end
+
+                    if match then
+                        local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        if prompt and prompt.Parent then
+                            prompt.HoldDuration = 0
+                            prompt.RequiresLineOfSight = false
+                            pcall(function() fireproximityprompt(prompt) end)
+                        end
                     end
                 end
             end
-            return false
         end
 
-        if not triggerPromptIn(petArea) then
-            triggerPromptIn(objPhysical)
-        end
-
-        -- 2. Remote Resmi PetsService
+        -- 2. Panggil Remote Resmi PetsService
         if PetsServiceMod and PetsServiceMod.UnequipPet then
             pcall(function() PetsServiceMod:UnequipPet(uuid) end)
+            pcall(function() PetsServiceMod:UnequipPet(stripped) end)
         end
         if PetsServiceRemote then
             pcall(function() PetsServiceRemote:FireServer("UnequipPet", uuid) end)
+            pcall(function() PetsServiceRemote:FireServer("UnequipPet", stripped) end)
         end
     end
 
@@ -902,7 +948,7 @@ return function(PagePets, State, ZyloLib, Main)
         end)
     end)
 
-    -- [LOGIKA TOMBOL STOP ASLI + AUTO UNEQUIP KE TAS INVENTORY TANPA MERUSAK FITUR LAIN]
+    -- [SEMPURNA]: LOGIKA TOMBOL STOP DENGAN DUAL-PASS SWEEP AGAR TAK ADA SATU PET PUN TERTINGGAL
     local isStopping = false
     StopBtn.MouseButton1Click:Connect(function()
         State.IsTeamRunning = false
@@ -921,16 +967,16 @@ return function(PagePets, State, ZyloLib, Main)
 
             local curTeam = State.ActiveTeam or "Main Team"
             local delayUneq = tonumber(State.TeamDelayUnequip[curTeam]) or 0.2
-            if delayUneq <= 0 then delayUneq = 0.15 end
+            if delayUneq <= 0 then delayUneq = 0.1 end
 
-            -- 1. Angkat semua pet yang aktif di kebun
+            -- PASS 1: Angkat semua pet yang terdata di kebun saat ini
             local inGarden = GetEquippedPetsInGarden()
             for _, gPet in ipairs(inGarden) do
                 UnequipPetByUUID(gPet.UUID)
                 task.wait(delayUneq)
             end
 
-            -- 2. Bersihkan juga pet yang tercatat di DataService
+            -- PASS 2: Sapu bersih UUID dari database DataService
             if DataService then
                 local ok, data = pcall(function() return DataService:GetData() end)
                 if ok and data and data.PetsData and data.PetsData.EquippedPets then
@@ -941,13 +987,30 @@ return function(PagePets, State, ZyloLib, Main)
                 end
             end
 
+            -- Jeda singkat untuk sinkronisasi server game
+            task.wait(0.3)
+
+            -- PASS 3 (FINAL SWEEP): Cek ulang semua model di kebun. Jika masih ada sisa, eksekusi langsung ProximityPrompt di tempat
+            local remaining = GetEquippedPetsInGarden()
+            for _, remPet in ipairs(remaining) do
+                UnequipPetByUUID(remPet.UUID)
+                if remPet.Model then
+                    local p = remPet.Model:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if p then
+                        p.HoldDuration = 0
+                        pcall(function() fireproximityprompt(p) end)
+                    end
+                end
+                task.wait(0.1)
+            end
+
             isStopping = false
             StopBtn.Text = "STOP"
             StopBtn.BackgroundColor3 = Color3.fromRGB(16, 21, 42)
             StopBtn.TextColor3 = C.TEXT_M
             stpStroke.Color = C.STROKE
 
-            -- Segarkan kembali tampilan list pet
+            -- Refresh seketika agar status [ACTIVE] hilang 100%
             if refreshPetSelectionUI then
                 task.defer(refreshPetSelectionUI)
             end
