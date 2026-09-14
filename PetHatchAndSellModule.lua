@@ -62,7 +62,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     end)
 
     -- Master List Spesies Pet (Diambil langsung dari PetDataset.lua dengan Fallback jika offline)
-    -- Master List Lengkap Seluruh 515 Spesies Pet Resmi Grow a Garden
     local MasterPetSpeciesList = {
         "Amethyst Beetle", "Anglerfish", "Angora Goat", "Ankylosaurus", "Anubis",
         "Apple Gazelle", "Arctic Fox", "Armadillo", "Axolotl", "Bacon Pig",
@@ -165,12 +164,10 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         "Yeti", "Zebra",
     }
 
-    -- [ENGINE AUTO-DETECT 100% RESMI & AKURAT LANGSUNG DARI MEMORI GAME]
     local function FetchAllGamePetSpecies()
         local function registerPet(name)
             if type(name) == "string" and #name >= 2 then
                 local nLower = string.lower(name)
-                -- Filter 100% akurat: Tolak semua kata 'huge', awalan 'GIANT ', atau kategori 'Egg/'
                 if string.find(nLower, "huge", 1, true) 
                    or string.find(name, "GIANT ", 1, true) 
                    or string.find(nLower, "egg/", 1, true) then
@@ -188,7 +185,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             end
         end
 
-        -- 1. Baca langsung dari Kamus Induk Resmi Game: ReplicatedStorage.Data.PetRegistry.PetList
         pcall(function()
             local petReg = ReplicatedStorage:FindFirstChild("Data") and ReplicatedStorage.Data:FindFirstChild("PetRegistry")
             if petReg then
@@ -206,7 +202,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                     end
                 end
                 
-                -- Baca juga daftar telur resmi game (PetEggs)
                 local petEggsMod = petReg:FindFirstChild("PetEggs")
                 if petEggsMod then
                     local pEggs = require(petEggsMod)
@@ -223,7 +218,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             end
         end)
 
-        -- 2. Baca dari PetTraitsData (Sea Anemone, Tsunami Sea Anemone, dll)
         pcall(function()
             local modules = ReplicatedStorage:FindFirstChild("Modules")
             local traitsMod = modules and modules:FindFirstChild("PetTraitsData")
@@ -242,7 +236,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             end
         end)
 
-        -- 3. Sinkronkan dari PetServices Modules jika ada pet khusus lainnya
         pcall(function()
             local petServices = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("PetServices")
             if petServices then
@@ -269,7 +262,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     end
     FetchAllGamePetSpecies()
 
-    -- Default List Pet Config awal
     State.SellPetRules = State.SellPetRules or {
         { Species = "Mimic Octopus", KG = 3, Action = "SELL" },
         { Species = "Peacock", KG = 3, Action = "SELL" },
@@ -291,7 +283,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         return nil
     end
 
-    -- [PATEN]: LOOP AUTO HATCH DENGAN DUKUNGAN "DONT HATCH IF TIME NOT DONE" (SYNC HATCH)
     task.spawn(function()
         while true do
             if State.AutoHatch then
@@ -348,21 +339,18 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         end
     end)
 
-    -- Proxy Helper ke TeamManager & Fallback Lengkap ke Game DataService
-    -- Helper pembersih nama spesies dari modifier Huge/GIANT dan tag bracket
     local function CleanSpeciesName(rawName)
         if type(rawName) ~= "string" then return "Unknown" end
         local s = rawName
-        s = s:gsub("%s*%[[^%]]*%]", "") -- buang [52.42 KG], [Age 455]
-        s = s:gsub("%s*%[[^%]]*$", "")  -- buang jika bracket terpotong di ujung misal [44.00
-        s = s:gsub("%s*%([^%)]*%)", "") -- buang (Age 1)
-        s = s:gsub("^[hH][uU][gG][eE]%s+", "") -- buang prefix Huge
-        s = s:gsub("^GIANT%s+", "") -- buang prefix GIANT
+        s = s:gsub("%s*%[[^%]]*%]", "")
+        s = s:gsub("%s*%[[^%]]*$", "")
+        s = s:gsub("%s*%([^%)]*%)", "")
+        s = s:gsub("^[hH][uU][gG][eE]%s+", "")
+        s = s:gsub("^GIANT%s+", "")
         s = s:gsub("^%s+", ""):gsub("%s+$", "")
         return s
     end
 
-    -- Pemanggilan aman untuk RemoteEvent maupun RemoteFunction
     local function SafeCallRemote(rem, ...)
         if not rem then return false end
         local args = { ... }
@@ -376,13 +364,11 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         return false
     end
 
-    -- Scanner Pet Terpadu (TeamManager + DataService + Inventory Backpack/Character)
     local function GetAllPetsList()
         local pets = {}
         local seenUUID = {}
         local seenTools = {}
 
-        -- 1. Coba dari TeamManager jika tersedia
         if TeamManager and TeamManager.GetAllPetsList then
             pcall(function()
                 local tmPets = TeamManager.GetAllPetsList()
@@ -398,7 +384,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             end)
         end
 
-        -- 2. Baca dari DataService (Data Resmi Penyimpanan Game)
         pcall(function()
             if not DataService then
                 DataService = require(ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("DataService", 2))
@@ -448,7 +433,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             end
         end)
 
-        -- 3. Deteksi langsung dari Tool di Backpack & Character Pemain (Paling Akurat untuk GameEvents.SellPet_RE)
         pcall(function()
             local lp = Players.LocalPlayer
             if not lp then return end
@@ -482,7 +466,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                                 local isFav = (item:GetAttribute("Favorite") == true) or (item:GetAttribute("Locked") == true)
                                 local inGarden = (container == lp.Character)
 
-                                -- Hubungkan dengan pet yang sudah ada jika UUID sama, atau tambahkan baru
                                 if uuid and seenUUID[uuid] then
                                     for _, existingPet in ipairs(pets) do
                                         if existingPet.UUID == tostring(uuid) then
@@ -532,17 +515,12 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         end
     end
 
-    -- =============================================================
-    -- [CORE SELL EXECUTION]: FUNGSI RESMI PENJUALAN PET KE SERVER GAME
-    -- Berdasarkan Analisis Script Steven SellNPC: SellPet_RE:FireServer(tool, true)
-    -- =============================================================
     local function SellPetInstance(pet)
         if not pet or pet.IsFavorite then return false end
 
         local sold = false
         local tool = pet.Tool
 
-        -- 1. [UTAMA]: Eksekusi Tool menggunakan GameEvents.SellPet_RE(tool, true)
         if tool and tool:IsA("Tool") and tool.Parent then
             if GameEvents then
                 local SellPet_RE = GameEvents:FindFirstChild("SellPet_RE")
@@ -562,7 +540,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             end
         end
 
-        -- 2. Jika tool belum terpasang langsung di object pet, cari tool aktif di Backpack / Character
         if not sold then
             local lp = Players.LocalPlayer
             if lp then
@@ -594,7 +571,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             end
         end
 
-        -- 3. Cadangan Tambahan: Jalur UUID ke Remote Service
         if pet.UUID then
             if GameEvents then
                 local SellPet_RE = GameEvents:FindFirstChild("SellPet_RE")
@@ -616,7 +592,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         return sold
     end
 
-    -- Pencocokan cerdas spesies terhadap konfigurasi pengguna
     local function MatchRuleForPet(pet)
         if not pet or pet.IsFavorite then return nil end
         local pClean = CleanSpeciesName(pet.Species or pet.Name or ""):lower()
@@ -633,21 +608,15 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         return nil
     end
 
-    -- Indikator status tombol START global / Team Manager
     local function IsGlobalStartActive()
         return (State.IsRunning == true) or (State.Running == true) or (State.StartActive == true)
             or (TeamManager and (TeamManager.IsRunning == true or TeamManager.Active == true or TeamManager.Running == true))
     end
 
-    -- =============================================================
-    -- [JENIS 1]: INTEGRATED AUTO SELL (BERJALAN BERSAMA FITUR START & TEAM MANAGER)
-    -- Menggunakan batas threshold jumlah pet, batas KG, dan aturan table config
-    -- =============================================================
     local isProcessingAutoSell = false
     local function CheckAndExecuteAutoSell(forceSell)
         if isProcessingAutoSell then return end
 
-        -- Hanya berjalan jika forceSell dipicu, ATAU fitur START aktif bersama aturan sell
         if not forceSell then
             if not IsGlobalStartActive() then return end
             if not State.ApplyBulkList and #State.SellPetRules == 0 then return end
@@ -657,7 +626,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         local currentTotalPets = #allPets
         local threshold = tonumber(State.AutoSellThresholdCount) or 1
 
-        -- Jika threshold di-set > 1 dan bukan eksekusi manual paksa, tunggu sampai total pet mencukupi
         if not forceSell and threshold > 1 and currentTotalPets < threshold then
             return
         end
@@ -709,10 +677,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         isProcessingAutoSell = false
     end
 
-    -- =============================================================
-    -- [JENIS 2]: QUICK SELL PET MANDIRI (LANGSUNG DENGAN TOGGLE - TANPA FITUR START)
-    -- Simple: Pilih jenis pet, aktifkan toggle ON, langsung auto sell tanpa batas KG!
-    -- =============================================================
     local isProcessingQuickSell = false
     local quickSellCount = 0
     local updateQuickSellStatus = nil
@@ -768,7 +732,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         isProcessingQuickSell = false
     end
 
-    -- Background loop untuk Jenis 1: Integrated Auto Sell (Mengikuti Tombol START)
     task.spawn(function()
         while true do
             task.wait(1.5)
@@ -778,7 +741,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         end
     end)
 
-    -- Background loop untuk Jenis 2: Quick Sell Pet Mandiri (Mengikuti Toggle Quick Sell)
     task.spawn(function()
         while true do
             task.wait(1)
@@ -787,6 +749,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             end
         end
     end)
+
     local ConfigContainer = TeamManager and TeamManager.ConfigContainer
     local TeamCard = TeamManager and TeamManager.TeamCard
 
@@ -906,6 +869,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         local h = 80
         if State.EggConfigExpanded then h = h + 100 end
         if State.SellConfigExpanded then h = h + 610 end
+        if State.PetSkillExpanded then h = h + 380 end
         ConfigContainer.CanvasSize = UDim2.new(0, 0, 0, h)
     end
 
@@ -960,9 +924,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     local soLayout = Instance.new("UIListLayout", SellOptionsFrame)
     soLayout.Padding = UDim.new(0, 6)
 
-    -- =============================================================
-    -- [BAGIAN 1 UI]: QUICK SELL PET (MANDIRI - TANPA FITUR START)
-    -- =============================================================
     local quickSellCard = Instance.new("Frame", SellOptionsFrame)
     quickSellCard.Size = UDim2.new(1, 0, 0, 115)
     quickSellCard.BackgroundColor3 = Color3.fromRGB(10, 14, 28)
@@ -997,7 +958,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     qsSub.TextSize = 7
     qsSub.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Baris 1: Pilih Pet
     local rowQsPet = Instance.new("Frame", quickSellCard)
     rowQsPet.Size = UDim2.new(1, 0, 0, 24)
     rowQsPet.BackgroundTransparency = 1
@@ -1023,7 +983,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     local qsdStroke = Instance.new("UIStroke", qsDropdown)
     qsdStroke.Color = Color3.fromRGB(45, 55, 85)
 
-    -- Baris 2: Toggle Active Auto Sell
     local rowQsToggle = Instance.new("Frame", quickSellCard)
     rowQsToggle.Size = UDim2.new(1, 0, 0, 24)
     rowQsToggle.BackgroundTransparency = 1
@@ -1077,7 +1036,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     end)
     qsPill.Position = UDim2.new(1, -44, 0.5, -10)
 
-    -- Garis Pemisah & Header Bagian 2
     local integratedSectionHeader = Instance.new("Frame", SellOptionsFrame)
     integratedSectionHeader.Size = UDim2.new(1, 0, 0, 32)
     integratedSectionHeader.BackgroundTransparency = 1
@@ -1108,7 +1066,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     ishSub.TextSize = 7
     ishSub.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Threshold Row
     local rowThresh = Instance.new("Frame", SellOptionsFrame)
     rowThresh.Size = UDim2.new(1, 0, 0, 28)
     rowThresh.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
@@ -1141,7 +1098,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         if val then State.AutoSellThresholdCount = val end
     end)
 
-    -- Sell Mode Selector
     local rowMode = Instance.new("Frame", SellOptionsFrame)
     rowMode.Size = UDim2.new(1, 0, 0, 26)
     rowMode.BackgroundTransparency = 1
@@ -1192,7 +1148,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         updateModeButtons()
     end)
 
-    -- Dropdown Select Pet Type
     local rowBulkPet = Instance.new("Frame", SellOptionsFrame)
     rowBulkPet.Size = UDim2.new(1, 0, 0, 24)
     rowBulkPet.BackgroundTransparency = 1
@@ -1218,7 +1173,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     local bpdStroke = Instance.new("UIStroke", bpDropdown)
     bpdStroke.Color = Color3.fromRGB(35, 42, 65)
 
-    -- KG (Bulk)
     local rowBulkKG = Instance.new("Frame", SellOptionsFrame)
     rowBulkKG.Size = UDim2.new(1, 0, 0, 24)
     rowBulkKG.BackgroundTransparency = 1
@@ -1249,7 +1203,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         if val then State.BulkKG = val end
     end)
 
-    -- Below KG Action
     local rowBulkAct = Instance.new("Frame", SellOptionsFrame)
     rowBulkAct.Size = UDim2.new(1, 0, 0, 24)
     rowBulkAct.BackgroundTransparency = 1
@@ -1283,7 +1236,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     local renderSellRules = nil
 
-    -- Apply Bulk List Switch
     local rowBulkApply = Instance.new("Frame", SellOptionsFrame)
     rowBulkApply.Size = UDim2.new(1, 0, 0, 26)
     rowBulkApply.BackgroundTransparency = 1
@@ -1330,7 +1282,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     end)
     bulkPill.Position = UDim2.new(1, -44, 0.5, -10)
 
-    -- Tombol Instan Sell Now untuk mempermudah eksekusi & pengujian langsung
     local btnSellNow = Instance.new("TextButton", SellOptionsFrame)
     btnSellNow.Size = UDim2.new(1, 0, 0, 24)
     btnSellNow.BackgroundColor3 = Color3.fromRGB(150, 35, 75)
@@ -1351,7 +1302,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         end)
     end)
 
-    -- Search Box
     local sellSearchBox = Instance.new("TextBox", SellOptionsFrame)
     sellSearchBox.Size = UDim2.new(1, 0, 0, 22)
     sellSearchBox.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
@@ -1365,7 +1315,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     local ssbStroke = Instance.new("UIStroke", sellSearchBox)
     ssbStroke.Color = Color3.fromRGB(32, 38, 60)
 
-    -- Scroll List Table
     local sellListScroll = Instance.new("ScrollingFrame", SellOptionsFrame)
     sellListScroll.Size = UDim2.new(1, 0, 0, 136)
     sellListScroll.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
@@ -1492,9 +1441,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     renderSellRules()
 
-    -- =============================================================
-    -- MODAL POPUP: SELECT PET TYPE (TERHUBUNG KE PETDATASET GITHUB)
-    -- =============================================================
     local PickerModal = Instance.new("Frame", TeamCard)
     PickerModal.Size = UDim2.new(0, 250, 0, 270)
     PickerModal.Position = UDim2.new(0.5, -125, 0.5, -135)
@@ -1537,7 +1483,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         PickerModal.Visible = false
     end)
 
-        local pmSearch = Instance.new("TextBox", PickerModal)
+    local pmSearch = Instance.new("TextBox", PickerModal)
     pmSearch.Position = UDim2.new(0, 10, 0, 32)
     pmSearch.Size = UDim2.new(1, -20, 0, 24)
     pmSearch.BackgroundColor3 = Color3.fromRGB(16, 21, 42)
@@ -1578,39 +1524,38 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
         for _, species in ipairs(MasterPetSpeciesList) do
             local sLower = species:lower()
-            -- Filter ketat: pastikan tidak ada Huge, GIANT, atau Egg/ yang lolos ke tampilan
             if not string.find(sLower, "huge", 1, true) 
                and not string.find(species, "GIANT ", 1, true) 
                and not string.find(sLower, "egg/", 1, true) then
                 if filter == "" or string.find(sLower, filter, 1, true) then
-                count = count + 1
-                local curSelected = (pickerTarget == "quicksell") and State.QuickSellPetSpecies or State.SelectedBulkPetSpecies
-                local isCur = (curSelected == species)
-                local b = Instance.new("TextButton", pmScroll)
-                b.Size = UDim2.new(1, -4, 0, 24)
-                b.BackgroundColor3 = isCur and Color3.fromRGB(42, 20, 70) or Color3.fromRGB(16, 21, 42)
-                b.Text = "  " .. species
-                b.TextColor3 = isCur and Color3.fromRGB(255, 255, 255) or C.TEXT_M
-                b.Font = Enum.Font.GothamBold
-                b.TextSize = 8.5
-                b.TextXAlignment = Enum.TextXAlignment.Left
-                b.ZIndex = 52
-                Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
-                local bSt = Instance.new("UIStroke", b)
-                bSt.Color = isCur and C.PURPLE_L or Color3.fromRGB(30, 36, 60)
+                    count = count + 1
+                    local curSelected = (pickerTarget == "quicksell") and State.QuickSellPetSpecies or State.SelectedBulkPetSpecies
+                    local isCur = (curSelected == species)
+                    local b = Instance.new("TextButton", pmScroll)
+                    b.Size = UDim2.new(1, -4, 0, 24)
+                    b.BackgroundColor3 = isCur and Color3.fromRGB(42, 20, 70) or Color3.fromRGB(16, 21, 42)
+                    b.Text = "  " .. species
+                    b.TextColor3 = isCur and Color3.fromRGB(255, 255, 255) or C.TEXT_M
+                    b.Font = Enum.Font.GothamBold
+                    b.TextSize = 8.5
+                    b.TextXAlignment = Enum.TextXAlignment.Left
+                    b.ZIndex = 52
+                    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
+                    local bSt = Instance.new("UIStroke", b)
+                    bSt.Color = isCur and C.PURPLE_L or Color3.fromRGB(30, 36, 60)
 
-                b.MouseButton1Click:Connect(function()
-                    if pickerTarget == "quicksell" then
-                        State.QuickSellPetSpecies = species
-                        if qsDropdown then qsDropdown.Text = species .. "  ▼" end
-                        if updateQuickSellStatus then updateQuickSellStatus() end
-                        print("[ZyloHub QuickSell] Dipilih pet untuk Quick Sell:", species)
-                    else
-                        State.SelectedBulkPetSpecies = species
-                        if bpDropdown then bpDropdown.Text = species .. "  ▼" end
-                    end
-                    PickerModal.Visible = false
-                end)
+                    b.MouseButton1Click:Connect(function()
+                        if pickerTarget == "quicksell" then
+                            State.QuickSellPetSpecies = species
+                            if qsDropdown then qsDropdown.Text = species .. "  ▼" end
+                            if updateQuickSellStatus then updateQuickSellStatus() end
+                            print("[ZyloHub QuickSell] Dipilih pet untuk Quick Sell:", species)
+                        else
+                            State.SelectedBulkPetSpecies = species
+                            if bpDropdown then bpDropdown.Text = species .. "  ▼" end
+                        end
+                        PickerModal.Visible = false
+                    end)
                 end
             end
         end
@@ -1676,41 +1621,80 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         recalculateCanvasSize()
     end)
 
-    -- [C] SWAP SKILL CONFIG BUTTON
-    local function makeSimpleConfigButton(title)
-        local btn = Instance.new("TextButton", ConfigContainer)
-        btn.Size = UDim2.new(1, 0, 0, 38)
-        btn.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
-        btn.Text = ""
-        btn.AutoButtonColor = false
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-        local stroke = Instance.new("UIStroke", btn)
-        stroke.Color = C.STROKE
-        stroke.Thickness = 1.2
+    -- =============================================================
+    -- [C] PET SKILL ACCORDION CARD (PENGGANTI SWAP SKILL CONFIG)
+    -- =============================================================
+    State.PetSkillExpanded = (State.PetSkillExpanded ~= nil) and State.PetSkillExpanded or false
 
-        local tLbl = Instance.new("TextLabel", btn)
-        tLbl.Position = UDim2.new(0, 12, 0, 0)
-        tLbl.Size = UDim2.new(1, -45, 1, 0)
-        tLbl.BackgroundTransparency = 1
-        tLbl.Text = title
-        tLbl.TextColor3 = Color3.fromRGB(240, 245, 255)
-        tLbl.Font = Enum.Font.GothamBold
-        tLbl.TextSize = 9.5
-        tLbl.TextXAlignment = Enum.TextXAlignment.Left
+    local PetSkillCard = Instance.new("Frame", ConfigContainer)
+    PetSkillCard.Size = State.PetSkillExpanded and UDim2.new(1, 0, 0, 0) or UDim2.new(1, 0, 0, 38)
+    PetSkillCard.AutomaticSize = State.PetSkillExpanded and Enum.AutomaticSize.Y or Enum.AutomaticSize.None
+    PetSkillCard.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
+    Instance.new("UICorner", PetSkillCard).CornerRadius = UDim.new(0, 8)
+    local pscStroke = Instance.new("UIStroke", PetSkillCard)
+    pscStroke.Color = State.PetSkillExpanded and C.PURPLE_L or C.STROKE
+    pscStroke.Thickness = 1.2
 
-        local arrow = Instance.new("TextLabel", btn)
-        arrow.Position = UDim2.new(1, -30, 0, 0)
-        arrow.Size = UDim2.new(0, 20, 1, 0)
-        arrow.BackgroundTransparency = 1
-        arrow.Text = "▶"
-        arrow.TextColor3 = C.PURPLE_L
-        arrow.Font = Enum.Font.GothamBold
-        arrow.TextSize = 9.5
+    local PetSkillHeaderBtn = Instance.new("TextButton", PetSkillCard)
+    PetSkillHeaderBtn.Size = UDim2.new(1, 0, 0, 38)
+    PetSkillHeaderBtn.BackgroundTransparency = 1
+    PetSkillHeaderBtn.Text = ""
 
-        return btn
+    local pskTitle = Instance.new("TextLabel", PetSkillHeaderBtn)
+    pskTitle.Position = UDim2.new(0, 12, 0, 0)
+    pskTitle.Size = UDim2.new(1, -45, 1, 0)
+    pskTitle.BackgroundTransparency = 1
+    pskTitle.Text = "⚡  Pet Skill (PNP & Boost)"
+    pskTitle.TextColor3 = Color3.fromRGB(240, 245, 255)
+    pskTitle.Font = Enum.Font.GothamBold
+    pskTitle.TextSize = 9.5
+    pskTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+    local pskArrow = Instance.new("TextLabel", PetSkillHeaderBtn)
+    pskArrow.Position = UDim2.new(1, -30, 0, 0)
+    pskArrow.Size = UDim2.new(0, 20, 1, 0)
+    pskArrow.BackgroundTransparency = 1
+    pskArrow.Text = State.PetSkillExpanded and "▼" or "▶"
+    pskArrow.TextColor3 = C.PURPLE_L
+    pskArrow.Font = Enum.Font.GothamBold
+    pskArrow.TextSize = 9.5
+
+    local PetSkillContentFrame = Instance.new("Frame", PetSkillCard)
+    PetSkillContentFrame.Position = UDim2.new(0, 8, 0, 42)
+    PetSkillContentFrame.Size = UDim2.new(1, -16, 0, 0)
+    PetSkillContentFrame.AutomaticSize = Enum.AutomaticSize.Y
+    PetSkillContentFrame.BackgroundTransparency = 1
+    PetSkillContentFrame.Visible = State.PetSkillExpanded
+
+    local pskLoaded = false
+    local function loadPetSkillContent()
+        if pskLoaded then return end
+        pskLoaded = true
+        pcall(function()
+            local raw = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/PetSkillModule.lua")
+            local mod = loadstring(raw)()
+            if mod and mod.Init then
+                mod.Init(PetSkillContentFrame, State, ZyloLib, Main)
+            end
+        end)
     end
 
-    makeSimpleConfigButton("🔄  Swap Skill Config")
+    if State.PetSkillExpanded then
+        loadPetSkillContent()
+    end
+
+    PetSkillHeaderBtn.MouseButton1Click:Connect(function()
+        State.PetSkillExpanded = not State.PetSkillExpanded
+        pskArrow.Text = State.PetSkillExpanded and "▼" or "▶"
+        PetSkillContentFrame.Visible = State.PetSkillExpanded
+        PetSkillCard.Size = State.PetSkillExpanded and UDim2.new(1, 0, 0, 0) or UDim2.new(1, 0, 0, 38)
+        PetSkillCard.AutomaticSize = State.PetSkillExpanded and Enum.AutomaticSize.Y or Enum.AutomaticSize.None
+        pscStroke.Color = State.PetSkillExpanded and C.PURPLE_L or C.STROKE
+        if State.PetSkillExpanded then 
+            loadPetSkillContent() 
+        end
+        recalculateCanvasSize()
+    end)
 
     return {
         CheckAndExecuteAutoSell = CheckAndExecuteAutoSell,
