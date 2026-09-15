@@ -1,9 +1,9 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6.2)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6.3)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
---  Presisi 100% Sesuai Screenshot Referensi (Tanpa Warna Kuning)
+--  Presisi Penuh (Full Width hingga Titik Kanan) & Tombol START / STOP
 -- =========================================================================
 
 return function(ParentContainer, State, ZyloLib, Main)
@@ -30,9 +30,9 @@ return function(ParentContainer, State, ZyloLib, Main)
     MutasiLayout.Padding = UDim.new(0, 6)
 
     -- =====================================================================
-    -- 1. SUB-NAVIGASI KATEGORI (PILL BUTTONS ROW)
+    -- 1. SUB-NAVIGASI KATEGORI (FULL WIDTH PILLS ROW)
     -- Urutan: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config + ⚙
-    -- Menggunakan Frame standar agar tidak pernah hilang/terpotong oleh Canvas
+    -- Dibuat Presisi Penuh (Full-Width) pas dari ujung kiri sampai titik merah kanan
     -- =====================================================================
     local NavRow = Instance.new("Frame", MutasiWrapper)
     NavRow.Size = UDim2.new(1, 0, 0, 28)
@@ -41,35 +41,49 @@ return function(ParentContainer, State, ZyloLib, Main)
     NavRow.ClipsDescendants = false
     NavRow.LayoutOrder = 1
 
-    local NavList = Instance.new("UIListLayout", NavRow)
+    -- Container Pills Kategori (Mengisi seluruh ruang kecuali tombol Gear di ujung kanan)
+    local PillsContainer = Instance.new("Frame", NavRow)
+    PillsContainer.Size = UDim2.new(1, -32, 1, 0)
+    PillsContainer.Position = UDim2.new(0, 0, 0, 0)
+    PillsContainer.BackgroundTransparency = 1
+    PillsContainer.BorderSizePixel = 0
+    PillsContainer.ClipsDescendants = false
+
+    local NavList = Instance.new("UIListLayout", PillsContainer)
     NavList.FillDirection = Enum.FillDirection.Horizontal
     NavList.HorizontalAlignment = Enum.HorizontalAlignment.Left
     NavList.VerticalAlignment = Enum.VerticalAlignment.Center
-    NavList.Padding = UDim.new(0, 4)
+    NavList.Padding = UDim.new(0, 5)
 
-    local Categories = { "Elephant", "Machine", "Nightmare", "100 Age", "XP", "GBXP", "Config" }
+    local Categories = {
+        { name = "Elephant",  weight = 1.05 },
+        { name = "Machine",   weight = 1.05 },
+        { name = "Nightmare", weight = 1.25 },
+        { name = "100 Age",   weight = 1.05 },
+        { name = "XP",        weight = 0.75 },
+        { name = "GBXP",      weight = 0.85 },
+        { name = "Config",    weight = 1.00 }
+    }
+    local totalWeight = 7.0 -- Total bobot untuk kalkulasi rasio lebar otomatis
+
     local CategoryButtons = {}
     local updateThresholdTitle
     local updateActionButton
     local refreshPetList
 
-    for _, catName in ipairs(Categories) do
-        local btnW = (catName == "Nightmare" and 64) 
-            or (catName == "Elephant" and 54) 
-            or (catName == "Machine" and 52) 
-            or (catName == "100 Age" and 50) 
-            or (catName == "Config" and 46) 
-            or (catName == "GBXP" and 44) 
-            or 34
+    for _, catData in ipairs(Categories) do
+        local catName = catData.name
+        local wScale = catData.weight / totalWeight
 
-        local btn = Instance.new("TextButton", NavRow)
-        btn.Size = UDim2.new(0, btnW, 0, 24)
+        local btn = Instance.new("TextButton", PillsContainer)
+        -- Lebar dinamis responsif dengan kompensasi padding 5px (-4px offset)
+        btn.Size = UDim2.new(wScale, -4, 0, 26)
         btn.BackgroundColor3 = (State.MutasiActiveCategory == catName) and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
         btn.Text = catName
         btn.TextColor3 = (State.MutasiActiveCategory == catName) and Color3.fromRGB(255, 255, 255) or C.TEXT_M
         btn.Font = Enum.Font.GothamBold
         btn.TextSize = 8.5
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 13)
         local stroke = Instance.new("UIStroke", btn)
         stroke.Color = (State.MutasiActiveCategory == catName) and C.PURPLE or Color3.fromRGB(38, 45, 70)
         stroke.Thickness = (State.MutasiActiveCategory == catName) and 1.5 or 1
@@ -91,15 +105,16 @@ return function(ParentContainer, State, ZyloLib, Main)
         end)
     end
 
-    -- Tombol ⚙ (Settings Gear di Ujung Kanan)
+    -- Tombol ⚙ (Settings Gear di Ujung Kanan Presisi, Pas Titik Merah)
     local GearBtn = Instance.new("TextButton", NavRow)
-    GearBtn.Size = UDim2.new(0, 24, 0, 24)
+    GearBtn.Size = UDim2.new(0, 26, 0, 26)
+    GearBtn.Position = UDim2.new(1, -26, 0.5, -13)
     GearBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 34)
     GearBtn.Text = "⚙"
     GearBtn.TextColor3 = C.TEXT_M
     GearBtn.Font = Enum.Font.GothamBold
-    GearBtn.TextSize = 11
-    Instance.new("UICorner", GearBtn).CornerRadius = UDim.new(0, 12)
+    GearBtn.TextSize = 12
+    Instance.new("UICorner", GearBtn).CornerRadius = UDim.new(0, 13)
     local gearStroke = Instance.new("UIStroke", GearBtn)
     gearStroke.Color = Color3.fromRGB(38, 45, 70)
 
@@ -301,7 +316,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     PlsPadding.PaddingLeft = UDim.new(0, 6)
     PlsPadding.PaddingRight = UDim.new(0, 6)
 
-    -- Filter agar item consumable (treat, shard, reroller) tidak ikut masuk
+    -- Filter item consumable
     local BLACKLIST_ITEM_KEYWORDS = {
         "shard", "treat", "reroll", "pack", "bundle", "crate", "chest", "box", "gift", 
         "potion", "elixir", "scroll", "book", "tome", "ticket", "token", "pass", "badge",
@@ -359,7 +374,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         local pets = GetBackpackPets()
         local count = 0
 
-        -- Update status counter untuk semua kategori
+        -- Update status counter untuk seluruh 6 kategori
         local cEle, cMac, cNM, c100, cXP, cGBXP = 0, 0, 0, 0, 0, 0
         for _, p in ipairs(pets) do
             local pNameLow = p.Name:lower()
@@ -385,7 +400,6 @@ return function(ParentContainer, State, ZyloLib, Main)
 
             local itemBtn = Instance.new("TextButton", PetListScroll)
             itemBtn.Size = UDim2.new(1, 0, 0, 26)
-            -- Tema ZyloHub: Deep Obsidian vs Cosmic Purple
             itemBtn.BackgroundColor3 = isSelected and Color3.fromRGB(68, 28, 115) or Color3.fromRGB(15, 19, 36)
             itemBtn.Text = displayText
             itemBtn.TextColor3 = isSelected and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(220, 225, 245)
@@ -421,7 +435,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     task.defer(refreshPetList)
 
     -- =====================================================================
-    -- 6. BOTTOM ACTION BUTTONS: [ ⚡ START NM+LVL ] [ STOP NM+LVL ] [ Mode: A ]
+    -- 6. BOTTOM ACTION BUTTONS: [ ⚡ START ] [ STOP ] [ Mode: A ]
     -- =====================================================================
     local ActionRow = Instance.new("Frame", MutasiWrapper)
     ActionRow.Size = UDim2.new(1, 0, 0, 32)
@@ -434,14 +448,14 @@ return function(ParentContainer, State, ZyloLib, Main)
     ActLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
     ActLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    -- Tombol 1: START Action (Dinamis sesuai Tab Aktif)
+    -- Tombol 1: START Action (Hanya "⚡ START")
     local StartBtn = Instance.new("TextButton", ActionRow)
     StartBtn.Size = UDim2.new(0.42, -5, 0, 30)
     StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
-    StartBtn.Text = "⚡ START " .. State.MutasiActiveCategory:upper()
+    StartBtn.Text = "⚡ START"
     StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     StartBtn.Font = Enum.Font.GothamBold
-    StartBtn.TextSize = 9
+    StartBtn.TextSize = 9.5
     Instance.new("UICorner", StartBtn).CornerRadius = UDim.new(0, 15)
     local startStroke = Instance.new("UIStroke", StartBtn)
     startStroke.Color = C.PURPLE
@@ -449,18 +463,18 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     updateActionButton = function()
         if not State.MutasiRunning then
-            StartBtn.Text = "⚡ START " .. State.MutasiActiveCategory:upper()
+            StartBtn.Text = "⚡ START"
         end
     end
 
-    -- Tombol 2: STOP Action
+    -- Tombol 2: STOP Action (Hanya "STOP")
     local StopBtn = Instance.new("TextButton", ActionRow)
     StopBtn.Size = UDim2.new(0.34, -5, 0, 30)
     StopBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
-    StopBtn.Text = "STOP " .. State.MutasiActiveCategory:upper()
+    StopBtn.Text = "STOP"
     StopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     StopBtn.Font = Enum.Font.GothamBold
-    StopBtn.TextSize = 9
+    StopBtn.TextSize = 9.5
     Instance.new("UICorner", StopBtn).CornerRadius = UDim.new(0, 15)
     local stopStroke = Instance.new("UIStroke", StopBtn)
     stopStroke.Color = Color3.fromRGB(50, 58, 88)
@@ -498,7 +512,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     StopBtn.MouseButton1Click:Connect(function()
         State.MutasiRunning = false
         StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
-        StartBtn.Text = "⚡ START " .. State.MutasiActiveCategory:upper()
+        StartBtn.Text = "⚡ START"
         print("[ZyloHub] Auto Mutasi stopped")
     end)
 
