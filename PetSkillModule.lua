@@ -37,10 +37,22 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
         PetsServiceMod = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("PetServices", 5):WaitForChild("PetsService", 5))
     end)
 
-    -- [2] INISIALISASI & MIGRASI STATE (MENDUKUNG MULTI-SELECT)
+    local DataService = nil
+    pcall(function()
+        DataService = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("DataService", 5))
+    end)
+
+    local PetUtilities = nil
+    pcall(function()
+        PetUtilities = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("PetServices", 5):WaitForChild("PetUtilities", 5))
+    end)
+
+    -- [2] INISIALISASI & MIGRASI STATE (MENDUKUNG MULTI-SELECT & INDIVIDUAL PET IDENTITY)
     State.PNP = State.PNP or {}
     State.PNP.Enabled = (State.PNP.Enabled ~= nil) and State.PNP.Enabled or false
-    State.PNP.DelaySeconds = State.PNP.DelaySeconds or 0.1
+    State.PNP.DelaySeconds = State.PNP.DelaySeconds or 0.5
+    State.PNP.PetDelays = State.PNP.PetDelays or {}
+    State.PNP.SelectedPetUUIDs = State.PNP.SelectedPetUUIDs or {}
 
     -- Migrasi ke Table Multi-Select jika sebelumnya string
     if type(State.PNP.SelectedPets) ~= "table" then
@@ -81,54 +93,156 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
         return farm:FindFirstChild("PetArea")
     end
 
-    -- [4] HELPER PEMBERSIH NAMA PET
+    -- [4] HELPER PEMBERSIH NAMA PET (FILTER KERAS UNTUK PETMOVER & TOOLS LAIN)
     local function cleanPetName(rawName)
-        if type(rawName) ~= "string" then return "Unknown" end
+        if type(rawName) ~= "string" then return "Pet" end
         local s = rawName
+        if s:lower():find("mover") then return "Pet" end
         s = s:gsub("%s*%[[^%]]*%]", "") -- buang tag [15.2 KG], [Age 10]
         s = s:gsub("%s*%[[^%]]*$", "")
         s = s:gsub("%s*%([^%)]*%)", "")
         s = s:gsub("^[hH][uU][gG][eE]%s+", "")
         s = s:gsub("^GIANT%s+", "")
         s = s:gsub("^%s+", ""):gsub("%s+$", "")
+        if s == "" or s:lower():find("mover") then return "Pet" end
         return s
     end
 
-    -- [5] GET ALL EQUIPPED PETS IN GARDEN (DENGAN UUID & TOOL & MODEL FISIK)
+    -- [5] GET ALL EQUIPPED PETS IN GARDEN (DENGAN |JENIS|PET|KG| & UUID UNIK & MODEL FISIK)
     local function GetEquippedGardenPets()
         local equipped = {}
         local seenUUID = {}
 
-        -- 1. Scan Model Fisik di Kebun Pemain (PetArea & Important)
+        if not DataService then
+            pcall(function()
+                DataService = require(ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("DataService", 2))
+            end)
+        end
+        if not PetUtilities then
+            pcall(function()
+                PetUtilities = require(ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("PetServices", 2):WaitForChild("PetUtilities", 2))
+            end)
+        end
+
+        -- 1. DATA RESMI DATASERVICE (Inventaris Lengkap & Daftar EquippedPets)
+        local equippedMap = {}
+        if DataService then
+            pcall(function()
+                local data = DataService:GetData()
+                if data and data.PetsData then
+                    local eqList = data.PetsData.EquippedPets or {}
+                    local inv = data.PetsData.PetInventory and data.PetsData.PetInventory.Data or {}
+
+                    for _, u in ipairs(eqList) do
+                        local sU = tostring(u)
+                        local cleanU = sU:gsub("[{}]", ""):lower()
+                        equippedMap[cleanU] = true
+                        equippedMap[sU:lower()] = true
+                    end
+
+                    for uuid, entry in pairs(inv) do
+                        local sUuid = tostring(uuid)
+                        local cleanU = sUuid:gsub("[{}]", ""):lower()
+                        if (equippedMap[cleanU] or equippedMap[sUuid:lower()]) and not seenUUID[cleanU] then
+                            seenUUID[cleanU] = true
+                            local petData = entry.PetData or {}
+                            local rawType = entry.PetType or petData.Species or petData.Name or "Pet"
+                            local species = cleanPetName(rawType)
+                            if species == "Pet" or species:lower():find("mover") then
+                                species = (entry.PetType and cleanPetName(entry.PetType)) or "Mimic"
+                            end
+
+                            local customName = (petData.Name and petData.Name ~= "" and petData.Name ~= rawType) and petData.Name or species
+                            local level = petData.Level or 1
+                            local weightStr = "0.0"
+
+                            if PetUtilities and PetUtilities.CalculateWeight and petData.BaseWeight then
+                                local calcW = PetUtilities:CalculateWeight(petData.BaseWeight, level) * 100
+                                calcW = math.round(calcW) / 100
+                                weightStr = string.format("%.1f", calcW)
+                            elseif petData.BaseWeight then
+                                weightStr = string.format("%.1f", tonumber(petData.BaseWeight) or 0)
+                            elseif petData.Weight then
+                                weightStr = string.format("%.1f", tonumber(petData.Weight) or 0)
+                            end
+
+                            local displayKey = string.format("|%s|%s|%s|", species, customName, weightStr)
+                            table.insert(equipped, {
+                                UUID = sUuid,
+                                CleanUUID = cleanU,
+                                Species = species,
+                                Nickname = customName,
+                                Name = customName,
+                                Weight = weightStr,
+                                Age = level,
+                                DisplayKey = displayKey,
+                                InGarden = true
+                            })
+                        end
+                    end
+                end
+            end)
+        end
+
+        -- 2. SCAN MODEL FISIK DI KEBUN (PetArea, Objects_Physical, PetsPhysical)
         local farm = GetFarm()
         local function scanGardenContainer(cont)
             if not cont then return end
             for _, obj in ipairs(cont:GetChildren()) do
+                local rawObjName = obj.Name
+                local isMoverName = rawObjName:lower():find("mover") ~= nil
+
                 local owner = obj:GetAttribute("OWNER") or (obj:FindFirstChild("Owner") and obj.Owner.Value)
                 local uuid = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
                 if not uuid then
                     for _, sub in ipairs(obj:GetChildren()) do
                         local sU = sub:GetAttribute("UUID") or sub:GetAttribute("PET_UUID")
                         if sU then uuid = sU break end
+                        local rawSub = sub.Name:gsub("[{}]", "")
+                        if #rawSub > 20 and rawSub:find("-") then uuid = sub.Name break end
                     end
                 end
 
                 if (not owner or owner == LocalPlayer.Name or owner == LocalPlayer.UserId) and uuid then
                     local sUuid = tostring(uuid)
                     local cleanU = sUuid:gsub("[{}]", ""):lower()
-                    if not seenUUID[cleanU] then
+
+                    local existing = nil
+                    for _, ep in ipairs(equipped) do
+                        if ep.CleanUUID == cleanU then
+                            existing = ep
+                            break
+                        end
+                    end
+
+                    if existing then
+                        existing.Model = obj
+                        pcall(function() existing.originalCFrame = obj:GetPivot() end)
+                        if (existing.Species == "Pet" or existing.Species == "Unknown") and not isMoverName then
+                            existing.Species = cleanPetName(rawObjName)
+                            existing.DisplayKey = string.format("|%s|%s|%s|", existing.Species, existing.Nickname, existing.Weight)
+                        end
+                    elseif not seenUUID[cleanU] and (not isMoverName or owner ~= nil or equippedMap[cleanU]) then
                         seenUUID[cleanU] = true
-                        local nameOnly = cleanPetName(obj.Name)
-                        local weight = obj.Name:match("%[([%d%.]+)%s*KG%]") or obj.Name:match("([%d%.]+)%s*KG") or "?"
-                        local age = obj.Name:match("%[Age%s*(%d+)%]") or obj.Name:match("Age%s*(%d+)") or "?"
+                        local speciesName = isMoverName and "Mimic" or cleanPetName(rawObjName)
+                        local weight = rawObjName:match("%[([%d%.]+)%s*KG%]") or rawObjName:match("([%d%.]+)%s*KG") or "0.0"
+                        local age = rawObjName:match("%[Age%s*(%d+)%]") or rawObjName:match("Age%s*(%d+)") or "1"
+                        local cf = nil
+                        pcall(function() cf = obj:GetPivot() end)
+
+                        local displayKey = string.format("|%s|%s|%s|", speciesName, speciesName, weight)
                         table.insert(equipped, {
                             UUID = sUuid,
+                            CleanUUID = cleanU,
                             Model = obj,
-                            FullName = obj.Name,
-                            Name = nameOnly,
-                            Species = nameOnly,
+                            FullName = rawObjName,
+                            Name = speciesName,
+                            Species = speciesName,
+                            Nickname = speciesName,
                             Weight = weight,
                             Age = age,
+                            DisplayKey = displayKey,
+                            originalCFrame = cf,
                             InGarden = true
                         })
                     end
@@ -144,37 +258,12 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
         end
         scanGardenContainer(workspace:FindFirstChild("PetsPhysical"))
 
-        -- 2. DataService (Data Resmi Inventory)
-        pcall(function()
-            local DataService = require(ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("DataService", 2))
-            local data = DataService and DataService:GetData()
-            if data and data.PetsData then
-                local eqList = data.PetsData.EquippedPets or {}
-                local inv = data.PetsData.PetInventory and data.PetsData.PetInventory.Data or {}
-                for _, uuid in ipairs(eqList) do
-                    local sUuid = tostring(uuid)
-                    local cleanU = sUuid:gsub("[{}]", ""):lower()
-                    local pData = inv[uuid]
-                    if pData and not seenUUID[cleanU] then
-                        seenUUID[cleanU] = true
-                        local species = cleanPetName(pData.PetType or pData.Species or pData.Name or "Pet")
-                        table.insert(equipped, {
-                            UUID = sUuid,
-                            Species = species,
-                            Name = species,
-                            InGarden = true
-                        })
-                    end
-                end
-            end
-        end)
-
-        -- 3. Character & Backpack
+        -- 3. SCAN CHARACTER & BACKPACK TOOLS (COCOKKAN DENGAN EQUIPPED PETS, ABAIKAN MOVER TOOLS)
         local containers = { LocalPlayer.Character, LocalPlayer:FindFirstChild("Backpack") }
         for _, container in ipairs(containers) do
             if container then
                 for _, item in ipairs(container:GetChildren()) do
-                    if item:IsA("Tool") then
+                    if item:IsA("Tool") and not item.Name:lower():find("mover") then
                         local uuidAttr = item:GetAttribute("UUID") 
                                       or item:GetAttribute("PET_UUID") 
                                       or item:GetAttribute("PetUUID") 
@@ -187,24 +276,11 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
                         if isPet and uuidAttr then
                             local uStr = tostring(uuidAttr)
                             local cleanU = uStr:gsub("[{}]", ""):lower()
-                            local spName = speciesAttr or cleanPetName(item.Name)
-                            local found = false
                             for _, p in ipairs(equipped) do
-                                if p.UUID:gsub("[{}]", ""):lower() == cleanU then
+                                if p.CleanUUID == cleanU or p.UUID:gsub("[{}]", ""):lower() == cleanU then
                                     p.Tool = item
-                                    found = true
                                     break
                                 end
-                            end
-                            if not found and not seenUUID[cleanU] and container == LocalPlayer.Character then
-                                seenUUID[cleanU] = true
-                                table.insert(equipped, {
-                                    UUID = uStr,
-                                    Species = spName,
-                                    Name = spName,
-                                    Tool = item,
-                                    InGarden = true
-                                })
                             end
                         end
                     end
@@ -408,13 +484,38 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
     end
 
     -- [10] HELPER VALIDASI MULTI-SELEKSI
-    local function IsPetSelectedForPNP(species)
+    local function IsPetSelectedForPNP(petUUID, species, petObj)
         local sel = State.PNP.SelectedPets or {}
         if sel["All Equipped Pets"] then return true end
-        local clean = cleanPetName(species):lower()
-        for sName, isAct in pairs(sel) do
-            if isAct and (sName:lower() == clean or clean:find(sName:lower(), 1, true) or sName:lower():find(clean, 1, true)) then
+
+        -- 1. Cek Presisi UUID Unik (Paling Akurat)
+        if petUUID then
+            local cleanU = tostring(petUUID):gsub("[{}]", ""):lower()
+            if State.PNP.SelectedPetUUIDs and State.PNP.SelectedPetUUIDs[cleanU] then
                 return true
+            end
+            for k, isAct in pairs(sel) do
+                if isAct and tostring(k):gsub("[{}]", ""):lower() == cleanU then
+                    return true
+                end
+            end
+        end
+
+        -- 2. Cek Presisi DisplayKey (|jenis|pet|Kg|)
+        if petObj and petObj.DisplayKey and sel[petObj.DisplayKey] then
+            return true
+        end
+
+        -- 3. Cek Spesies (Fallback jika pengguna memilih jenis)
+        if species then
+            local clean = cleanPetName(species):lower()
+            for sName, isAct in pairs(sel) do
+                if isAct then
+                    local sClean = cleanPetName(tostring(sName)):lower()
+                    if sClean == clean or clean:find(sClean, 1, true) or sClean:find(clean, 1, true) then
+                        return true
+                    end
+                end
             end
         end
         return false
@@ -464,17 +565,24 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
     local isPnPBusy = {}
     local previousCooldowns = {}
 
-    local function ExecutePickAndPlace(petUUID, petSpecies)
-        if not State.PNP.Enabled or isPnPBusy[petUUID] then return end
+    local function ExecutePickAndPlace(petUUID, petSpecies, petInfo)
+        if not State.PNP.Enabled or not petUUID then return end
+        local stripped = tostring(petUUID):gsub("[{}]", "")
+        if isPnPBusy[stripped] or isPnPBusy[petUUID] then return end
+        isPnPBusy[stripped] = true
         isPnPBusy[petUUID] = true
 
         task.spawn(function()
-            local stripped = tostring(petUUID):gsub("[{}]", "")
+            -- Delay spesifik untuk pet ini jika disetel pengguna, atau delay default (0.5s)
+            local targetDelay = (petInfo and petInfo.UUID and State.PNP.PetDelays and State.PNP.PetDelays[petInfo.UUID])
+                or (State.PNP.PetDelays and State.PNP.PetDelays[stripped])
+                or State.PNP.DelaySeconds
+                or 0.5
 
             -- 1. IDENTIFIKASI MODEL PET DI KEBUN SEBELUM DI-PICK (Ambil CFrame asli & FullName)
-            local petModel = FindPetModelInGarden(petUUID)
-            local originalCFrame = nil
-            local petFullName = nil
+            local petModel = (petInfo and petInfo.Model) or FindPetModelInGarden(petUUID)
+            local originalCFrame = (petInfo and petInfo.originalCFrame)
+            local petFullName = (petInfo and petInfo.FullName)
             if petModel then
                 pcall(function()
                     originalCFrame = petModel:GetPivot()
@@ -482,8 +590,10 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
                 end)
             end
 
-            -- Jika belum dapat FullName dari model fisik, ambil dari DataService
-            if not petFullName then
+            -- Jika belum dapat FullName dari model fisik, ambil dari petInfo atau DataService
+            if not petFullName and petInfo and petInfo.DisplayKey then
+                petFullName = petInfo.DisplayKey
+            elseif not petFullName then
                 pcall(function()
                     local DataService = require(ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("DataService", 2))
                     local data = DataService and DataService:GetData()
@@ -538,8 +648,8 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
                 pcall(function() PetsServiceRemote:FireServer("Unequip", stripped) end)
             end
 
-            -- 4. TAHAP JEDA (Waktu jeda yang ditentukan pemain)
-            local userDelay = math.max(0.05, tonumber(State.PNP.DelaySeconds) or 0.1)
+            -- 4. TAHAP JEDA (Waktu jeda pick and place yang ditentukan, default 0.5s)
+            local userDelay = math.max(0.05, tonumber(targetDelay) or tonumber(State.PNP.DelaySeconds) or 0.5)
             task.wait(userDelay)
 
             -- 5. TUNGGU TOOL ASLI TIBA DI TAS DENGAN POLLING REAKTIF (Hingga 3.0 detik)
@@ -599,6 +709,7 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
             print(string.format("[ZyloHub PNP] ✅ Pet %s (%s) sukses ditaruh kembali dengan presisi!", petFullName or petSpecies or "Pet", stripped))
             task.wait(0.3)
             isPnPBusy[petUUID] = nil
+            isPnPBusy[stripped] = nil
         end)
     end
 
@@ -634,8 +745,8 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
                             speciesName = cleanPetName(m.Name)
                         end
                     end
-                    if IsPetSelectedForPNP(speciesName) then
-                        ExecutePickAndPlace(uStr, speciesName)
+                    if IsPetSelectedForPNP(uStr, speciesName, matchedPet) then
+                        ExecutePickAndPlace(uStr, speciesName, matchedPet)
                     end
                 end
 
@@ -841,7 +952,7 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
     boxDelayPNP.Position = UDim2.new(1, -75, 0.5, -12)
     boxDelayPNP.Size = UDim2.new(0, 65, 0, 24)
     boxDelayPNP.BackgroundColor3 = Color3.fromRGB(12, 16, 32)
-    boxDelayPNP.Text = tostring(State.PNP.DelaySeconds or 0.1)
+    boxDelayPNP.Text = tostring(State.PNP.DelaySeconds or 0.5)
     boxDelayPNP.TextColor3 = C.CYAN
     boxDelayPNP.Font = Enum.Font.GothamBold
     boxDelayPNP.TextSize = 9.5
@@ -976,15 +1087,27 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
             btnPetPNP.Text = "All Equipped Pets  v"
         else
             local list = {}
-            for name, isAct in pairs(pnpSel) do
-                if isAct then table.insert(list, name) end
+            for key, isAct in pairs(pnpSel) do
+                if isAct and key ~= "All Equipped Pets" then
+                    table.insert(list, key)
+                end
             end
             if #list == 0 then
-                btnPetPNP.Text = "None Selected  v"
+                local uuidCount = 0
+                for _, isAct in pairs(State.PNP.SelectedPetUUIDs or {}) do
+                    if isAct then uuidCount = uuidCount + 1 end
+                end
+                if uuidCount == 0 then
+                    btnPetPNP.Text = "None Selected  v"
+                elseif uuidCount == 1 then
+                    btnPetPNP.Text = "1 Pet Active  v"
+                else
+                    btnPetPNP.Text = string.format("%d Pets Active  v", uuidCount)
+                end
             elseif #list == 1 then
                 btnPetPNP.Text = list[1] .. "  v"
             else
-                btnPetPNP.Text = string.format("%d Pets Selected  v", #list)
+                btnPetPNP.Text = string.format("%d Pets Active  v", #list)
             end
         end
 
@@ -1028,11 +1151,11 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
     UpdateButtonLabels()
 
     -- =====================================================================
-    -- [BAGIAN 4: MODAL POPUP MULTI-SELEKSI DENGAN CHECKBOX & SEARCH]
+    -- [BAGIAN 4: MODAL POPUP MULTI-SELEKSI DENGAN FORMAT |JENIS|PET|KG| (TIME) ON/OFF]
     -- =====================================================================
     local ModalFrame = Instance.new("Frame", MainScreen or ParentContainer)
-    ModalFrame.Size = UDim2.new(0, 270, 0, 310)
-    ModalFrame.Position = UDim2.new(0.5, -135, 0.5, -155)
+    ModalFrame.Size = UDim2.new(0, 310, 0, 330)
+    ModalFrame.Position = UDim2.new(0.5, -155, 0.5, -165)
     ModalFrame.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
     ModalFrame.Visible = false
     ModalFrame.ZIndex = 100
@@ -1050,7 +1173,7 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
     mTitle.Position = UDim2.new(0, 12, 0, 0)
     mTitle.Size = UDim2.new(1, -40, 1, 0)
     mTitle.BackgroundTransparency = 1
-    mTitle.Text = "Select Target (Multi-Select)"
+    mTitle.Text = "Select Target"
     mTitle.TextColor3 = Color3.fromRGB(245, 247, 255)
     mTitle.Font = Enum.Font.GothamBold
     mTitle.TextSize = 9.5
@@ -1124,27 +1247,177 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
 
     local function populateModalOptions()
         for _, c in ipairs(mScroll:GetChildren()) do
-            if c:IsA("TextButton") or c:IsA("TextLabel") then c:Destroy() end
+            if c:IsA("TextButton") or c:IsA("TextLabel") or c:IsA("Frame") then c:Destroy() end
         end
 
         local filter = mSearch.Text:lower():gsub("^%s+", ""):gsub("%s+$", "")
+
+        -- =================================================================
+        -- MODE 1: PNP PET SELECTION DENGAN FORMAT |JENIS|PET|KG| (TIME) ON/OFF
+        -- =================================================================
+        if currentModalMode == "PNP_PET" then
+            mTitle.Text = "Select Pets for PNP"
+            local gPets = GetEquippedGardenPets()
+            local isAllActive = (State.PNP.SelectedPets and State.PNP.SelectedPets["All Equipped Pets"] == true)
+
+            local rowCount = 0
+
+            -- Opsi Header: All Equipped Pets
+            if filter == "" or ("all equipped pets"):find(filter, 1, true) or ("semua pet"):find(filter, 1, true) then
+                rowCount = rowCount + 1
+                local btnAll = Instance.new("TextButton", mScroll)
+                btnAll.Size = UDim2.new(1, -4, 0, 28)
+                btnAll.BackgroundColor3 = isAllActive and Color3.fromRGB(36, 18, 58) or Color3.fromRGB(16, 21, 42)
+                btnAll.Text = (isAllActive and "  [✓] " or "  [  ] ") .. "All Equipped Pets (Semua Pet)"
+                btnAll.TextColor3 = isAllActive and C.PURPLE_L or Color3.fromRGB(240, 245, 255)
+                btnAll.Font = Enum.Font.GothamBold
+                btnAll.TextSize = 8.5
+                btnAll.TextXAlignment = Enum.TextXAlignment.Left
+                btnAll.ZIndex = 102
+                Instance.new("UICorner", btnAll).CornerRadius = UDim.new(0, 4)
+                local bStAll = Instance.new("UIStroke", btnAll)
+                bStAll.Color = isAllActive and C.PURPLE or Color3.fromRGB(35, 42, 70)
+                bStAll.Thickness = isAllActive and 1.2 or 1
+
+                btnAll.MouseButton1Click:Connect(function()
+                    table.clear(State.PNP.SelectedPets)
+                    table.clear(State.PNP.SelectedPetUUIDs)
+                    State.PNP.SelectedPets["All Equipped Pets"] = true
+                    populateModalOptions()
+                    UpdateButtonLabels()
+                end)
+            end
+
+            -- Opsi Pet Individual: |jenis|pet|Kg  (time pick and place)  On/Off
+            for _, pet in ipairs(gPets) do
+                local displayKey = pet.DisplayKey or string.format("|%s|%s|%s|", pet.Species, pet.Nickname or pet.Species, pet.Weight or "0.0")
+                local cleanU = pet.CleanUUID or tostring(pet.UUID):gsub("[{}]", ""):lower()
+
+                local matchesFilter = (filter == "")
+                    or displayKey:lower():find(filter, 1, true)
+                    or pet.Species:lower():find(filter, 1, true)
+                    or (pet.Nickname and pet.Nickname:lower():find(filter, 1, true))
+                    or (pet.Weight and tostring(pet.Weight):find(filter, 1, true))
+
+                if matchesFilter then
+                    rowCount = rowCount + 1
+                    local isChecked = not isAllActive and ((State.PNP.SelectedPets and State.PNP.SelectedPets[displayKey] == true) 
+                        or (State.PNP.SelectedPetUUIDs and State.PNP.SelectedPetUUIDs[cleanU] == true))
+
+                    local row = Instance.new("Frame", mScroll)
+                    row.Size = UDim2.new(1, -4, 0, 32)
+                    row.BackgroundColor3 = isChecked and Color3.fromRGB(36, 18, 58) or Color3.fromRGB(16, 21, 42)
+                    row.ZIndex = 102
+                    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
+                    local rStroke = Instance.new("UIStroke", row)
+                    rStroke.Color = isChecked and C.PURPLE or Color3.fromRGB(35, 42, 70)
+                    rStroke.Thickness = isChecked and 1.2 or 1
+
+                    -- 1. Bagian Kiri: |jenis|pet|Kg|
+                    local lblPet = Instance.new("TextLabel", row)
+                    lblPet.Position = UDim2.new(0, 8, 0, 0)
+                    lblPet.Size = UDim2.new(1, -120, 1, 0)
+                    lblPet.BackgroundTransparency = 1
+                    lblPet.Text = displayKey
+                    lblPet.TextColor3 = isChecked and C.PURPLE_L or Color3.fromRGB(240, 245, 255)
+                    lblPet.Font = Enum.Font.GothamBold
+                    lblPet.TextSize = 8.5
+                    lblPet.TextXAlignment = Enum.TextXAlignment.Left
+                    lblPet.TextTruncate = Enum.TextTruncate.AtEnd
+                    lblPet.ZIndex = 102
+
+                    -- 2. Bagian Tengah: (time pick and place) editable box
+                    local petDelay = (State.PNP.PetDelays and State.PNP.PetDelays[pet.UUID])
+                        or (State.PNP.PetDelays and State.PNP.PetDelays[cleanU])
+                        or State.PNP.DelaySeconds
+                        or 0.5
+
+                    local boxTime = Instance.new("TextBox", row)
+                    boxTime.Position = UDim2.new(1, -108, 0.5, -10)
+                    boxTime.Size = UDim2.new(0, 48, 0, 20)
+                    boxTime.BackgroundColor3 = Color3.fromRGB(10, 14, 28)
+                    boxTime.Text = string.format("(%.1f)", tonumber(petDelay) or 0.5)
+                    boxTime.TextColor3 = C.CYAN
+                    boxTime.Font = Enum.Font.GothamBold
+                    boxTime.TextSize = 8
+                    boxTime.ClearTextOnFocus = false
+                    boxTime.ZIndex = 104
+                    Instance.new("UICorner", boxTime).CornerRadius = UDim.new(0, 4)
+                    local tStroke = Instance.new("UIStroke", boxTime)
+                    tStroke.Color = Color3.fromRGB(40, 50, 75)
+
+                    boxTime.FocusLost:Connect(function()
+                        local num = tonumber(boxTime.Text:match("[%d%.]+"))
+                        if num and num >= 0.05 then
+                            State.PNP.PetDelays[pet.UUID] = num
+                            State.PNP.PetDelays[cleanU] = num
+                            boxTime.Text = string.format("(%.1f)", num)
+                        else
+                            boxTime.Text = string.format("(%.1f)", tonumber(petDelay) or 0.5)
+                        end
+                    end)
+
+                    -- 3. Bagian Kanan: Tombol On/Off
+                    local btnToggle = Instance.new("TextButton", row)
+                    btnToggle.Position = UDim2.new(1, -56, 0.5, -11)
+                    btnToggle.Size = UDim2.new(0, 50, 0, 22)
+                    btnToggle.BackgroundColor3 = isChecked and Color3.fromRGB(138, 43, 226) or Color3.fromRGB(24, 28, 48)
+                    btnToggle.Text = isChecked and "ON" or "OFF"
+                    btnToggle.TextColor3 = isChecked and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(130, 140, 170)
+                    btnToggle.Font = Enum.Font.GothamBold
+                    btnToggle.TextSize = 8.5
+                    btnToggle.ZIndex = 104
+                    Instance.new("UICorner", btnToggle).CornerRadius = UDim.new(0, 4)
+                    local tgStroke = Instance.new("UIStroke", btnToggle)
+                    tgStroke.Color = isChecked and Color3.fromRGB(190, 120, 255) or Color3.fromRGB(45, 55, 85)
+
+                    local function togglePet()
+                        State.PNP.SelectedPets["All Equipped Pets"] = nil
+                        if isChecked then
+                            State.PNP.SelectedPets[displayKey] = nil
+                            State.PNP.SelectedPetUUIDs[cleanU] = nil
+                        else
+                            State.PNP.SelectedPets[displayKey] = true
+                            State.PNP.SelectedPetUUIDs[cleanU] = true
+                        end
+
+                        local anySelected = false
+                        for _, v in pairs(State.PNP.SelectedPets) do
+                            if v == true then anySelected = true break end
+                        end
+                        for _, v in pairs(State.PNP.SelectedPetUUIDs) do
+                            if v == true then anySelected = true break end
+                        end
+                        if not anySelected then
+                            State.PNP.SelectedPets["All Equipped Pets"] = true
+                        end
+
+                        populateModalOptions()
+                        UpdateButtonLabels()
+                    end
+
+                    btnToggle.MouseButton1Click:Connect(togglePet)
+
+                    local clickOverlay = Instance.new("TextButton", row)
+                    clickOverlay.Size = UDim2.new(1, -112, 1, 0)
+                    clickOverlay.BackgroundTransparency = 1
+                    clickOverlay.Text = ""
+                    clickOverlay.ZIndex = 103
+                    clickOverlay.MouseButton1Click:Connect(togglePet)
+                end
+            end
+
+            mScroll.CanvasSize = UDim2.new(0, 0, 0, rowCount * 36 + 10)
+            return
+        end
+
+        -- =================================================================
+        -- MODE 2 & 3: AUTO PET BOOST (TARGET PET & ITEMS)
+        -- =================================================================
         local options = {}
         local selectedTable = nil
 
-        if currentModalMode == "PNP_PET" then
-            mTitle.Text = "Select Pets for PNP"
-            table.insert(options, "All Equipped Pets")
-            selectedTable = State.PNP.SelectedPets
-
-            local gPets = GetEquippedGardenPets()
-            local seen = {}
-            for _, p in ipairs(gPets) do
-                if not seen[p.Species] then
-                    seen[p.Species] = true
-                    table.insert(options, p.Species)
-                end
-            end
-        elseif currentModalMode == "BOOST_PET" then
+        if currentModalMode == "BOOST_PET" then
             mTitle.Text = "Select Pets for Auto Boost"
             table.insert(options, "All Equipped Pets")
             selectedTable = State.PetBoost.SelectedPets
@@ -1198,11 +1471,9 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
 
                 btn.MouseButton1Click:Connect(function()
                     if opt == "All Equipped Pets" or opt == "All Toys & Boosts" then
-                        -- Jika opsi "All" dipilih, bersihkan opsi individual
                         table.clear(selectedTable)
                         selectedTable[opt] = true
                     else
-                        -- Jika opsi individual dipilih, lepas centang opsi "All"
                         selectedTable["All Equipped Pets"] = nil
                         selectedTable["All Toys & Boosts"] = nil
 
@@ -1212,7 +1483,6 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
                             selectedTable[opt] = true
                         end
 
-                        -- Jika tidak ada yang dicentang, kembalikan ke "All"
                         local anySelected = false
                         for _, v in pairs(selectedTable) do
                             if v == true then anySelected = true break end
