@@ -3,7 +3,7 @@
 --  Repository: zylo-games/PetHatchAndSellModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  STATUS: 100% PRESERVED AUTO HATCH & REAL-TIME AUTO SELL ENGINE
---  DATASET INTEGRATION: ranklee26-glitch/zylo-games/PetDataset.lua (OFFICIAL)
+--  DATASET: DYNAMIC SYNC DENGAN PetDataset.lua & GAME REGISTRY
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main, TeamManager)
@@ -61,130 +61,41 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         end
     end)
 
-    -- Master List Spesies Pet (Diambil langsung dari PetDataset.lua dengan Fallback jika offline)
+    -- Master List Spesies Pet (Sinkronisasi Otomatis dengan Dataset & Memory Game)
     local MasterPetSpeciesList = {
-        "Amethyst Beetle", "Anglerfish", "Angora Goat", "Ankylosaurus", "Anubis",
-        "Apple Gazelle", "Arctic Fox", "Armadillo", "Axolotl", "Bacon Pig",
-        "Badger", "Bagel Bunny", "Bald Eagle", "Barn Owl", "Bat",
-        "Beanstalk Bear", "Bear Bee", "Bear on Bike", "Bearded Dragon", "Beaver",
-        "Bee", "Birb", "Bison", "Black Bird", "Black Bunny",
-        "Black Cat", "Black Spotty Dragon", "Blood Hedgehog", "Blood Kiwi", "Blood Owl",
-        "Blue Jay", "Blue Whale", "Bone Dog", "Brontosaurus", "Brown Mouse",
-        "Brown Owl", "Bumblebee", "Bunny", "Butterfly", "Cactus Mouse",
-        "Calico", "Camel", "Canary", "Candy Squirrel", "Cape Buffalo",
-        "Capybara", "Cardinal", "Carnival Elephant", "Carpenter Bee", "Cat",
-        "Caterpillar", "Celebration Puppy", "Champion Beetle", "Cheetah", "Chest Mimic",
-        "Chicken", "Chicken Zombie", "Chimera", "Chimpanzee", "Chinchilla",
-        "Chipmunk", "Chocolate Bunny", "Christmas Gorilla", "Christmas Spirit", "Chubby Chipmunk",
-        "Cicada", "Clam", "Cloud Hound", "Cloud Sprite", "Cockatrice",
-        "Cocoa Cat", "Cooked Owl", "Cornling", "Corrupted Kitsune", "Corrupted Kodama",
-        "Cow", "Crab", "Crocodile", "Crow", "Cuckoo",
-        "Dairy Cow", "Dark Spriggan", "Deer", "Desert Tortoise", "Diamond Dragonfly",
-        "Diamond Panther", "Dilophosaurus", "Disco Bee", "Dog", "Dolphin",
-        "Dragonfly", "Drake", "Easter Bunny", "Easter Egg Chick", "Echo Frog",
-        "Eggnog Chick", "Electric Eel", "Elemental Bee", "Elephant", "Elk",
-        "Emerald Snake", "Empress Bee", "Farmer Chipmunk", "Fennec Fox", "Festive Frost Squirrel",
-        "Festive Ice Golem", "Festive Moose", "Festive Nutcracker", "Festive Partridge", "Festive Reindeer",
-        "Festive Santa Bear", "Festive Turtle Dove", "Festive Wendigo", "Festive Yeti", "FestiveFrost Squirrel",
-        "Fire Wisp", "Firefly", "Firework Sprite", "Flame Bear", "Flame Bee",
-        "Flamingo", "Football", "Fortune Squirrel", "French Fry Ferret", "French Hen",
-        "Frog", "Frost Dragon", "Frost Squirrel", "Gardener Bee", "Gecko",
-        "Geode Turtle", "German Shepherd", "Ghost Bear", "Ghostly Bat", "Ghostly Black Cat",
-        "Ghostly Bone Dog", "Ghostly Dark Spriggan", "Ghostly Headless Horseman", "Ghostly Mummy", "Ghostly Scarab",
-        "Ghostly Spider", "Ghostly Tomb Marmot", "Giant Ant", "Giant Scorpion", "Gift Rat",
-        "Gilded Choc Chocolate Bunny", "Gilded Choc Easter Bunny", "Gilded Choc Easter Egg Chick", "Gilded Choc Gummy Bear", "Gilded Choc Hootsie Roll",
-        "Gilded Choc Jerboa", "Gilded Choc Marshmallow Lamb", "Gilded Choc Nyala", "Gilded Choc Peryton", "Gilded Choc Spring Bee",
-        "Giraffe", "Glass Cat", "Glass Dog", "Glimmering Sprite", "Gnome",
-        "Goat", "Goblin", "Goblin Miner", "Gold Finch", "Golden Bee",
-        "Golden Goose", "Golden Lab", "Golden Piggy", "Golem", "Goose",
-        "Gorilla Chef", "Green Bean", "Grey Mouse", "Griffin", "Grizzly Bear",
-        "Gummy Bear", "Hamster", "Harvest Golem", "Headless Horseman", "Hedgehog",
-        "Hermit Crab", "Hex Serpent", "Hippo", "Hippocampus", "Honey Badger",
-        "Honey Bee", "Hootsie Roll", "Hotdog Daschund", "Hummingbird", "Hyacinth Macaw",
-        "Hydra", "Hyena", "Hyrax", "Ice Golem", "Idol Chipmunk",
-        "Iguana", "Iguanodon", "Imp", "Jabberwock", "Jackalope",
-        "Jellyfish", "Jerboa", "Junkbot", "Kappa", "King Bee",
-        "Kirin", "Kitsune", "Kiwi", "Kodama", "Koi",
-        "Krampus", "Ladybug", "Leaf Insect", "Lemon Lion", "Lich",
-        "Lion", "Lioness", "Lobster Thermidor", "Lunar Moth", "Lyrebird",
-        "Magpie", "Mallard", "Mandrake", "Maneki-neko", "Manta Ray",
-        "Mantis Shrimp", "Marmot", "Marshmallow Lamb", "Meerkat", "Messenger Pigeon",
-        "Mimic Octopus", "Mistletoad", "Mizuchi", "Mochi Mouse", "Mole",
-        "Monitor Lizard", "Monkey", "Moon Cat", "Moon Dragon", "Moon Snail",
-        "Moose", "Moss Wyvern", "Moth", "Mummy", "Nautilus",
-        "New Year\'s Bird", "New Year\'s Chimp", "New Year\'s Dragon", "Newt", "Night Horse",
-        "Night Owl", "Nightjar", "Nihonzaru", "Nurse Bee", "Nutcracker",
-        "Nyala", "Opossum", "Orange Tabby", "Orangutan", "Orca",
-        "Orchid Mantis", "Ostrich", "Owl", "Oxpecker", "Pachycephalosaurus",
-        "Pack Bee", "Pack Mule", "Pancake Mole", "Panda", "Parasaurolophus",
-        "Partridge", "Peach Wasp", "Peacock", "Pelican", "Penguin",
-        "Performer Seal", "Peryton", "Petal Bee", "Phoenix", "Pig",
-        "Pine Beetle", "Pink Bunny", "Pink Panda", "Pixie", "Polar Bear",
-        "Praying Mantis", "Prince Wasp", "Professor Bee", "Pterodactyl", "Pumpkin Rat",
-        "Queen Bee", "Quetzal", "Raccoon", "Raiju", "Rainbow Anglerfish",
-        "Rainbow Ankylosaurus", "Rainbow Anubis", "Rainbow Arctic Fox", "Rainbow Armadillo", "Rainbow Bacon Pig",
-        "Rainbow Badger", "Rainbow Barn Owl", "Rainbow Bear on Bike", "Rainbow Birb", "Rainbow Black Bird",
-        "Rainbow Blue Jay", "Rainbow Brown Owl", "Rainbow Bumblebee", "Rainbow Cardinal", "Rainbow Carnival Elephant",
-        "Rainbow Celebration Puppy", "Rainbow Chest Mimic", "Rainbow Chinchilla", "Rainbow Christmas Gorilla", "Rainbow Cicada",
-        "Rainbow Cloud Hound", "Rainbow Cloud Sprite", "Rainbow Corrupted Kitsune", "Rainbow Cuckoo", "Rainbow Dilophosaurus",
-        "Rainbow Elemental Bee", "Rainbow Elephant", "Rainbow Elk", "Rainbow Empress Bee", "Rainbow Farmer Chipmunk",
-        "Rainbow Fire Wisp", "Rainbow Firework Sprite", "Rainbow Fortune Squirrel", "Rainbow French Hen", "Rainbow Frost Dragon",
-        "Rainbow Gardener Bee", "Rainbow Giraffe", "Rainbow Gold Finch", "Rainbow Goose", "Rainbow Griffin",
-        "Rainbow Grizzly Bear", "Rainbow Hotdog Daschund", "Rainbow Hydra", "Rainbow Idol Chipmunk", "Rainbow Iguanodon",
-        "Rainbow Jabberwock", "Rainbow Kirin", "Rainbow Kodama", "Rainbow Krampus", "Rainbow Lobster Thermidor",
-        "Rainbow Mandrake", "Rainbow Maneki-neko", "Rainbow Mantis Shrimp", "Rainbow Mistletoad", "Rainbow Mizuchi",
-        "Rainbow Monitor Lizard", "Rainbow Moon Snail", "Rainbow Moss Wyvern", "Rainbow New Year\'s Bird", "Rainbow New Year\'s Chimp",
-        "Rainbow New Year\'s Dragon", "Rainbow Newt", "Rainbow Nightjar", "Rainbow Nurse Bee", "Rainbow Oxpecker",
-        "Rainbow Pachycephalosaurus", "Rainbow Parasaurolophus", "Rainbow Performer Seal", "Rainbow Phoenix", "Rainbow Pink Bunny",
-        "Rainbow Rhino", "Rainbow Robin", "Rainbow Sand Wyrm", "Rainbow Sheep", "Rainbow Show Pony",
-        "Rainbow Shroomie", "Rainbow Snow Bunny", "Rainbow Spinosaurus", "Rainbow Stag Beetle", "Rainbow Star Wolf",
-        "Rainbow Swan", "Rainbow Thunderbird", "Rainbow Unicycle Monkey", "Rainbow Vine Serpent", "Rainbow Wise Owl",
-        "Rainbow Zebra", "Raptor", "Reaper", "Red Dragon", "Red Fox",
-        "Red Giant Ant", "Red Panda", "Red Rose Fox", "Red Squirrel", "Red-Nosed Reindeer",
-        "Reindeer", "Rhino", "Robin", "Rooster", "Ruby Squid",
-        "Salmon", "Sand Snake", "Sand Wyrm", "Sandcastle Crab", "Santa Bear",
-        "Sapphire Macaw", "Scarab", "Scarlet Macaw", "Sea Anemone", "Sea Otter",
-        "Sea Turtle", "Sea Urchin", "Seagull", "Seahorse", "Seal",
-        "Seedling", "Shadow Cat", "Shark", "Sheckling", "Sheep",
-        "Shiba Inu", "Show Pony", "Shroomie", "Silver Dragonfly", "Silver Monkey",
-        "Silver Piggy", "Smithing Dog", "Snail", "Snake", "Snow Bunny",
-        "Snowman Builder", "Snowman Soldier", "Space Squirrel", "Spaghetti Sloth", "Specter",
-        "Spider", "Spinosaurus", "Spotted Deer", "Spriggan", "Spring Bee",
-        "Squirrel", "Stag Beetle", "Star Wolf", "Starfish", "Starry Lunar Moth",
-        "Starry Moon Dragon", "Starry Night Horse", "Starry Opossum", "Stegosaurus", "Stork",
-        "Sugar Glider", "Summer Kiwi", "Sunny-Side Chicken", "Sushi Bear", "Swan",
-        "T-Rex", "Tanchozuru", "Tanuki", "Tarantula Hawk", "Termite",
-        "Thunderbird", "Tidal Hermit Crab", "Tidal Orca", "Tidal Sea Anemone", "Tidal Seahorse",
-        "Tiger", "Tomb Marmot", "Topaz Snail", "Toucan", "Trapdoor Spider",
-        "Tree Frog", "Triceratops", "Tsuchinoko", "Tsunami Hermit Crab", "Tsunami Orca",
-        "Tsunami Sea Anemone", "Tsunami Seahorse", "Turtle", "Turtle Dove", "Unicycle Monkey",
-        "Vampire Squid", "Vine Serpent", "Walrus", "Wasp", "Water Buffalo",
-        "Wendigo", "Wheat Crow", "White Tiger", "Wind Wyvern", "Wind-Up Rat",
-        "Wise Owl", "Wisp", "Wolf", "Woodpecker", "Woody",
-        "Yeti", "Zebra",
+        "Mimic Octopus", "Brontosaurus", "Ankylosaurus", "Blood Hedgehog", "Sea Anemone",
+        "Queen Bee", "T-Rex", "Spinosaurus", "Dragonfly", "Hydra", "Kitsune", "Phoenix",
+        "Corrupted Kitsune", "Diamond Dragonfly", "Empress Bee", "Elemental Bee", "Disco Bee"
     }
 
-    local function FetchAllGamePetSpecies()
-        local function registerPet(name)
-            if type(name) == "string" and #name >= 2 then
-                local nLower = string.lower(name)
-                if string.find(nLower, "huge", 1, true) 
-                   or string.find(name, "GIANT ", 1, true) 
-                   or string.find(nLower, "egg/", 1, true) then
-                    return
-                end
-                if not string.find(name, "Service", 1, true) 
-                   and not string.find(name, "Event", 1, true) 
-                   and not string.find(name, "Remote", 1, true) 
-                   and not string.find(name, "Tween", 1, true) 
-                   and not string.find(name, "Module", 1, true) then
-                    if not table.find(MasterPetSpeciesList, name) then
-                        table.insert(MasterPetSpeciesList, name)
-                    end
+    local function registerPet(name)
+        if type(name) == "string" and #name >= 2 then
+            local nLower = string.lower(name)
+            if string.find(nLower, "huge", 1, true) 
+               or string.find(name, "GIANT ", 1, true) 
+               or string.find(nLower, "egg/", 1, true) then
+                return
+            end
+            if not string.find(name, "Service", 1, true) 
+               and not string.find(name, "Event", 1, true) 
+               and not string.find(name, "Remote", 1, true) 
+               and not string.find(name, "Tween", 1, true) 
+               and not string.find(name, "Module", 1, true) then
+                if not table.find(MasterPetSpeciesList, name) then
+                    table.insert(MasterPetSpeciesList, name)
                 end
             end
         end
+    end
 
+    if GlobalPetDataset and type(GlobalPetDataset) == "table" then
+        for k, v in pairs(GlobalPetDataset) do
+            local name = (type(v) == "table" and (v.Name or v.Species)) or (type(k) == "string" and k) or v
+            registerPet(name)
+        end
+    end
+
+    local function FetchAllGamePetSpecies()
         pcall(function()
             local petReg = ReplicatedStorage:FindFirstChild("Data") and ReplicatedStorage.Data:FindFirstChild("PetRegistry")
             if petReg then
@@ -262,13 +173,8 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     end
     FetchAllGamePetSpecies()
 
-    State.SellPetRules = State.SellPetRules or {
-        { Species = "Mimic Octopus", KG = 3, Action = "SELL" },
-        { Species = "Peacock", KG = 3, Action = "SELL" },
-        { Species = "Scarlet Macaw", KG = 3, Action = "SELL" },
-        { Species = "Capybara", KG = 3, Action = "SELL" },
-        { Species = "Ostrich", KG = 3, Action = "SELL" }
-    }
+    -- [PERBAIKAN 1: LIST AWAL MURNI KOSONG, TIDAK ADA PET OTOMATIS]
+    State.SellPetRules = State.SellPetRules or {}
 
     local function GetFarm()
         if not Farms then return nil end
@@ -283,9 +189,10 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         return nil
     end
 
+    -- Loop Auto Hatch Mandiri
     task.spawn(function()
         while true do
-            if State.AutoHatch then
+            if State.AutoHatch and not State.IsTeamRunning then
                 local farm = GetFarm()
                 local imp = farm and farm:FindFirstChild("Important")
                 local objPhysical = imp and imp:FindFirstChild("Objects_Physical")
@@ -355,7 +262,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         if not rem then return false end
         local args = { ... }
         if rem:IsA("RemoteEvent") then
-            local ok, err = pcall(function() rem:FireServer(unpack(args)) end)
+            local ok = pcall(function() rem:FireServer(unpack(args)) end)
             return ok
         elseif rem:IsA("RemoteFunction") then
             local ok, res = pcall(function() return rem:InvokeServer(unpack(args)) end)
@@ -608,8 +515,9 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         return nil
     end
 
+    -- [PERBAIKAN 2: SINKRONISASI AKTIF DENGAN TOMBOL START]
     local function IsGlobalStartActive()
-        return (State.IsRunning == true) or (State.Running == true) or (State.StartActive == true)
+        return (State.IsTeamRunning == true) or (State.IsRunning == true) or (State.Running == true) or (State.StartActive == true)
             or (TeamManager and (TeamManager.IsRunning == true or TeamManager.Active == true or TeamManager.Running == true))
     end
 
@@ -637,9 +545,10 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             local rule = MatchRuleForPet(pet)
             if rule then
                 local petWeight = pet.NumericWeight or tonumber(pet.Weight) or 0
-                local targetKG = tonumber(rule.KG) or 0
+                local targetKG = tonumber(rule.KG) or 3
                 local action = (rule.Action or "SELL"):upper()
 
+                -- Logika Bobot: Jual jika bobot < batas KG, simpan jika >= batas KG
                 if targetKG > 0 and petWeight < targetKG and action == "SELL" then
                     table.insert(petsToSell, pet)
                 end
@@ -647,7 +556,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         end
 
         if #petsToSell > 0 then
-            print(string.format("[ZyloHub AutoSell] Menemukan %d pet yang memenuhi syarat jual dari total %d pet!", #petsToSell, currentTotalPets))
+            print(string.format("[ZyloHub AutoSell] Menemukan %d pet bobot < batas KG yang akan dijual...", #petsToSell))
             for _, p in ipairs(petsToSell) do
                 if not forceSell and not IsGlobalStartActive() then break end
 
@@ -660,7 +569,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                 end
 
                 SellPetInstance(p)
-                print(string.format("[ZyloHub AutoSell] Menjual: %s (Berat: %.2f KG, UUID: %s)", p.Species, p.NumericWeight or 0, tostring(p.UUID)))
+                print(string.format("[ZyloHub AutoSell] Terjual: %s (Bobot: %.2f KG, UUID: %s)", p.Species, p.NumericWeight or 0, tostring(p.UUID)))
 
                 if State.SellMode == "Sell One By One" then
                     task.wait(0.35)
@@ -668,14 +577,12 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                     task.wait(0.08)
                 end
             end
-        else
-            if forceSell then
-                print(string.format("[ZyloHub AutoSell] Tidak ada pet yang memenuhi syarat jual. Total pet terdeteksi: %d", currentTotalPets))
-            end
         end
 
         isProcessingAutoSell = false
     end
+
+    State.CheckAndExecuteAutoSell = CheckAndExecuteAutoSell
 
     local isProcessingQuickSell = false
     local quickSellCount = 0
@@ -764,7 +671,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     end
 
     -- =============================================================
-    -- CONFIG CONTAINER (EGG CONFIG & SELL CONFIG FULL UI)
+    -- CONFIG CONTAINER UI
     -- =============================================================
     local cfgLayout = Instance.new("UIListLayout", ConfigContainer)
     cfgLayout.Padding = UDim.new(0, 8)
@@ -868,7 +775,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     local function recalculateCanvasSize()
         local h = 80
         if State.EggConfigExpanded then h = h + 100 end
-        if State.SellConfigExpanded then h = h + 610 end
+        if State.SellConfigExpanded then h = h + 650 end
         if State.PetSkillExpanded then h = h + 380 end
         ConfigContainer.CanvasSize = UDim2.new(0, 0, 0, h)
     end
@@ -884,7 +791,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     -- [B] SELL CONFIG CARD
     local SellConfigCard = Instance.new("Frame", ConfigContainer)
-    SellConfigCard.Size = State.SellConfigExpanded and UDim2.new(1, 0, 0, 660) or UDim2.new(1, 0, 0, 38)
+    SellConfigCard.Size = State.SellConfigExpanded and UDim2.new(1, 0, 0, 690) or UDim2.new(1, 0, 0, 38)
     SellConfigCard.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
     Instance.new("UICorner", SellConfigCard).CornerRadius = UDim.new(0, 8)
     local sccStroke = Instance.new("UIStroke", SellConfigCard)
@@ -900,7 +807,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     shTitle.Position = UDim2.new(0, 12, 0, 0)
     shTitle.Size = UDim2.new(1, -45, 1, 0)
     shTitle.BackgroundTransparency = 1
-    shTitle.Text = "💰  Sell Config (Favorite Important Pets First)"
+    shTitle.Text = "💰  Sell Config (Filter Bobot Pet & Auto Sell)"
     shTitle.TextColor3 = Color3.fromRGB(240, 245, 255)
     shTitle.Font = Enum.Font.GothamBold
     shTitle.TextSize = 9.5
@@ -917,12 +824,31 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
 
     local SellOptionsFrame = Instance.new("Frame", SellConfigCard)
     SellOptionsFrame.Position = UDim2.new(0, 8, 0, 42)
-    SellOptionsFrame.Size = UDim2.new(1, -16, 0, 580)
+    SellOptionsFrame.Size = UDim2.new(1, -16, 0, 630)
     SellOptionsFrame.BackgroundTransparency = 1
     SellOptionsFrame.Visible = State.SellConfigExpanded
 
     local soLayout = Instance.new("UIListLayout", SellOptionsFrame)
     soLayout.Padding = UDim.new(0, 6)
+
+    -- [PANDUAN INFORMASI SIMBOL BOBOT KG]
+    local infoBanner = Instance.new("Frame", SellOptionsFrame)
+    infoBanner.Size = UDim2.new(1, 0, 0, 36)
+    infoBanner.BackgroundColor3 = Color3.fromRGB(20, 15, 38)
+    Instance.new("UICorner", infoBanner).CornerRadius = UDim.new(0, 6)
+    local ibStroke = Instance.new("UIStroke", infoBanner)
+    ibStroke.Color = Color3.fromRGB(138, 43, 226)
+
+    local ibText = Instance.new("TextLabel", infoBanner)
+    ibText.Position = UDim2.new(0, 8, 0, 0)
+    ibText.Size = UDim2.new(1, -16, 1, 0)
+    ibText.BackgroundTransparency = 1
+    ibText.RichText = true
+    ibText.Text = "💡 <b>Aturan Bobot KG:</b>\n• <font color=\"#F87171\"><b>&lt; 3 KG SELL</b></font> : Otomatis DIJUAL (Sampah)\n• <font color=\"#4ADE80\"><b>&gt;= 3 KG BRONTO</b></font> : Otomatis DISIMPAN & Di-boost Bronto"
+    ibText.TextColor3 = Color3.fromRGB(220, 230, 255)
+    ibText.Font = Enum.Font.GothamMedium
+    ibText.TextSize = 7.5
+    ibText.TextXAlignment = Enum.TextXAlignment.Left
 
     local quickSellCard = Instance.new("Frame", SellOptionsFrame)
     quickSellCard.Size = UDim2.new(1, 0, 0, 115)
@@ -980,8 +906,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     qsDropdown.Font = Enum.Font.GothamBold
     qsDropdown.TextSize = 8.5
     Instance.new("UICorner", qsDropdown).CornerRadius = UDim.new(0, 4)
-    local qsdStroke = Instance.new("UIStroke", qsDropdown)
-    qsdStroke.Color = Color3.fromRGB(45, 55, 85)
 
     local rowQsToggle = Instance.new("Frame", quickSellCard)
     rowQsToggle.Size = UDim2.new(1, 0, 0, 24)
@@ -1090,8 +1014,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     rthBox.Font = Enum.Font.GothamBold
     rthBox.TextSize = 9
     Instance.new("UICorner", rthBox).CornerRadius = UDim.new(0, 4)
-    local rthStroke = Instance.new("UIStroke", rthBox)
-    rthStroke.Color = C.STROKE
 
     rthBox:GetPropertyChangedSignal("Text"):Connect(function()
         local val = tonumber(rthBox.Text)
@@ -1170,8 +1092,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     bpDropdown.Font = Enum.Font.GothamBold
     bpDropdown.TextSize = 8.5
     Instance.new("UICorner", bpDropdown).CornerRadius = UDim.new(0, 4)
-    local bpdStroke = Instance.new("UIStroke", bpDropdown)
-    bpdStroke.Color = Color3.fromRGB(35, 42, 65)
 
     local rowBulkKG = Instance.new("Frame", SellOptionsFrame)
     rowBulkKG.Size = UDim2.new(1, 0, 0, 24)
@@ -1180,7 +1100,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     local bkgLbl = Instance.new("TextLabel", rowBulkKG)
     bkgLbl.Size = UDim2.new(0.6, 0, 1, 0)
     bkgLbl.BackgroundTransparency = 1
-    bkgLbl.Text = "KG (Bulk)"
+    bkgLbl.Text = "KG Batas (Bulk)"
     bkgLbl.TextColor3 = C.TEXT_M
     bkgLbl.Font = Enum.Font.GothamMedium
     bkgLbl.TextSize = 8.5
@@ -1195,8 +1115,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     bkgBox.Font = Enum.Font.GothamBold
     bkgBox.TextSize = 8.5
     Instance.new("UICorner", bkgBox).CornerRadius = UDim.new(0, 4)
-    local bkgStroke = Instance.new("UIStroke", bkgBox)
-    bkgStroke.Color = Color3.fromRGB(35, 42, 65)
 
     bkgBox:GetPropertyChangedSignal("Text"):Connect(function()
         local val = tonumber(bkgBox.Text)
@@ -1210,7 +1128,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     local bkaLbl = Instance.new("TextLabel", rowBulkAct)
     bkaLbl.Size = UDim2.new(0.6, 0, 1, 0)
     bkaLbl.BackgroundTransparency = 1
-    bkaLbl.Text = "Below KG Action (Bulk)"
+    bkaLbl.Text = "Aksi Di Bawah KG"
     bkaLbl.TextColor3 = C.TEXT_M
     bkaLbl.Font = Enum.Font.GothamMedium
     bkaLbl.TextSize = 8.5
@@ -1225,8 +1143,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     bkaBtn.Font = Enum.Font.GothamBold
     bkaBtn.TextSize = 8.5
     Instance.new("UICorner", bkaBtn).CornerRadius = UDim.new(0, 4)
-    local bkaStroke = Instance.new("UIStroke", bkaBtn)
-    bkaStroke.Color = Color3.fromRGB(35, 42, 65)
 
     bkaBtn.MouseButton1Click:Connect(function()
         State.BulkAction = (State.BulkAction == "sell") and "keep" or "sell"
@@ -1290,9 +1206,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     btnSellNow.Font = Enum.Font.GothamBold
     btnSellNow.TextSize = 8.5
     Instance.new("UICorner", btnSellNow).CornerRadius = UDim.new(0, 4)
-    local bsnSt = Instance.new("UIStroke", btnSellNow)
-    bsnSt.Color = Color3.fromRGB(255, 80, 130)
-    bsnSt.Thickness = 1
+
     btnSellNow.MouseButton1Click:Connect(function()
         btnSellNow.Text = "⏳  Memeriksa & Menjual..."
         task.spawn(function()
@@ -1312,8 +1226,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     sellSearchBox.Font = Enum.Font.Gotham
     sellSearchBox.TextSize = 8.5
     Instance.new("UICorner", sellSearchBox).CornerRadius = UDim.new(0, 4)
-    local ssbStroke = Instance.new("UIStroke", sellSearchBox)
-    ssbStroke.Color = Color3.fromRGB(32, 38, 60)
 
     local sellListScroll = Instance.new("ScrollingFrame", SellOptionsFrame)
     sellListScroll.Size = UDim2.new(1, 0, 0, 136)
@@ -1321,8 +1233,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     sellListScroll.ScrollBarThickness = 2
     sellListScroll.ScrollBarImageColor3 = C.PURPLE
     Instance.new("UICorner", sellListScroll).CornerRadius = UDim.new(0, 6)
-    local slsStroke = Instance.new("UIStroke", sellListScroll)
-    slsStroke.Color = Color3.fromRGB(30, 38, 60)
 
     local slsLayout = Instance.new("UIListLayout", sellListScroll)
     slsLayout.Padding = UDim.new(0, 4)
@@ -1497,9 +1407,6 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     pmSearch.ClearTextOnFocus = false
     pmSearch.ZIndex = 51
     Instance.new("UICorner", pmSearch).CornerRadius = UDim.new(0, 5)
-    local pmSearchPad = Instance.new("UIPadding", pmSearch)
-    pmSearchPad.PaddingLeft = UDim.new(0, 8)
-    pmSearchPad.PaddingRight = UDim.new(0, 8)
 
     local pmScroll = Instance.new("ScrollingFrame", PickerModal)
     pmScroll.Position = UDim2.new(0, 10, 0, 62)
@@ -1541,15 +1448,12 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
                     b.TextXAlignment = Enum.TextXAlignment.Left
                     b.ZIndex = 52
                     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
-                    local bSt = Instance.new("UIStroke", b)
-                    bSt.Color = isCur and C.PURPLE_L or Color3.fromRGB(30, 36, 60)
 
                     b.MouseButton1Click:Connect(function()
                         if pickerTarget == "quicksell" then
                             State.QuickSellPetSpecies = species
                             if qsDropdown then qsDropdown.Text = species .. "  ▼" end
                             if updateQuickSellStatus then updateQuickSellStatus() end
-                            print("[ZyloHub QuickSell] Dipilih pet untuk Quick Sell:", species)
                         else
                             State.SelectedBulkPetSpecies = species
                             if bpDropdown then bpDropdown.Text = species .. "  ▼" end
@@ -1564,7 +1468,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
             local noRes = Instance.new("TextLabel", pmScroll)
             noRes.Size = UDim2.new(1, 0, 0, 30)
             noRes.BackgroundTransparency = 1
-            noRes.Text = "Tidak ditemukan pet yang cocok: \"" .. rawText .. "\""
+            noRes.Text = "Tidak ditemukan: \"" .. rawText .. "\""
             noRes.TextColor3 = Color3.fromRGB(255, 120, 120)
             noRes.Font = Enum.Font.GothamMedium
             noRes.TextSize = 8
@@ -1581,14 +1485,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
     bpDropdown.MouseButton1Click:Connect(function()
         pickerTarget = "bulk"
         FetchAllGamePetSpecies()
-        local validCount = 0
-        for _, s in ipairs(MasterPetSpeciesList) do
-            local sL = string.lower(s)
-            if not string.find(sL, "huge", 1, true) and not string.find(s, "GIANT ", 1, true) and not string.find(sL, "egg/", 1, true) then
-                validCount = validCount + 1
-            end
-        end
-        pmTitle.Text = "Select Pet Type (" .. tostring(validCount) .. " Pets)"
+        pmTitle.Text = "Select Pet Type (" .. tostring(#MasterPetSpeciesList) .. " Pets)"
         PickerModal.Visible = true
         pmSearch.Text = ""
         refreshPickerModalList()
@@ -1598,14 +1495,7 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         qsDropdown.MouseButton1Click:Connect(function()
             pickerTarget = "quicksell"
             FetchAllGamePetSpecies()
-            local validCount = 0
-            for _, s in ipairs(MasterPetSpeciesList) do
-                local sL = string.lower(s)
-                if not string.find(sL, "huge", 1, true) and not string.find(s, "GIANT ", 1, true) and not string.find(sL, "egg/", 1, true) then
-                    validCount = validCount + 1
-                end
-            end
-            pmTitle.Text = "Select Pet to Sell (" .. tostring(validCount) .. " Pets)"
+            pmTitle.Text = "Select Pet to Sell (" .. tostring(#MasterPetSpeciesList) .. " Pets)"
             PickerModal.Visible = true
             pmSearch.Text = ""
             refreshPickerModalList()
@@ -1616,14 +1506,12 @@ return function(PagePets, State, ZyloLib, Main, TeamManager)
         State.SellConfigExpanded = not State.SellConfigExpanded
         shArrow.Text = State.SellConfigExpanded and "▼" or "▶"
         SellOptionsFrame.Visible = State.SellConfigExpanded
-        SellConfigCard.Size = State.SellConfigExpanded and UDim2.new(1, 0, 0, 660) or UDim2.new(1, 0, 0, 38)
+        SellConfigCard.Size = State.SellConfigExpanded and UDim2.new(1, 0, 0, 690) or UDim2.new(1, 0, 0, 38)
         sccStroke.Color = State.SellConfigExpanded and C.PURPLE_L or C.STROKE
         recalculateCanvasSize()
     end)
 
-    -- =============================================================
-    -- [C] PET SKILL ACCORDION CARD (PENGGANTI SWAP SKILL CONFIG)
-    -- =============================================================
+    -- [C] PET SKILL ACCORDION CARD
     State.PetSkillExpanded = (State.PetSkillExpanded ~= nil) and State.PetSkillExpanded or false
 
     local PetSkillCard = Instance.new("Frame", ConfigContainer)
