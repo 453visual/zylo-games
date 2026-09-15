@@ -1,5 +1,5 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6.1)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
@@ -36,15 +36,17 @@ return function(ParentContainer, State, ZyloLib, Main)
     local NavScroll = Instance.new("ScrollingFrame", MutasiWrapper)
     NavScroll.Size = UDim2.new(1, 0, 0, 30)
     NavScroll.BackgroundTransparency = 1
+    NavScroll.BorderSizePixel = 0
     NavScroll.ScrollBarThickness = 0
-    NavScroll.ScrollingDirection = Enum.ScrollingDirection.Horizontal
+    NavScroll.ScrollingDirection = Enum.ScrollingDirection.X
+    NavScroll.CanvasSize = UDim2.new(0, 520, 1, 0)
     NavScroll.LayoutOrder = 1
 
     local NavList = Instance.new("UIListLayout", NavScroll)
     NavList.FillDirection = Enum.FillDirection.Horizontal
     NavList.HorizontalAlignment = Enum.HorizontalAlignment.Left
     NavList.VerticalAlignment = Enum.VerticalAlignment.Center
-    NavList.Padding = UDim.new(0, 6)
+    NavList.Padding = UDim.new(0, 5)
 
     local Categories = { "Elephant", "Machine", "Nightmare", "100 Age", "XP", "GBXP", "Config" }
     local CategoryButtons = {}
@@ -52,10 +54,8 @@ return function(ParentContainer, State, ZyloLib, Main)
     local updateActionButton
     local refreshPetList
 
-    local totalNavWidth = 0
     for _, catName in ipairs(Categories) do
         local btnW = (catName == "Nightmare" and 76) or (catName == "Elephant" and 68) or (catName == "Machine" and 66) or (catName == "100 Age" and 64) or (catName == "Config" and 54) or 46
-        totalNavWidth = totalNavWidth + btnW + 6
 
         local btn = Instance.new("TextButton", NavScroll)
         btn.Size = UDim2.new(0, btnW, 0, 26)
@@ -97,11 +97,9 @@ return function(ParentContainer, State, ZyloLib, Main)
     Instance.new("UICorner", GearBtn).CornerRadius = UDim.new(0, 13)
     local gearStroke = Instance.new("UIStroke", GearBtn)
     gearStroke.Color = Color3.fromRGB(38, 45, 70)
-    totalNavWidth = totalNavWidth + 32
-    NavScroll.CanvasSize = UDim2.new(0, totalNavWidth + 10, 0, 0)
 
     GearBtn.MouseButton1Click:Connect(function()
-        ZyloLib:Notify("Settings", "Pengaturan konfigurasi mutasi aktif.", 2)
+        print("[ZyloHub] Settings button clicked")
     end)
 
     -- =====================================================================
@@ -163,8 +161,10 @@ return function(ParentContainer, State, ZyloLib, Main)
     local StatsScroll = Instance.new("ScrollingFrame", ThreshBody)
     StatsScroll.Size = UDim2.new(1, 0, 0, 22)
     StatsScroll.BackgroundTransparency = 1
+    StatsScroll.BorderSizePixel = 0
     StatsScroll.ScrollBarThickness = 0
-    StatsScroll.ScrollingDirection = Enum.ScrollingDirection.Horizontal
+    StatsScroll.ScrollingDirection = Enum.ScrollingDirection.X
+    StatsScroll.CanvasSize = UDim2.new(0, 490, 1, 0)
     StatsScroll.LayoutOrder = 1
 
     local StatsLayout = Instance.new("UIListLayout", StatsScroll)
@@ -190,7 +190,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     local stat100  = CreateStatItem(StatsScroll, "💯", "100 Age", 0, C.CYAN, 74)
     local statXP   = CreateStatItem(StatsScroll, "📘", "XP", 0, Color3.fromRGB(130, 200, 255), 62)
     local statGBXP = CreateStatItem(StatsScroll, "🧪", "GBXP", 0, Color3.fromRGB(180, 140, 255), 72)
-    StatsScroll.CanvasSize = UDim2.new(0, 480, 0, 0)
 
     -- Row 3B: Equip Age
     local RowEq = Instance.new("Frame", ThreshBody)
@@ -312,13 +311,13 @@ return function(ParentContainer, State, ZyloLib, Main)
         for _, kw in ipairs(BLACKLIST_ITEM_KEYWORDS) do
             if nLower:find(kw) then return false end
         end
-        return tool:FindFirstChild("PetData") or (not tool:FindFirstChild("PetEggToolLocal"))
+        return (tool:FindFirstChild("PetData") ~= nil) or (not tool:FindFirstChild("PetEggToolLocal"))
     end
 
     local function GetBackpackPets()
         local pets = {}
-        local bp = LocalPlayer:FindFirstChild("Backpack")
-        local char = LocalPlayer.Character
+        local bp = LocalPlayer and LocalPlayer:FindFirstChild("Backpack")
+        local char = LocalPlayer and LocalPlayer.Character
         local function scan(container)
             if not container then return end
             for _, tool in ipairs(container:GetChildren()) do
@@ -488,14 +487,14 @@ return function(ParentContainer, State, ZyloLib, Main)
         State.MutasiRunning = true
         StartBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 80)
         StartBtn.Text = "RUNNING (" .. State.MutasiMode .. ")"
-        ZyloLib:Notify("Auto Mutasi", "Memulai proses " .. State.MutasiActiveCategory .. " (" .. State.MutasiMode .. ")", 2.5)
+        print("[ZyloHub] Auto Mutasi started: " .. State.MutasiActiveCategory)
     end)
 
     StopBtn.MouseButton1Click:Connect(function()
         State.MutasiRunning = false
         StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
         StartBtn.Text = "⚡ START " .. State.MutasiActiveCategory:upper()
-        ZyloLib:Notify("Auto Mutasi", "Proses " .. State.MutasiActiveCategory .. " dihentikan.", 2)
+        print("[ZyloHub] Auto Mutasi stopped")
     end)
 
     return {
