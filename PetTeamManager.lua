@@ -453,10 +453,11 @@ return function(PagePets, State, ZyloLib, Main)
     SubTabRow.Size = UDim2.new(1, -20, 0, 30)
     SubTabRow.BackgroundTransparency = 1
     SubTabRow.ScrollBarThickness = 0
-    SubTabRow.CanvasSize = UDim2.new(0, 480, 0, 0)
+    SubTabRow.CanvasSize = UDim2.new(0, 520, 0, 0)
 
     local stLayout = Instance.new("UIListLayout", SubTabRow)
     stLayout.FillDirection = Enum.FillDirection.Horizontal
+    stLayout.SortOrder = Enum.SortOrder.LayoutOrder
     stLayout.Padding = UDim.new(0, 6)
 
     local subTabs = { "Main Team", "Bronto Team", "Hatch Team", "Sell Team", "Config" }
@@ -517,8 +518,11 @@ return function(PagePets, State, ZyloLib, Main)
         end
     end
 
-    for _, tabName in ipairs(subTabs) do
+    -- Membuat 5 tombol tab dengan LayoutOrder 1 sampai 5
+    for idx, tabName in ipairs(subTabs) do
         local sBtn = Instance.new("TextButton", SubTabRow)
+        sBtn.Name = "Tab_" .. tostring(idx) .. "_" .. tabName:gsub("%s+", "")
+        sBtn.LayoutOrder = idx
         sBtn.Size = UDim2.new(0, (tabName == "Config") and 68 or 88, 1, 0)
         sBtn.BackgroundColor3 = (State.ActiveTeam == tabName) and Color3.fromRGB(42, 20, 70) or Color3.fromRGB(16, 21, 42)
         sBtn.Text = tabName
@@ -537,10 +541,11 @@ return function(PagePets, State, ZyloLib, Main)
     end
 
     -- =============================================================
-    -- TOMBOL GEAR (⚙️) DI SEBELAH CONFIG UNTUK MODAL WEBHOOK EGG
+    -- TOMBOL GEAR (⚙️) DI POJOK KANAN PERSIS DI SAMPING CONFIG (LAYOUTORDER = 6)
     -- =============================================================
     local GearBtn = Instance.new("TextButton", SubTabRow)
-    GearBtn.Name = "EggWebhookGearBtn"
+    GearBtn.Name = "Tab_6_EggWebhookGearBtn"
+    GearBtn.LayoutOrder = 6
     GearBtn.Size = UDim2.new(0, 32, 1, 0)
     GearBtn.BackgroundColor3 = Color3.fromRGB(16, 21, 42)
     GearBtn.Text = "⚙"
@@ -551,7 +556,7 @@ return function(PagePets, State, ZyloLib, Main)
     local gbStroke = Instance.new("UIStroke", GearBtn)
     gbStroke.Color = C.STROKE
 
-    -- Mengunduh dan menginisialisasi modul Webhook Egg secara terpisah
+    -- Mengunduh dan menginisialisasi modul Webhook Egg langsung dari GitHub
     local EggWebhookHandler = nil
     pcall(function()
         local rawWebhook = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/Eggwebhookmodule.lua")
@@ -560,27 +565,10 @@ return function(PagePets, State, ZyloLib, Main)
             local targetScreenGui = (Main and (Main:IsA("ScreenGui") and Main or Main:FindFirstAncestorOfClass("ScreenGui")))
                 or LocalPlayer.PlayerGui:FindFirstChildOfClass("ScreenGui")
                 or Main
+            -- GearBtn diteruskan ke Init agar modul webhook memasang event klik & update warnanya secara native
             EggWebhookHandler = webhookModule.Init(State, ZyloLib, targetScreenGui, GearBtn)
         end
     end)
-
-    -- Handler klik / sentuh layar (Mendukung PC & Layar Sentuh Mobile/Android)
-    local lastGearTap = 0
-    local function onGearActivated()
-        if tick() - lastGearTap < 0.25 then return end
-        lastGearTap = tick()
-
-        if EggWebhookHandler and EggWebhookHandler.Toggle then
-            EggWebhookHandler.Toggle()
-        elseif EggWebhookHandler and EggWebhookHandler.Modal then
-            EggWebhookHandler.Modal.Visible = not EggWebhookHandler.Modal.Visible
-        end
-    end
-
-    if GearBtn:IsA("GuiButton") then
-        GearBtn.Activated:Connect(onGearActivated)
-    end
-    GearBtn.MouseButton1Click:Connect(onGearActivated)
 
     -- =============================================================
     -- [1] TEAM VIEWS CONTAINER
