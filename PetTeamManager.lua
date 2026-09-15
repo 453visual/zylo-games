@@ -2,7 +2,7 @@
 --  ZYLOHUB - PET TEAM MANAGER MODULE (OFFICIAL EXTENSION - PART 1)
 --  Repository: zylo-games/PetTeamManager.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  STATUS: 100% PRESERVED PET TEAM MANAGER ENGINE + MULTI-PASS UNEQUIP
+--  STATUS: 100% PRESERVED PET TEAM MANAGER ENGINE + EGG WEBHOOK INTEGRATION
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main)
@@ -536,7 +536,11 @@ return function(PagePets, State, ZyloLib, Main)
         subTabBtns[tabName] = sBtn
     end
 
+    -- =============================================================
+    -- TOMBOL GEAR (⚙️) DI SEBELAH CONFIG UNTUK MODAL WEBHOOK EGG
+    -- =============================================================
     local GearBtn = Instance.new("TextButton", SubTabRow)
+    GearBtn.Name = "EggWebhookGearBtn"
     GearBtn.Size = UDim2.new(0, 32, 1, 0)
     GearBtn.BackgroundColor3 = Color3.fromRGB(16, 21, 42)
     GearBtn.Text = "⚙"
@@ -547,10 +551,36 @@ return function(PagePets, State, ZyloLib, Main)
     local gbStroke = Instance.new("UIStroke", GearBtn)
     gbStroke.Color = C.STROKE
 
-    GearBtn.MouseButton1Click:Connect(function()
-        State.ActiveTeam = "Config"
-        updateSubTabs()
+    -- Mengunduh dan menginisialisasi modul Webhook Egg secara terpisah
+    local EggWebhookHandler = nil
+    pcall(function()
+        local rawWebhook = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/Eggwebhookmodule.lua")
+        local webhookModule = loadstring(rawWebhook)()
+        if webhookModule and webhookModule.Init then
+            local targetScreenGui = (Main and (Main:IsA("ScreenGui") and Main or Main:FindFirstAncestorOfClass("ScreenGui")))
+                or LocalPlayer.PlayerGui:FindFirstChildOfClass("ScreenGui")
+                or Main
+            EggWebhookHandler = webhookModule.Init(State, ZyloLib, targetScreenGui, GearBtn)
+        end
     end)
+
+    -- Handler klik / sentuh layar (Mendukung PC & Layar Sentuh Mobile/Android)
+    local lastGearTap = 0
+    local function onGearActivated()
+        if tick() - lastGearTap < 0.25 then return end
+        lastGearTap = tick()
+
+        if EggWebhookHandler and EggWebhookHandler.Toggle then
+            EggWebhookHandler.Toggle()
+        elseif EggWebhookHandler and EggWebhookHandler.Modal then
+            EggWebhookHandler.Modal.Visible = not EggWebhookHandler.Modal.Visible
+        end
+    end
+
+    if GearBtn:IsA("GuiButton") then
+        GearBtn.Activated:Connect(onGearActivated)
+    end
+    GearBtn.MouseButton1Click:Connect(onGearActivated)
 
     -- =============================================================
     -- [1] TEAM VIEWS CONTAINER
@@ -1022,6 +1052,8 @@ return function(PagePets, State, ZyloLib, Main)
         ConfigContainer = ConfigContainer,
         SubTabRow = SubTabRow,
         SubTabBtns = subTabBtns,
+        GearBtn = GearBtn,
+        EggWebhook = EggWebhookHandler,
         UpdateSubTabs = updateSubTabs,
         ExecutePetTeam = ExecutePetTeam,
         GetEquippedPetsInGarden = GetEquippedPetsInGarden,
