@@ -1,7 +1,7 @@
 -- =========================================================================
 --  ZYLOHUB - GROW A GARDEN (v3.5 - SAFE MODULAR EDITION)
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  STATUS: AUTO FARM & AUTO PLACE EGG LOCKED (100% PRESERVED)
+--  STATUS: AUTO FARM & AUTO PLACE EGG LOCKED (100% PRESERVED & PRECISE)
 -- =========================================================================
 
 local Players = game:GetService("Players")
@@ -462,7 +462,7 @@ local Main = Window.Main
 -- 9 Tabs Resmi ZyloHub
 local PageHome      = Window:CreateTab("Home", "🏠", 1)
 local PageFarm      = Window:CreateTab("Farm", "🍃", 2, 480)
-local PagePets      = Window:CreateTab("Pets", "🐾", 3, 1100)
+local PagePets      = Window:CreateTab("Pets", "🐾", 3, 1500)
 local PageUtility   = Window:CreateTab("Utility", "🔧", 4, 240)
 local PageShop      = Window:CreateTab("Shop", "🛒", 5)
 local PageConfig    = Window:CreateTab("Config", "⚙️", 6)
@@ -713,9 +713,24 @@ if not okHatch then
 end
 
 -- =============================================================
--- [ACCORDION PET LAINNYA]
+-- [ACCORDION PET LAINNYA & AUTO MUTASI]
 -- =============================================================
-local accMutasi, bodyMutasi = ZyloLib:CreateAccordion(PagePets, "Auto Mutasi", false, 85)
+local accMutasi, bodyMutasi = ZyloLib:CreateAccordion(PagePets, "Auto Mutasi", false, 490)
+local PetMutasiModule = nil
+local okMutasi, errMutasi = pcall(function()
+    local raw = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/PetMutasiModule.lua")
+    local fn = loadstring(raw)
+    if fn then
+        local moduleFunc = fn()
+        if type(moduleFunc) == "function" then
+            PetMutasiModule = moduleFunc(bodyMutasi, State, ZyloLib, Main)
+        end
+    end
+end)
+if not okMutasi then
+    warn("[ZyloHub] PetMutasiModule note:", errMutasi)
+end
+
 local accEle, bodyEle = ZyloLib:CreateAccordion(PagePets, "Auto Elephant", false, 85)
 
 -- =============================================================
