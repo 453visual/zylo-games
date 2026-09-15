@@ -2,16 +2,15 @@
 --  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  No Yellow Color - Pure ZyloHub Clean Aesthetics
+--  Presisi 100% Sesuai Screenshot Referensi (Tanpa Warna Kuning)
 -- =========================================================================
 
 return function(ParentContainer, State, ZyloLib, Main)
     local Players = game:GetService("Players")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
     local C = ZyloLib.Colors
 
-    -- Inisialisasi State Mutasi
+    -- State Inisialisasi Mutasi
     State.MutasiActiveCategory = State.MutasiActiveCategory or "Nightmare"
     State.MutasiEquipAge = State.MutasiEquipAge or 20
     State.MutasiUnequipAge = State.MutasiUnequipAge or 0
@@ -20,9 +19,9 @@ return function(ParentContainer, State, ZyloLib, Main)
     State.MutasiSelectedPets = State.MutasiSelectedPets or {}
     State.MutasiSearchQuery = State.MutasiSearchQuery or ""
 
-    -- Container Utama di dalam Accordion Auto Mutasi
+    -- Container Utama
     local MutasiWrapper = Instance.new("Frame", ParentContainer)
-    MutasiWrapper.Size = UDim2.new(1, 0, 0, 480)
+    MutasiWrapper.Size = UDim2.new(1, 0, 0, 440)
     MutasiWrapper.BackgroundTransparency = 1
 
     local MutasiLayout = Instance.new("UIListLayout", MutasiWrapper)
@@ -30,112 +29,93 @@ return function(ParentContainer, State, ZyloLib, Main)
     MutasiLayout.Padding = UDim.new(0, 6)
 
     -- =====================================================================
-    -- 1. SUB-NAVIGASI KATEGORI (Nightmare | 100 Age | XP | GBXP | Config)
+    -- 1. SUB-NAVIGASI KATEGORI (Nightmare | 100 Age | XP | GBXP | Config + ⚙)
     -- =====================================================================
-    local NavRow = Instance.new("ScrollingFrame", MutasiWrapper)
-    NavRow.Size = UDim2.new(1, 0, 0, 30)
+    local NavRow = Instance.new("Frame", MutasiWrapper)
+    NavRow.Size = UDim2.new(1, 0, 0, 28)
     NavRow.BackgroundTransparency = 1
-    NavRow.ScrollBarThickness = 0
-    NavRow.CanvasSize = UDim2.new(0, 380, 0, 0)
     NavRow.LayoutOrder = 1
 
     local NavList = Instance.new("UIListLayout", NavRow)
     NavList.FillDirection = Enum.FillDirection.Horizontal
-    NavList.Padding = UDim.new(0, 6)
+    NavList.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    NavList.VerticalAlignment = Enum.VerticalAlignment.Center
+    NavList.Padding = UDim.new(0, 5)
 
-    local Categories = {
-        { id = "Nightmare", name = "🌙 Nightmare" },
-        { id = "100 Age",   name = "💯 100 Age" },
-        { id = "XP",        name = "🧊 XP" },
-        { id = "GBXP",      name = "🧪 GBXP" },
-        { id = "Config",    name = "⚙️ Config" }
-    }
-
+    local Categories = { "Nightmare", "100 Age", "XP", "GBXP", "Config" }
     local CategoryButtons = {}
-    local refreshPetList -- forward declaration
+    local updateThresholdTitle
+    local refreshPetList
 
-    for _, cat in ipairs(Categories) do
+    for _, catName in ipairs(Categories) do
         local btn = Instance.new("TextButton", NavRow)
-        btn.Size = UDim2.new(0, 70, 0, 26)
-        btn.BackgroundColor3 = (State.MutasiActiveCategory == cat.id) and C.PURPLE or C.CARD_2
-        btn.Text = cat.name
-        btn.TextColor3 = (State.MutasiActiveCategory == cat.id) and Color3.fromRGB(255, 255, 255) or C.TEXT_M
+        btn.Size = UDim2.new(0, (catName == "Nightmare" and 72) or (catName == "100 Age" and 64) or (catName == "Config" and 54) or 48, 0, 26)
+        btn.BackgroundColor3 = (State.MutasiActiveCategory == catName) and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
+        btn.Text = catName
+        btn.TextColor3 = (State.MutasiActiveCategory == catName) and Color3.fromRGB(255, 255, 255) or C.TEXT_M
         btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 8.5
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+        btn.TextSize = 9
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 13)
         local stroke = Instance.new("UIStroke", btn)
-        stroke.Color = (State.MutasiActiveCategory == cat.id) and C.PURPLE_L or Color3.fromRGB(45, 52, 80)
+        stroke.Color = (State.MutasiActiveCategory == catName) and C.PURPLE or Color3.fromRGB(38, 45, 70)
+        stroke.Thickness = (State.MutasiActiveCategory == catName) and 1.5 or 1
 
-        CategoryButtons[cat.id] = { btn = btn, stroke = stroke }
+        CategoryButtons[catName] = { btn = btn, stroke = stroke }
 
         btn.MouseButton1Click:Connect(function()
-            State.MutasiActiveCategory = cat.id
-            for id, data in pairs(CategoryButtons) do
-                local isActive = (id == cat.id)
-                data.btn.BackgroundColor3 = isActive and C.PURPLE or C.CARD_2
+            State.MutasiActiveCategory = catName
+            for cName, data in pairs(CategoryButtons) do
+                local isActive = (cName == catName)
+                data.btn.BackgroundColor3 = isActive and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
                 data.btn.TextColor3 = isActive and Color3.fromRGB(255, 255, 255) or C.TEXT_M
-                data.stroke.Color = isActive and C.PURPLE_L or Color3.fromRGB(45, 52, 80)
+                data.stroke.Color = isActive and C.PURPLE or Color3.fromRGB(38, 45, 70)
+                data.stroke.Thickness = isActive and 1.5 or 1
             end
+            if updateThresholdTitle then updateThresholdTitle() end
             if refreshPetList then refreshPetList() end
         end)
     end
 
-    -- =====================================================================
-    -- 2. STATUS BADGES / CHIPS (Ringkasan Total Pet Terdeteksi)
-    -- =====================================================================
-    local BadgeRow = Instance.new("Frame", MutasiWrapper)
-    BadgeRow.Size = UDim2.new(1, 0, 0, 24)
-    BadgeRow.BackgroundTransparency = 1
-    BadgeRow.LayoutOrder = 2
-
-    local BadgeLayout = Instance.new("UIListLayout", BadgeRow)
-    BadgeLayout.FillDirection = Enum.FillDirection.Horizontal
-    BadgeLayout.Padding = UDim.new(0, 5)
-
-    local function CreateBadge(parent, icon, title, initialVal, accentColor)
-        local bg = Instance.new("Frame", parent)
-        bg.Size = UDim2.new(0.24, -4, 1, 0)
-        bg.BackgroundColor3 = Color3.fromRGB(12, 16, 32)
-        Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 5)
-        local strk = Instance.new("UIStroke", bg)
-        strk.Color = Color3.fromRGB(35, 42, 68)
-
-        local lbl = Instance.new("TextLabel", bg)
-        lbl.Size = UDim2.new(1, 0, 1, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = icon .. " " .. title .. " (" .. tostring(initialVal) .. ")"
-        lbl.TextColor3 = accentColor or C.TEXT_M
-        lbl.Font = Enum.Font.GothamMedium
-        lbl.TextSize = 8
-        return lbl
-    end
-
-    local badgeNM   = CreateBadge(BadgeRow, "🌙", "NM", 0, C.PURPLE_L)
-    local badge100  = CreateBadge(BadgeRow, "💯", "100", 0, C.CYAN)
-    local badgeXP   = CreateBadge(BadgeRow, "🧊", "XP", 0, Color3.fromRGB(130, 200, 255))
-    local badgeGBXP = CreateBadge(BadgeRow, "🧪", "GBXP", 0, Color3.fromRGB(180, 140, 255))
+    -- Tombol ⚙ (Settings Gear di Ujung Kanan)
+    local GearBtn = Instance.new("TextButton", NavRow)
+    GearBtn.Size = UDim2.new(0, 26, 0, 26)
+    GearBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 34)
+    GearBtn.Text = "⚙"
+    GearBtn.TextColor3 = C.TEXT_M
+    GearBtn.Font = Enum.Font.GothamBold
+    GearBtn.TextSize = 12
+    Instance.new("UICorner", GearBtn).CornerRadius = UDim.new(0, 13)
+    local gearStroke = Instance.new("UIStroke", GearBtn)
+    gearStroke.Color = Color3.fromRGB(38, 45, 70)
+    GearBtn.MouseButton1Click:Connect(function()
+        ZyloLib:Notify("Settings", "Pengaturan konfigurasi mutasi aktif.", 2)
+    end)
 
     -- =====================================================================
-    -- 3. COLLAPSIBLE THRESHOLD AGE & SETTINGS (BISA DI-HIDE / TAMPILKAN)
+    -- 2. DROPDOWN HEADER: ( [Category] Team ) Threshold Age & Kg
     -- =====================================================================
     local ThreshHeader = Instance.new("TextButton", MutasiWrapper)
-    ThreshHeader.Size = UDim2.new(1, 0, 0, 32)
-    ThreshHeader.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
+    ThreshHeader.Size = UDim2.new(1, 0, 0, 30)
+    ThreshHeader.BackgroundColor3 = Color3.fromRGB(13, 16, 32)
     ThreshHeader.Text = ""
-    ThreshHeader.LayoutOrder = 3
-    Instance.new("UICorner", ThreshHeader).CornerRadius = UDim.new(0, 6)
+    ThreshHeader.LayoutOrder = 2
+    Instance.new("UICorner", ThreshHeader).CornerRadius = UDim.new(0, 8)
     local thStroke = Instance.new("UIStroke", ThreshHeader)
-    thStroke.Color = Color3.fromRGB(45, 55, 85)
+    thStroke.Color = Color3.fromRGB(38, 45, 72)
 
     local thTitle = Instance.new("TextLabel", ThreshHeader)
     thTitle.Position = UDim2.new(0, 10, 0, 0)
-    thTitle.Size = UDim2.new(0.8, 0, 1, 0)
+    thTitle.Size = UDim2.new(1, -40, 1, 0)
     thTitle.BackgroundTransparency = 1
-    thTitle.Text = "( " .. State.MutasiActiveCategory .. " Team ) Threshold Age & Settings"
+    thTitle.Text = "( " .. State.MutasiActiveCategory .. " Team ) Threshold Age & Kg"
     thTitle.TextColor3 = C.TEXT_W
     thTitle.Font = Enum.Font.GothamBold
-    thTitle.TextSize = 9
+    thTitle.TextSize = 9.5
     thTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+    updateThresholdTitle = function()
+        thTitle.Text = "( " .. State.MutasiActiveCategory .. " Team ) Threshold Age & Kg"
+    end
 
     local thArrow = Instance.new("TextLabel", ThreshHeader)
     thArrow.Position = UDim2.new(1, -26, 0, 0)
@@ -146,17 +126,19 @@ return function(ParentContainer, State, ZyloLib, Main)
     thArrow.Font = Enum.Font.GothamBold
     thArrow.TextSize = 9
 
-    -- Body Threshold yang bisa di Hide / Tampilkan
+    -- =====================================================================
+    -- 3. BODY COLLAPSIBLE: STATS ROW + EQUIP/UNEQUIP AGE INPUTS
+    -- =====================================================================
     local ThreshBody = Instance.new("Frame", MutasiWrapper)
-    ThreshBody.Size = UDim2.new(1, 0, 0, 78)
-    ThreshBody.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
-    ThreshBody.LayoutOrder = 4
-    ThreshBody.Visible = true
-    Instance.new("UICorner", ThreshBody).CornerRadius = UDim.new(0, 6)
-    local tbStroke = Instance.new("UIStroke", ThreshBody)
-    tbStroke.Color = Color3.fromRGB(35, 42, 65)
+    ThreshBody.Size = UDim2.new(1, 0, 0, 84)
+    ThreshBody.BackgroundTransparency = 1
+    ThreshBody.LayoutOrder = 3
 
-    -- Toggle Hide/Show Interaksi
+    local TbLayout = Instance.new("UIListLayout", ThreshBody)
+    TbLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    TbLayout.Padding = UDim.new(0, 4)
+
+    -- Toggle Buka / Tutup Threshold
     local isThreshOpen = true
     ThreshHeader.MouseButton1Click:Connect(function()
         isThreshOpen = not isThreshOpen
@@ -164,64 +146,94 @@ return function(ParentContainer, State, ZyloLib, Main)
         thArrow.Text = isThreshOpen and "▼" or "▶"
     end)
 
-    -- Row 1: Equip Age
+    -- Row 3A: Inline Stats Row (🌙 Nightmare (7)  💯 100 Age (6)  📘 XP (6)  🧪 GBXP (55))
+    local StatsRow = Instance.new("Frame", ThreshBody)
+    StatsRow.Size = UDim2.new(1, 0, 0, 20)
+    StatsRow.BackgroundTransparency = 1
+    StatsRow.LayoutOrder = 1
+
+    local StatsLayout = Instance.new("UIListLayout", StatsRow)
+    StatsLayout.FillDirection = Enum.FillDirection.Horizontal
+    StatsLayout.Padding = UDim.new(0, 10)
+    StatsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+    local function CreateStatItem(parent, icon, name, initialVal, accentColor)
+        local item = Instance.new("TextLabel", parent)
+        item.Size = UDim2.new(0, 75, 1, 0)
+        item.BackgroundTransparency = 1
+        item.Text = icon .. " " .. name .. " (" .. tostring(initialVal) .. ")"
+        item.TextColor3 = accentColor or C.TEXT_M
+        item.Font = Enum.Font.GothamMedium
+        item.TextSize = 8.5
+        item.TextXAlignment = Enum.TextXAlignment.Left
+        return item
+    end
+
+    local statNM   = CreateStatItem(StatsRow, "🌙", "Nightmare", 0, C.PURPLE_L)
+    local stat100  = CreateStatItem(StatsRow, "💯", "100 Age", 0, C.CYAN)
+    local statXP   = CreateStatItem(StatsRow, "📘", "XP", 0, Color3.fromRGB(130, 200, 255))
+    local statGBXP = CreateStatItem(StatsRow, "🧪", "GBXP", 0, Color3.fromRGB(180, 140, 255))
+
+    -- Row 3B: Equip Age
     local RowEq = Instance.new("Frame", ThreshBody)
-    RowEq.Position = UDim2.new(0, 10, 0, 8)
-    RowEq.Size = UDim2.new(1, -20, 0, 28)
+    RowEq.Size = UDim2.new(1, 0, 0, 26)
     RowEq.BackgroundTransparency = 1
+    RowEq.LayoutOrder = 2
 
     local EqLabel = Instance.new("TextLabel", RowEq)
+    EqLabel.Position = UDim2.new(0, 4, 0, 0)
     EqLabel.Size = UDim2.new(0.6, 0, 1, 0)
     EqLabel.BackgroundTransparency = 1
     EqLabel.Text = "Equip Age"
-    EqLabel.TextColor3 = C.TEXT
+    EqLabel.TextColor3 = C.TEXT_W
     EqLabel.Font = Enum.Font.GothamMedium
-    EqLabel.TextSize = 9
+    EqLabel.TextSize = 9.5
     EqLabel.TextXAlignment = Enum.TextXAlignment.Left
 
     local EqBox = Instance.new("TextBox", RowEq)
-    EqBox.Position = UDim2.new(1, -80, 0.5, -12)
-    EqBox.Size = UDim2.new(0, 80, 0, 24)
-    EqBox.BackgroundColor3 = Color3.fromRGB(18, 22, 42)
+    EqBox.Position = UDim2.new(1, -85, 0.5, -12)
+    EqBox.Size = UDim2.new(0, 85, 0, 24)
+    EqBox.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
     EqBox.Text = tostring(State.MutasiEquipAge)
     EqBox.TextColor3 = Color3.fromRGB(255, 255, 255)
     EqBox.Font = Enum.Font.GothamBold
-    EqBox.TextSize = 9
-    Instance.new("UICorner", EqBox).CornerRadius = UDim.new(0, 5)
+    EqBox.TextSize = 9.5
+    Instance.new("UICorner", EqBox).CornerRadius = UDim.new(0, 6)
     local eqStroke = Instance.new("UIStroke", EqBox)
-    eqStroke.Color = Color3.fromRGB(50, 60, 90)
+    eqStroke.Color = Color3.fromRGB(42, 50, 78)
 
     EqBox:GetPropertyChangedSignal("Text"):Connect(function()
         local num = tonumber(EqBox.Text)
         if num then State.MutasiEquipAge = num end
     end)
 
-    -- Row 2: Unequip Age
+    -- Row 3C: Unequip Age
     local RowUneq = Instance.new("Frame", ThreshBody)
-    RowUneq.Position = UDim2.new(0, 10, 0, 42)
-    RowUneq.Size = UDim2.new(1, -20, 0, 28)
+    RowUneq.Size = UDim2.new(1, 0, 0, 26)
     RowUneq.BackgroundTransparency = 1
+    RowUneq.LayoutOrder = 3
 
     local UneqLabel = Instance.new("TextLabel", RowUneq)
+    UneqLabel.Position = UDim2.new(0, 4, 0, 0)
     UneqLabel.Size = UDim2.new(0.6, 0, 1, 0)
     UneqLabel.BackgroundTransparency = 1
     UneqLabel.Text = "Unequip Age"
-    UneqLabel.TextColor3 = C.TEXT
+    UneqLabel.TextColor3 = C.TEXT_W
     UneqLabel.Font = Enum.Font.GothamMedium
-    UneqLabel.TextSize = 9
+    UneqLabel.TextSize = 9.5
     UneqLabel.TextXAlignment = Enum.TextXAlignment.Left
 
     local UneqBox = Instance.new("TextBox", RowUneq)
-    UneqBox.Position = UDim2.new(1, -80, 0.5, -12)
-    UneqBox.Size = UDim2.new(0, 80, 0, 24)
-    UneqBox.BackgroundColor3 = Color3.fromRGB(18, 22, 42)
+    UneqBox.Position = UDim2.new(1, -85, 0.5, -12)
+    UneqBox.Size = UDim2.new(0, 85, 0, 24)
+    UneqBox.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
     UneqBox.Text = tostring(State.MutasiUnequipAge)
     UneqBox.TextColor3 = Color3.fromRGB(255, 255, 255)
     UneqBox.Font = Enum.Font.GothamBold
-    UneqBox.TextSize = 9
-    Instance.new("UICorner", UneqBox).CornerRadius = UDim.new(0, 5)
+    UneqBox.TextSize = 9.5
+    Instance.new("UICorner", UneqBox).CornerRadius = UDim.new(0, 6)
     local unStroke = Instance.new("UIStroke", UneqBox)
-    unStroke.Color = Color3.fromRGB(50, 60, 90)
+    unStroke.Color = Color3.fromRGB(42, 50, 78)
 
     UneqBox:GetPropertyChangedSignal("Text"):Connect(function()
         local num = tonumber(UneqBox.Text)
@@ -229,46 +241,35 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 4. DAFTAR PET / PET SELECTOR (THEME ZYLOHUB - DEEP OBSIDIAN & PURPLE)
+    -- 4. SECTION HEADER: Select Pet [Category] Team (Favorite List)
     -- =====================================================================
     local PetListHeader = Instance.new("Frame", MutasiWrapper)
-    PetListHeader.Size = UDim2.new(1, 0, 0, 26)
+    PetListHeader.Size = UDim2.new(1, 0, 0, 22)
     PetListHeader.BackgroundTransparency = 1
-    PetListHeader.LayoutOrder = 5
+    PetListHeader.LayoutOrder = 4
 
     local ListTitle = Instance.new("TextLabel", PetListHeader)
     ListTitle.Position = UDim2.new(0, 4, 0, 0)
-    ListTitle.Size = UDim2.new(0.6, 0, 1, 0)
+    ListTitle.Size = UDim2.new(1, -8, 1, 0)
     ListTitle.BackgroundTransparency = 1
-    ListTitle.Text = "Select Pet Mutasi Team (Favorite / Backpack)"
+    ListTitle.Text = "Select Pet " .. State.MutasiActiveCategory .. " Team (Favorite List)"
     ListTitle.TextColor3 = C.TEXT_M
     ListTitle.Font = Enum.Font.GothamMedium
-    ListTitle.TextSize = 8.5
+    ListTitle.TextSize = 9
     ListTitle.TextXAlignment = Enum.TextXAlignment.Left
 
-    local SearchPetBox = Instance.new("TextBox", PetListHeader)
-    SearchPetBox.Position = UDim2.new(1, -120, 0, 0)
-    SearchPetBox.Size = UDim2.new(0, 120, 1, 0)
-    SearchPetBox.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
-    SearchPetBox.PlaceholderText = "🔍 Search pet..."
-    SearchPetBox.PlaceholderColor3 = C.TEXT_M
-    SearchPetBox.Text = ""
-    SearchPetBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    SearchPetBox.Font = Enum.Font.GothamMedium
-    SearchPetBox.TextSize = 8.5
-    Instance.new("UICorner", SearchPetBox).CornerRadius = UDim.new(0, 5)
-    local spbStroke = Instance.new("UIStroke", SearchPetBox)
-    spbStroke.Color = Color3.fromRGB(45, 52, 78)
-
+    -- =====================================================================
+    -- 5. DAFTAR PET (CARD LIST SESUAI SCREENSHOT)
+    -- =====================================================================
     local PetListScroll = Instance.new("ScrollingFrame", MutasiWrapper)
-    PetListScroll.Size = UDim2.new(1, 0, 0, 175)
-    PetListScroll.BackgroundColor3 = Color3.fromRGB(8, 11, 22)
+    PetListScroll.Size = UDim2.new(1, 0, 0, 165)
+    PetListScroll.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
     PetListScroll.ScrollBarThickness = 3
     PetListScroll.ScrollBarImageColor3 = C.PURPLE
-    PetListScroll.LayoutOrder = 6
+    PetListScroll.LayoutOrder = 5
     Instance.new("UICorner", PetListScroll).CornerRadius = UDim.new(0, 8)
     local plsStroke = Instance.new("UIStroke", PetListScroll)
-    plsStroke.Color = Color3.fromRGB(25, 32, 54)
+    plsStroke.Color = Color3.fromRGB(30, 36, 60)
 
     local PlsLayout = Instance.new("UIListLayout", PetListScroll)
     PlsLayout.Padding = UDim.new(0, 4)
@@ -278,7 +279,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     PlsPadding.PaddingLeft = UDim.new(0, 6)
     PlsPadding.PaddingRight = UDim.new(0, 6)
 
-    -- Fungsi membaca pet dari Backpack
     local function GetBackpackPets()
         local pets = {}
         local bp = LocalPlayer:FindFirstChild("Backpack")
@@ -310,15 +310,16 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     refreshPetList = function()
+        ListTitle.Text = "Select Pet " .. State.MutasiActiveCategory .. " Team (Favorite List)"
+
         for _, c in ipairs(PetListScroll:GetChildren()) do
             if c:IsA("TextButton") or c:IsA("TextLabel") then c:Destroy() end
         end
 
         local pets = GetBackpackPets()
-        local q = State.MutasiSearchQuery:lower()
         local count = 0
 
-        -- Update badges counter
+        -- Update status counter
         local cNM, c100, cXP, cGBXP = 0, 0, 0, 0
         for _, p in ipairs(pets) do
             local mLow = p.Mutation:lower()
@@ -327,143 +328,105 @@ return function(ParentContainer, State, ZyloLib, Main)
             if mLow:find("xp") and not mLow:find("gbxp") then cXP = cXP + 1 end
             if mLow:find("gbxp") then cGBXP = cGBXP + 1 end
         end
-        badgeNM.Text = "🌙 NM (" .. cNM .. ")"
-        badge100.Text = "💯 100 (" .. c100 .. ")"
-        badgeXP.Text = "🧊 XP (" .. cXP .. ")"
-        badgeGBXP.Text = "🧪 GBXP (" .. cGBXP .. ")"
+        statNM.Text = "🌙 Nightmare (" .. cNM .. ")"
+        stat100.Text = "💯 100 Age (" .. c100 .. ")"
+        statXP.Text = "📘 XP (" .. cXP .. ")"
+        statGBXP.Text = "🧪 GBXP (" .. cGBXP .. ")"
 
         for _, pet in ipairs(pets) do
-            local fullName = string.format("[%s] %s | Age %s | %.2f KG", pet.Mutation, pet.Name, tostring(pet.Age), pet.Weight)
-            if q == "" or fullName:lower():find(q) then
-                count = count + 1
-                local isSelected = State.MutasiSelectedPets[pet.UUID] or false
+            count = count + 1
+            local isSelected = State.MutasiSelectedPets[pet.UUID] or false
+            local displayText = string.format("[%s] %s | Age %s | %.2f KG", pet.Mutation, pet.Name, tostring(pet.Age), pet.Weight)
 
-                local itemBtn = Instance.new("TextButton", PetListScroll)
-                itemBtn.Size = UDim2.new(1, 0, 0, 30)
-                -- PENGGANTI WARNA KUNING: Menggunakan Dark Obsidian Purple Theme ZyloHub
-                itemBtn.BackgroundColor3 = isSelected and Color3.fromRGB(48, 24, 78) or Color3.fromRGB(15, 19, 36)
-                itemBtn.Text = ""
-                Instance.new("UICorner", itemBtn).CornerRadius = UDim.new(0, 6)
-                local iStroke = Instance.new("UIStroke", itemBtn)
-                iStroke.Color = isSelected and C.PURPLE or Color3.fromRGB(35, 42, 65)
-                iStroke.Thickness = isSelected and 1.5 or 1
+            local itemBtn = Instance.new("TextButton", PetListScroll)
+            itemBtn.Size = UDim2.new(1, 0, 0, 26)
+            -- Tema ZyloHub: Deep Obsidian vs Cosmic Purple
+            itemBtn.BackgroundColor3 = isSelected and Color3.fromRGB(68, 28, 115) or Color3.fromRGB(15, 19, 36)
+            itemBtn.Text = displayText
+            itemBtn.TextColor3 = isSelected and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(220, 225, 245)
+            itemBtn.Font = Enum.Font.GothamBold
+            itemBtn.TextSize = 8.5
+            itemBtn.TextXAlignment = Enum.TextXAlignment.Center
+            Instance.new("UICorner", itemBtn).CornerRadius = UDim.new(0, 6)
 
-                -- Tag Mutasi
-                local tagLbl = Instance.new("TextLabel", itemBtn)
-                tagLbl.Position = UDim2.new(0, 8, 0, 0)
-                tagLbl.Size = UDim2.new(0.25, 0, 1, 0)
-                tagLbl.BackgroundTransparency = 1
-                tagLbl.Text = "[" .. pet.Mutation .. "]"
-                tagLbl.TextColor3 = isSelected and Color3.fromRGB(220, 180, 255) or C.PURPLE_L
-                tagLbl.Font = Enum.Font.GothamBold
-                tagLbl.TextSize = 8.5
-                tagLbl.TextXAlignment = Enum.TextXAlignment.Left
+            local iStroke = Instance.new("UIStroke", itemBtn)
+            iStroke.Color = isSelected and C.PURPLE_L or Color3.fromRGB(35, 42, 65)
+            iStroke.Thickness = isSelected and 1.5 or 1
 
-                -- Nama Pet
-                local nameLbl = Instance.new("TextLabel", itemBtn)
-                nameLbl.Position = UDim2.new(0.26, 5, 0, 0)
-                nameLbl.Size = UDim2.new(0.42, -5, 1, 0)
-                nameLbl.BackgroundTransparency = 1
-                nameLbl.Text = pet.Name
-                nameLbl.TextColor3 = C.TEXT_W
-                nameLbl.Font = Enum.Font.GothamBold
-                nameLbl.TextSize = 8.5
-                nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-                nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-
-                -- Info Age & KG
-                local infoLbl = Instance.new("TextLabel", itemBtn)
-                infoLbl.Position = UDim2.new(0.68, 0, 0, 0)
-                infoLbl.Size = UDim2.new(0.24, 0, 1, 0)
-                infoLbl.BackgroundTransparency = 1
-                infoLbl.Text = string.format("Age %s | %.1fKG", tostring(pet.Age), pet.Weight)
-                infoLbl.TextColor3 = isSelected and C.CYAN or C.TEXT_M
-                infoLbl.Font = Enum.Font.Gotham
-                infoLbl.TextSize = 8
-                infoLbl.TextXAlignment = Enum.TextXAlignment.Right
-
-                -- Checkmark Indicator
-                local checkLbl = Instance.new("TextLabel", itemBtn)
-                checkLbl.Position = UDim2.new(1, -22, 0, 0)
-                checkLbl.Size = UDim2.new(0, 18, 1, 0)
-                checkLbl.BackgroundTransparency = 1
-                checkLbl.Text = isSelected and "✓" or "○"
-                checkLbl.TextColor3 = isSelected and C.PURPLE_L or C.TEXT_M
-                checkLbl.Font = Enum.Font.GothamBold
-                checkLbl.TextSize = 10
-
-                itemBtn.MouseButton1Click:Connect(function()
-                    State.MutasiSelectedPets[pet.UUID] = not State.MutasiSelectedPets[pet.UUID]
-                    refreshPetList()
-                end)
-            end
+            itemBtn.MouseButton1Click:Connect(function()
+                State.MutasiSelectedPets[pet.UUID] = not State.MutasiSelectedPets[pet.UUID]
+                refreshPetList()
+            end)
         end
 
         if count == 0 then
             local empty = Instance.new("TextLabel", PetListScroll)
             empty.Size = UDim2.new(1, 0, 1, 0)
             empty.BackgroundTransparency = 1
-            empty.Text = (q ~= "") and "Tidak ada pet yang cocok dengan '" .. q .. "'" or "Belum ada pet terdeteksi di Backpack."
+            empty.Text = "Belum ada pet terdeteksi di Backpack / Karakter."
             empty.TextColor3 = C.TEXT_M
             empty.Font = Enum.Font.GothamMedium
             empty.TextSize = 8.5
             PetListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
         else
-            PetListScroll.CanvasSize = UDim2.new(0, 0, 0, count * 34 + 12)
+            PetListScroll.CanvasSize = UDim2.new(0, 0, 0, count * 30 + 12)
         end
     end
-
-    SearchPetBox:GetPropertyChangedSignal("Text"):Connect(function()
-        State.MutasiSearchQuery = SearchPetBox.Text
-        refreshPetList()
-    end)
 
     task.defer(refreshPetList)
 
     -- =====================================================================
-    -- 5. ACTION BUTTONS (START, STOP, MODE SELECTOR)
+    -- 6. BOTTOM ACTION BUTTONS: [ ⚡ START NM+LVL ] [ STOP NM+LVL ] [ Mode: A ]
     -- =====================================================================
     local ActionRow = Instance.new("Frame", MutasiWrapper)
     ActionRow.Size = UDim2.new(1, 0, 0, 32)
     ActionRow.BackgroundTransparency = 1
-    ActionRow.LayoutOrder = 7
+    ActionRow.LayoutOrder = 6
 
-    -- Tombol Start
+    local ActLayout = Instance.new("UIListLayout", ActionRow)
+    ActLayout.FillDirection = Enum.FillDirection.Horizontal
+    ActLayout.Padding = UDim.new(0, 8)
+    ActLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    ActLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+    -- Tombol 1: START NM+LVL
     local StartBtn = Instance.new("TextButton", ActionRow)
-    StartBtn.Position = UDim2.new(0, 0, 0, 0)
-    StartBtn.Size = UDim2.new(0.42, 0, 1, 0)
-    StartBtn.BackgroundColor3 = C.PURPLE
+    StartBtn.Size = UDim2.new(0.42, -5, 0, 30)
+    StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
     StartBtn.Text = "⚡ START NM+LVL"
     StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     StartBtn.Font = Enum.Font.GothamBold
-    StartBtn.TextSize = 9.5
-    Instance.new("UICorner", StartBtn).CornerRadius = UDim.new(0, 6)
+    StartBtn.TextSize = 9
+    Instance.new("UICorner", StartBtn).CornerRadius = UDim.new(0, 15)
+    local startStroke = Instance.new("UIStroke", StartBtn)
+    startStroke.Color = C.PURPLE
+    startStroke.Thickness = 1.5
 
-    -- Tombol Stop
+    -- Tombol 2: STOP NM+LVL
     local StopBtn = Instance.new("TextButton", ActionRow)
-    StopBtn.Position = UDim2.new(0.44, 0, 0, 0)
-    StopBtn.Size = UDim2.new(0.32, 0, 1, 0)
-    StopBtn.BackgroundColor3 = Color3.fromRGB(28, 20, 34)
-    StopBtn.Text = "⏹ STOP NM+LVL"
-    StopBtn.TextColor3 = Color3.fromRGB(255, 120, 140)
+    StopBtn.Size = UDim2.new(0.34, -5, 0, 30)
+    StopBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
+    StopBtn.Text = "STOP NM+LVL"
+    StopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     StopBtn.Font = Enum.Font.GothamBold
     StopBtn.TextSize = 9
-    Instance.new("UICorner", StopBtn).CornerRadius = UDim.new(0, 6)
-    local stStroke = Instance.new("UIStroke", StopBtn)
-    stStroke.Color = Color3.fromRGB(60, 30, 45)
+    Instance.new("UICorner", StopBtn).CornerRadius = UDim.new(0, 15)
+    local stopStroke = Instance.new("UIStroke", StopBtn)
+    stopStroke.Color = Color3.fromRGB(50, 58, 88)
+    stopStroke.Thickness = 1.5
 
-    -- Tombol Mode: A / Mode: B
+    -- Tombol 3: Mode: A / Mode: B
     local ModeBtn = Instance.new("TextButton", ActionRow)
-    ModeBtn.Position = UDim2.new(0.78, 0, 0, 0)
-    ModeBtn.Size = UDim2.new(0.22, 0, 1, 0)
-    ModeBtn.BackgroundColor3 = Color3.fromRGB(18, 22, 42)
+    ModeBtn.Size = UDim2.new(0.24, -5, 0, 30)
+    ModeBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
     ModeBtn.Text = State.MutasiMode
     ModeBtn.TextColor3 = C.CYAN
     ModeBtn.Font = Enum.Font.GothamBold
     ModeBtn.TextSize = 9
-    Instance.new("UICorner", ModeBtn).CornerRadius = UDim.new(0, 6)
-    local mbStroke = Instance.new("UIStroke", ModeBtn)
-    mbStroke.Color = Color3.fromRGB(45, 55, 85)
+    Instance.new("UICorner", ModeBtn).CornerRadius = UDim.new(0, 15)
+    local modeStroke = Instance.new("UIStroke", ModeBtn)
+    modeStroke.Color = Color3.fromRGB(50, 58, 88)
+    modeStroke.Thickness = 1.5
 
     ModeBtn.MouseButton1Click:Connect(function()
         if State.MutasiMode == "Mode: A" then
@@ -476,14 +439,14 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     StartBtn.MouseButton1Click:Connect(function()
         State.MutasiRunning = true
-        StartBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 80)
-        StartBtn.Text = "ACTIVE (RUNNING...)"
+        StartBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 80)
+        StartBtn.Text = "RUNNING (" .. State.MutasiMode .. ")"
         ZyloLib:Notify("Auto Mutasi", "Memulai proses mutasi (" .. State.MutasiMode .. ")", 2.5)
     end)
 
     StopBtn.MouseButton1Click:Connect(function()
         State.MutasiRunning = false
-        StartBtn.BackgroundColor3 = C.PURPLE
+        StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
         StartBtn.Text = "⚡ START NM+LVL"
         ZyloLib:Notify("Auto Mutasi", "Proses mutasi dihentikan.", 2)
     end)
