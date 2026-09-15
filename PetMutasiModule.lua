@@ -1,5 +1,5 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6.1)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6.2)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
@@ -30,23 +30,22 @@ return function(ParentContainer, State, ZyloLib, Main)
     MutasiLayout.Padding = UDim.new(0, 6)
 
     -- =====================================================================
-    -- 1. SUB-NAVIGASI KATEGORI (HORIZONTAL SCROLLING PILLS)
+    -- 1. SUB-NAVIGASI KATEGORI (PILL BUTTONS ROW)
     -- Urutan: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config + ⚙
+    -- Menggunakan Frame standar agar tidak pernah hilang/terpotong oleh Canvas
     -- =====================================================================
-    local NavScroll = Instance.new("ScrollingFrame", MutasiWrapper)
-    NavScroll.Size = UDim2.new(1, 0, 0, 30)
-    NavScroll.BackgroundTransparency = 1
-    NavScroll.BorderSizePixel = 0
-    NavScroll.ScrollBarThickness = 0
-    NavScroll.ScrollingDirection = Enum.ScrollingDirection.X
-    NavScroll.CanvasSize = UDim2.new(0, 520, 1, 0)
-    NavScroll.LayoutOrder = 1
+    local NavRow = Instance.new("Frame", MutasiWrapper)
+    NavRow.Size = UDim2.new(1, 0, 0, 28)
+    NavRow.BackgroundTransparency = 1
+    NavRow.BorderSizePixel = 0
+    NavRow.ClipsDescendants = false
+    NavRow.LayoutOrder = 1
 
-    local NavList = Instance.new("UIListLayout", NavScroll)
+    local NavList = Instance.new("UIListLayout", NavRow)
     NavList.FillDirection = Enum.FillDirection.Horizontal
     NavList.HorizontalAlignment = Enum.HorizontalAlignment.Left
     NavList.VerticalAlignment = Enum.VerticalAlignment.Center
-    NavList.Padding = UDim.new(0, 5)
+    NavList.Padding = UDim.new(0, 4)
 
     local Categories = { "Elephant", "Machine", "Nightmare", "100 Age", "XP", "GBXP", "Config" }
     local CategoryButtons = {}
@@ -55,16 +54,22 @@ return function(ParentContainer, State, ZyloLib, Main)
     local refreshPetList
 
     for _, catName in ipairs(Categories) do
-        local btnW = (catName == "Nightmare" and 76) or (catName == "Elephant" and 68) or (catName == "Machine" and 66) or (catName == "100 Age" and 64) or (catName == "Config" and 54) or 46
+        local btnW = (catName == "Nightmare" and 64) 
+            or (catName == "Elephant" and 54) 
+            or (catName == "Machine" and 52) 
+            or (catName == "100 Age" and 50) 
+            or (catName == "Config" and 46) 
+            or (catName == "GBXP" and 44) 
+            or 34
 
-        local btn = Instance.new("TextButton", NavScroll)
-        btn.Size = UDim2.new(0, btnW, 0, 26)
+        local btn = Instance.new("TextButton", NavRow)
+        btn.Size = UDim2.new(0, btnW, 0, 24)
         btn.BackgroundColor3 = (State.MutasiActiveCategory == catName) and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
         btn.Text = catName
         btn.TextColor3 = (State.MutasiActiveCategory == catName) and Color3.fromRGB(255, 255, 255) or C.TEXT_M
         btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 9
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 13)
+        btn.TextSize = 8.5
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
         local stroke = Instance.new("UIStroke", btn)
         stroke.Color = (State.MutasiActiveCategory == catName) and C.PURPLE or Color3.fromRGB(38, 45, 70)
         stroke.Thickness = (State.MutasiActiveCategory == catName) and 1.5 or 1
@@ -87,14 +92,14 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- Tombol ⚙ (Settings Gear di Ujung Kanan)
-    local GearBtn = Instance.new("TextButton", NavScroll)
-    GearBtn.Size = UDim2.new(0, 26, 0, 26)
+    local GearBtn = Instance.new("TextButton", NavRow)
+    GearBtn.Size = UDim2.new(0, 24, 0, 24)
     GearBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 34)
     GearBtn.Text = "⚙"
     GearBtn.TextColor3 = C.TEXT_M
     GearBtn.Font = Enum.Font.GothamBold
-    GearBtn.TextSize = 12
-    Instance.new("UICorner", GearBtn).CornerRadius = UDim.new(0, 13)
+    GearBtn.TextSize = 11
+    Instance.new("UICorner", GearBtn).CornerRadius = UDim.new(0, 12)
     local gearStroke = Instance.new("UIStroke", GearBtn)
     gearStroke.Color = Color3.fromRGB(38, 45, 70)
 
@@ -157,14 +162,14 @@ return function(ParentContainer, State, ZyloLib, Main)
         thArrow.Text = isThreshOpen and "▼" or "▶"
     end)
 
-    -- Row 3A: Inline Stats Row (Horizontal Scrollable agar muat 6 Counter Lengkap)
+    -- Row 3A: Inline Stats Row (Horizontal Scrollable dengan Canvas Height Tetap 22px)
     local StatsScroll = Instance.new("ScrollingFrame", ThreshBody)
     StatsScroll.Size = UDim2.new(1, 0, 0, 22)
     StatsScroll.BackgroundTransparency = 1
     StatsScroll.BorderSizePixel = 0
     StatsScroll.ScrollBarThickness = 0
     StatsScroll.ScrollingDirection = Enum.ScrollingDirection.X
-    StatsScroll.CanvasSize = UDim2.new(0, 490, 1, 0)
+    StatsScroll.CanvasSize = UDim2.new(0, 480, 0, 22)
     StatsScroll.LayoutOrder = 1
 
     local StatsLayout = Instance.new("UIListLayout", StatsScroll)
