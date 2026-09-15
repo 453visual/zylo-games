@@ -1,8 +1,9 @@
 -- =========================================================================
 --  ZYLOHUB - EGG WEBHOOK MODULE (OFFICIAL EXTENSION)
---  Repository: zylo-games/EggWebhookModule.lua
+--  Repository: zylo-games/Eggwebhookmodule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  Fungsi: Notifikasi Hatch Egg ke Discord Webhook (Mode Simple & Detail)
+--  Fungsi: Notifikasi Hatch Egg ke Discord Webhook (Auto-Detect Realtime Hatch)
+--  STATUS: 100% PRESERVED UI + REALTIME AUTO HATCH DETECTOR ENGINE
 -- =========================================================================
 
 local EggWebhookModule = {}
@@ -10,8 +11,29 @@ local EggWebhookModule = {}
 function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
     local Players = game:GetService("Players")
     local HttpService = game:GetService("HttpService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
-    local C = ZyloLib.Colors
+    local C = ZyloLib and ZyloLib.Colors or {
+        PURPLE = Color3.fromRGB(138, 43, 226),
+        PURPLE_L = Color3.fromRGB(175, 110, 255),
+        CYAN = Color3.fromRGB(0, 220, 255),
+        TEXT_W = Color3.fromRGB(245, 248, 255),
+        TEXT_M = Color3.fromRGB(150, 160, 190),
+        STROKE = Color3.fromRGB(35, 42, 70)
+    }
+
+    -- Inisialisasi Services & Data Game
+    local DataService = nil
+    pcall(function()
+        DataService = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("DataService", 5))
+    end)
+
+    local PetUtilities = nil
+    pcall(function()
+        PetUtilities = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("PetServices", 5):WaitForChild("PetUtilities", 5))
+    end)
+
+    local Farms = workspace:WaitForChild("Farm", 10)
 
     -- Inisialisasi State Webhook
     State.EggWebhook = State.EggWebhook or {}
@@ -37,7 +59,7 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         EggBackSell = {}
     }
 
-    -- Auto-load saved webhook URL & Mode dari file jika didukung executor
+    -- Auto-load saved webhook URL & Mode dari file JSON jika didukung executor
     local CONFIG_FILE = "ZyloHub_EggWebhook.json"
     pcall(function()
         if readfile and isfile and isfile(CONFIG_FILE) then
@@ -70,71 +92,74 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
     end
 
     -- =============================================================
-    -- [1] HTTP REQUEST HELPER FOR DISCORD WEBHOOK
+    -- [1] HTTP REQUEST HELPER & QUEUE UNTUK DISCORD WEBHOOK
     -- =============================================================
-    local function sendDiscordWebhook(url, payloadTable, callback)
+    local WebhookQueue = {}
+    local isSendingQueue = false
+
+    local function processQueue()
+        if isSendingQueue or #WebhookQueue == 0 then return end
+        isSendingQueue = true
+
         task.spawn(function()
-            if not url or url == "" then
-                if callback then callback(false, "URL Webhook kosong!") end
-                return
-            end
+            while #WebhookQueue > 0 do
+                local item = table.remove(WebhookQueue, 1)
+                local url = item.Url
+                local payloadTable = item.Payload
+                local callback = item.Callback
 
-            local cleanUrl = url:gsub("^%s+", ""):gsub("%s+$", "")
-            if not (cleanUrl:find("discord%.com/api/webhooks") or cleanUrl:find("discordapp%.com/api/webhooks")) then
-                if callback then callback(false, "URL tidak valid! Harus link discord.com/api/webhooks") end
-                return
-            end
-
-            local jsonPayload = nil
-            local okEncode, errEncode = pcall(function()
-                jsonPayload = HttpService:JSONEncode(payloadTable)
-            end)
-            if not okEncode or not jsonPayload then
-                if callback then callback(false, "Gagal encode JSON: " .. tostring(errEncode)) end
-                return
-            end
-
-            local httpRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
-            if httpRequest then
-                local res = nil
-                local okReq, errReq = pcall(function()
-                    res = httpRequest({
-                        Url = cleanUrl,
-                        Method = "POST",
-                        Headers = {
-                            ["Content-Type"] = "application/json"
-                        },
-                        Body = jsonPayload
-                    })
+                local cleanUrl = url:gsub("^%s+", ""):gsub("%s+$", "")
+                local jsonPayload = nil
+                pcall(function()
+                    jsonPayload = HttpService:JSONEncode(payloadTable)
                 end)
 
-                if okReq and res then
-                    local code = res.StatusCode or res.status_code or 0
-                    if code == 200 or code == 204 then
-                        if callback then callback(true, "Sukses terkirim! (Status " .. tostring(code) .. ")") end
+                if jsonPayload and (cleanUrl:find("discord%.com/api/webhooks") or cleanUrl:find("discordapp%.com/api/webhooks")) then
+                    local httpRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+                    if httpRequest then
+                        local res = nil
+                        local okReq, errReq = pcall(function()
+                            res = httpRequest({
+                                Url = cleanUrl,
+                                Method = "POST",
+                                Headers = {
+                                    ["Content-Type"] = "application/json"
+                                },
+                                Body = jsonPayload
+                            })
+                        end)
+
+                        if okReq and res then
+                            local code = res.StatusCode or res.status_code or 0
+                            if code == 200 or code == 204 then
+                                if callback then callback(true, "Sukses terkirim! (Status " .. tostring(code) .. ")") end
+                            else
+                                local msg = res.Body or res.body or "HTTP Error " .. tostring(code)
+                                if callback then callback(false, "Gagal (" .. tostring(code) .. "): " .. tostring(msg):sub(1, 60)) end
+                            end
+                        else
+                            if callback then callback(false, "Gagal request: " .. tostring(errReq or "Unknown error")) end
+                        end
                     else
-                        local msg = res.Body or res.body or "HTTP Error " .. tostring(code)
-                        if callback then callback(false, "Gagal (" .. tostring(code) .. "): " .. tostring(msg):sub(1, 60)) end
+                        if callback then callback(false, "Executor tidak mendukung fungsi HTTP Request!") end
                     end
-                else
-                    if callback then callback(false, "Gagal request: " .. tostring(errReq or "Unknown error")) end
                 end
-            else
-                if callback then callback(false, "Executor tidak mendukung fungsi HTTP Request!") end
+
+                task.wait(0.35) -- Jeda aman anti-rate limit Discord
             end
+            isSendingQueue = false
         end)
     end
 
-    -- Helper format detik menjadi HH:MM:SS
-    local function formatSeconds(secs)
-        secs = math.max(0, math.floor(tonumber(secs) or 0))
-        local h = math.floor(secs / 3600)
-        local m = math.floor((secs % 3600) / 60)
-        local s = secs % 60
-        return string.format("%02d:%02d:%02d", h, m, s)
+    local function sendDiscordWebhook(url, payloadTable, callback)
+        if not url or url == "" then
+            if callback then callback(false, "URL Webhook kosong!") end
+            return
+        end
+        table.insert(WebhookQueue, { Url = url, Payload = payloadTable, Callback = callback })
+        processQueue()
     end
 
-    -- Helper ambil ping game real-time
     local function getGamePing()
         local ping = 50
         pcall(function()
@@ -150,15 +175,14 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
     -- =============================================================
     -- [2] BUILDER PAYLOAD DISCORD (SIMPLE & DETAIL)
     -- =============================================================
-
-    -- BUILDER 1: MODE SIMPLE (Sesuai request user)
-    -- Menampilkan: Nama/jenis telur, Nama pet, Berat/bobot, status favorite/keep, Akun roblox & waktu
     local function BuildSimplePayload(eggName, petSpecies, petWeight, isFavorite, timestamp)
         local timeStr = timestamp or os.date("%Y-%m-%d %H:%M:%S")
-        local color = isFavorite and 16766720 or 9055202 -- Emas jika favorite, Ungu jika normal
+        local color = isFavorite and 16766720 or 9055202
+        local weightText = tostring(petWeight or "0.0")
+        if not weightText:find("KG") then weightText = weightText .. " KG" end
 
         return {
-            username = "ZyloHub • Egg Hatch (Simple)",
+            username = "ZyloHub • Egg Hatch",
             avatar_url = "https://i.imgur.com/4M34hi2.png",
             embeds = {
                 {
@@ -166,9 +190,9 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
                     description = "Pemain **" .. LocalPlayer.Name .. "** baru saja menetaskan telur di kebun!",
                     color = color,
                     fields = {
-                        { name = "🥚 Jenis Telur", value = "`" .. tostring(eggName or "Unknown Egg") .. "`", inline = true },
+                        { name = "🥚 Jenis Telur", value = "`" .. tostring(eggName or "Egg") .. "`", inline = true },
                         { name = "🐾 Nama Pet", value = "**" .. tostring(petSpecies or "Pet") .. "**", inline = true },
-                        { name = "⚖️ Berat/Bobot", value = "`" .. tostring(petWeight or "0.0") .. " KG`", inline = true },
+                        { name = "⚖️ Berat/Bobot", value = "`" .. weightText .. "`", inline = true },
                         { name = "⭐ Status Pet", value = isFavorite and "`⭐ Favorite / Keep`" or "`Normal`", inline = true },
                         { name = "👤 Akun Roblox", value = "`" .. LocalPlayer.Name .. "`", inline = true },
                         { name = "🕒 Waktu Hatch", value = "`" .. timeStr .. "`", inline = true }
@@ -181,34 +205,28 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         }
     end
 
-    -- BUILDER 2: MODE DETAIL (Sesuai Screenshot Discord Pengguna)
-    -- Menampilkan Cycle, Tracking, Ping, Pets Inventory, Eggs Start, Eggs Cycle, Bronto, Normal, Egg Back, Sell Summary, Luck
     local function BuildDetailPayload(customData)
         local d = customData or {}
-        local cycleNum = d.Cycle or 417
+        local cycleNum = d.Cycle or 1
         local cycleDur = d.CycleDuration or "00:00:53"
         local player = d.Player or LocalPlayer.Name
-        local totalHatch = d.TotalHatch or 5421
-        local totalDur = d.Duration or "06:05:17"
+        local totalHatch = d.TotalHatch or 0
+        local totalDur = d.Duration or "00:00:00"
         local ping = d.Ping or getGamePing()
-        local invTotal = d.InvTotal or 34
+        local invTotal = d.InvTotal or 0
         local invMax = d.InvMax or 285
-        local invFree = invMax - invTotal
+        local invFree = math.max(0, invMax - invTotal)
 
-        local eggsTotalStr = d.EggsTotalStr or "Total: 768 → 806 (+38)\n• Night Egg: 768 → 806 (+38)"
-        local eggsCycleStr = d.EggsCycleStr or "Total: 807 → 806 (-1)\n• Night Egg: 807 → 806 (-1)"
-
-        local brontoHatchStr = d.BrontoHatchStr or "• Total hatch with Bronto: 8\n• Raccoon: 8x (1.270–2.504 kg)"
-        local normalHatchStr = d.NormalHatchStr or "• Echo Frog: 1x (1.118–1.118 kg)\n• Hedgehog: 4x (0.904–1.780 kg)\n• Frog: 2x (1.456–1.492 kg)\n• Mole: 5x (0.908–2.058 kg)"
-
-        local eggBackStr = d.EggBackStr or "• Night Egg: 5x"
-        local eggBackPercent = d.EggBackPercent or "50.00%"
-
-        local sellSummaryStr = d.SellSummaryStr or "• Pets sold : 12\n• Egg back sell : Night Egg ( 6x )"
-        local sellPercent = d.SellPercent or "52.25%"
-
-        local luckStr = d.LuckStr or "🟢 GOOD Luck (+38)"
-        local embedColor = d.EmbedColor or 3066993 -- 0x2ECC71 (Emerald Green Discord)
+        local eggsTotalStr = d.EggsTotalStr or "Total: 0"
+        local eggsCycleStr = d.EggsCycleStr or "Total: 0"
+        local brontoHatchStr = d.BrontoHatchStr or "• None"
+        local normalHatchStr = d.NormalHatchStr or "• None"
+        local eggBackStr = d.EggBackStr or "• None"
+        local eggBackPercent = d.EggBackPercent or "0.00%"
+        local sellSummaryStr = d.SellSummaryStr or "• Pets sold : 0"
+        local sellPercent = d.SellPercent or "0.00%"
+        local luckStr = d.LuckStr or "🟢 Normal"
+        local embedColor = d.EmbedColor or 3066993
 
         local contentText = string.format(
             "**Cycle #%d • Finished**\n**Cycle Duration:** %s\n\n" ..
@@ -254,9 +272,184 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
     end
 
     -- =============================================================
-    -- [3] UI MODAL FRAME PENGATURAN WEBHOOK EGG
+    -- [3] REAL-TIME AUTO HATCH DETECTOR ENGINE (DETEKSI NYATA)
     -- =============================================================
-    local Modal = Instance.new("Frame", MainScreen or LocalPlayer.PlayerGui:FindFirstChildOfClass("ScreenGui"))
+    local knownPetUUIDs = {}
+    local isDetectorInitialized = false
+
+    local function GetFarm()
+        if not Farms then return nil end
+        for _, farm in ipairs(Farms:GetChildren()) do
+            local imp = farm:FindFirstChild("Important")
+            local data = imp and imp:FindFirstChild("Data")
+            local owner = data and data:FindFirstChild("Owner")
+            if owner and (owner.Value == LocalPlayer.Name or owner.Value == LocalPlayer.UserId) then
+                return farm
+            end
+        end
+        return nil
+    end
+
+    -- Deteksi Nama Telur Aktif di Kebun Pemain
+    local function GetCurrentGardenEggName()
+        local farm = GetFarm()
+        local imp = farm and farm:FindFirstChild("Important")
+        local objPhysical = imp and imp:FindFirstChild("Objects_Physical")
+        if objPhysical then
+            for _, obj in ipairs(objPhysical:GetChildren()) do
+                local nameLower = obj.Name:lower()
+                if nameLower:find("egg") then
+                    local cleanName = obj.Name:gsub("%s*%[.-%]", ""):gsub("%s*%([^%)]*%)", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                    if cleanName ~= "" then
+                        return cleanName
+                    end
+                end
+            end
+        end
+        return "Garden Egg"
+    end
+
+    -- Catat semua pet yang sudah ada saat skrip pertama kali dijalankan
+    local function snapshotExistingPets()
+        if not DataService then
+            pcall(function()
+                DataService = require(ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("DataService", 2))
+            end)
+        end
+        if DataService and DataService.GetData then
+            pcall(function()
+                local data = DataService:GetData()
+                if data and data.PetsData and data.PetsData.PetInventory and data.PetsData.PetInventory.Data then
+                    for uuid, _ in pairs(data.PetsData.PetInventory.Data) do
+                        knownPetUUIDs[tostring(uuid)] = true
+                        knownPetUUIDs[tostring(uuid):gsub("[{}]", "")] = true
+                    end
+                end
+            end)
+        end
+
+        local bp = LocalPlayer:FindFirstChild("Backpack")
+        if bp then
+            for _, item in ipairs(bp:GetChildren()) do
+                if item:IsA("Tool") then
+                    local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or item.Name
+                    knownPetUUIDs[tostring(u)] = true
+                    knownPetUUIDs[tostring(u):gsub("[{}]", "")] = true
+                end
+            end
+        end
+        isDetectorInitialized = true
+    end
+
+    task.defer(snapshotExistingPets)
+
+    -- Fungsi Kirim Notifikasi saat Pet Menetas
+    local function onPetHatched(eggName, petSpecies, petWeight, isFavorite)
+        if not State.EggWebhook.Enabled or not State.EggWebhook.Url or State.EggWebhook.Url == "" then
+            return
+        end
+
+        if State.EggWebhook.Mode == "Detail" then
+            local trk = State.EggWebhook.Tracking
+            trk.TotalHatch = trk.TotalHatch + 1
+            local sp = tostring(petSpecies)
+            trk.NormalHatchBreakdown[sp] = (trk.NormalHatchBreakdown[sp] or 0) + 1
+        else
+            local payload = BuildSimplePayload(eggName, petSpecies, petWeight, isFavorite)
+            sendDiscordWebhook(State.EggWebhook.Url, payload)
+        end
+    end
+
+    -- Listener 1: Deteksi Instan via Backpack.ChildAdded (Saat pet masuk ke tas)
+    local function monitorBackpack(bp)
+        if not bp then return end
+        bp.ChildAdded:Connect(function(item)
+            if not isDetectorInitialized or not State.EggWebhook.Enabled then return end
+            task.wait(0.2) -- Jeda singkat agar atribut/data tool selesai ter-load
+
+            if item:IsA("Tool") then
+                local isPet = item:FindFirstChild("PetToolLocal") or item:FindFirstChild("PetData") or item:GetAttribute("PET_UUID") or item.Name:find("%[")
+                if isPet then
+                    local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or item.Name
+                    local sU = tostring(u)
+                    local stripped = sU:gsub("[{}]", "")
+
+                    if not knownPetUUIDs[sU] and not knownPetUUIDs[stripped] then
+                        knownPetUUIDs[sU] = true
+                        knownPetUUIDs[stripped] = true
+
+                        local species = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                        local weightStr = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "0.0"
+                        local isFav = (item:GetAttribute("IsFavorite") == true) or (item:GetAttribute("Favorite") == true)
+                        local eggName = GetCurrentGardenEggName()
+
+                        onPetHatched(eggName, species, weightStr, isFav)
+                    end
+                end
+            end
+        end)
+    end
+
+    monitorBackpack(LocalPlayer:FindFirstChild("Backpack"))
+    LocalPlayer.ChildAdded:Connect(function(child)
+        if child.Name == "Backpack" then
+            monitorBackpack(child)
+        end
+    end)
+
+    -- Listener 2: Deteksi Akurat via DataService Loop (Paling Lengkap & Presisi)
+    task.spawn(function()
+        while true do
+            task.wait(0.5)
+            if isDetectorInitialized and State.EggWebhook.Enabled and State.EggWebhook.Url ~= "" then
+                if DataService and DataService.GetData then
+                    pcall(function()
+                        local data = DataService:GetData()
+                        if data and data.PetsData and data.PetsData.PetInventory and data.PetsData.PetInventory.Data then
+                            for uuid, entry in pairs(data.PetsData.PetInventory.Data) do
+                                local sUuid = tostring(uuid)
+                                local stripped = sUuid:gsub("[{}]", "")
+
+                                if not knownPetUUIDs[sUuid] and not knownPetUUIDs[stripped] then
+                                    knownPetUUIDs[sUuid] = true
+                                    knownPetUUIDs[stripped] = true
+
+                                    local petData = entry.PetData or {}
+                                    local rawType = entry.PetType or petData.Species or petData.Name or "Pet"
+                                    local species = rawType:gsub("%s*%[.-%]", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                                    local isFav = (petData.IsFavorite == true) or (entry.IsFavorite == true)
+                                    local level = petData.Level or 1
+
+                                    local weightVal = "0.0"
+                                    if PetUtilities and PetUtilities.CalculateWeight and petData.BaseWeight then
+                                        local calcW = PetUtilities:CalculateWeight(petData.BaseWeight, level) * 100
+                                        calcW = math.round(calcW) / 100
+                                        weightVal = string.format("%.2f", calcW)
+                                    elseif petData.BaseWeight then
+                                        weightVal = string.format("%.2f", tonumber(petData.BaseWeight) or 0)
+                                    elseif petData.Weight then
+                                        weightVal = string.format("%.2f", tonumber(petData.Weight) or 0)
+                                    end
+
+                                    local eggName = GetCurrentGardenEggName()
+                                    onPetHatched(eggName, species, weightVal, isFav)
+                                end
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+    end)
+
+    -- =============================================================
+    -- [4] UI MODAL PENGATURAN WEBHOOK EGG
+    -- =============================================================
+    local parentGui = (MainScreen and (MainScreen:IsA("ScreenGui") and MainScreen or MainScreen:FindFirstAncestorOfClass("ScreenGui")))
+        or LocalPlayer.PlayerGui:FindFirstChildOfClass("ScreenGui")
+        or MainScreen
+
+    local Modal = Instance.new("Frame", parentGui)
     Modal.Name = "EggWebhookModal"
     Modal.Size = UDim2.new(0, 335, 0, 345)
     Modal.Position = UDim2.new(0.5, -167, 0.5, -172)
@@ -307,9 +500,11 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
     CloseBtn.ZIndex = 122
     Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 5)
 
-    CloseBtn.MouseButton1Click:Connect(function()
+    local function closeModal()
         Modal.Visible = false
-    end)
+    end
+    CloseBtn.MouseButton1Click:Connect(closeModal)
+    if CloseBtn:IsA("GuiButton") then CloseBtn.Activated:Connect(closeModal) end
 
     -- Container Body
     local Body = Instance.new("Frame", Modal)
@@ -322,9 +517,7 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
     bLayout.SortOrder = Enum.SortOrder.LayoutOrder
     bLayout.Padding = UDim.new(0, 8)
 
-    -- -------------------------------------------------------------
     -- [BAGIAN 1: INPUT LINK WEBHOOK EGG]
-    -- -------------------------------------------------------------
     local SecLink = Instance.new("Frame", Body)
     SecLink.Size = UDim2.new(1, 0, 0, 58)
     SecLink.BackgroundColor3 = Color3.fromRGB(14, 18, 34)
@@ -372,13 +565,10 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         State.EggWebhook.Url = BoxLink.Text:gsub("^%s+", ""):gsub("%s+$", "")
         saveWebhookConfig()
     end
-
     BoxLink.FocusLost:Connect(onUrlChanged)
     BoxLink:GetPropertyChangedSignal("Text"):Connect(onUrlChanged)
 
-    -- -------------------------------------------------------------
     -- [BAGIAN 2: PILIHAN MODE FORMAT NOTIFIKASI (SIMPLE VS DETAIL)]
-    -- -------------------------------------------------------------
     local SecMode = Instance.new("Frame", Body)
     SecMode.Size = UDim2.new(1, 0, 0, 64)
     SecMode.BackgroundColor3 = Color3.fromRGB(14, 18, 34)
@@ -435,7 +625,6 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
 
     local function updateModeVisual()
         local isSimple = (State.EggWebhook.Mode == "Simple")
-
         btnSimple.BackgroundColor3 = isSimple and Color3.fromRGB(138, 43, 226) or Color3.fromRGB(20, 24, 44)
         btnSimple.Text = isSimple and "✓ 📄 Simple Mode" or "📄 Simple Mode"
         btnSimple.TextColor3 = isSimple and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 170, 200)
@@ -447,9 +636,9 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         bdStroke.Color = not isSimple and Color3.fromRGB(200, 130, 255) or Color3.fromRGB(45, 55, 85)
 
         if isSimple then
-            lblModeDesc.Text = "ℹ️ Simple: Nama telur, pet didapat, bobot, status fav/keep, player & waktu"
+            lblModeDesc.Text = "ℹ️ Simple: Notifikasi instan per telur (Jenis telur, pet, bobot KG, status)"
         else
-            lblModeDesc.Text = "ℹ️ Detail: Rekap Cycle lengkap (Tracking, Ping, Bronto/Normal, Egg & Sell)"
+            lblModeDesc.Text = "ℹ️ Detail: Rekap Cycle lengkap (Tracking durasi, hatch, sell & luck)"
         end
     end
 
@@ -458,18 +647,14 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         updateModeVisual()
         saveWebhookConfig()
     end)
-
     btnDetail.MouseButton1Click:Connect(function()
         State.EggWebhook.Mode = "Detail"
         updateModeVisual()
         saveWebhookConfig()
     end)
-
     updateModeVisual()
 
-    -- -------------------------------------------------------------
     -- [BAGIAN 3: TOMBOL "SEND TEST" & STATUS INDIKATOR]
-    -- -------------------------------------------------------------
     local SecTest = Instance.new("Frame", Body)
     SecTest.Size = UDim2.new(1, 0, 0, 56)
     SecTest.BackgroundColor3 = Color3.fromRGB(14, 18, 34)
@@ -520,24 +705,24 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         local testPayload = nil
         if mode == "Detail" then
             testPayload = BuildDetailPayload({
-                Cycle = 417,
-                CycleDuration = "00:00:53",
+                Cycle = 1,
+                CycleDuration = "00:01:00",
                 Player = LocalPlayer.Name,
-                TotalHatch = 5421,
-                Duration = "06:05:17",
+                TotalHatch = 12,
+                Duration = "00:15:30",
                 Ping = getGamePing(),
-                InvTotal = 34,
+                InvTotal = 15,
                 InvMax = 285,
-                EggsTotalStr = "Total: 768 → 806 (+38)\n• Night Egg: 768 → 806 (+38)",
-                EggsCycleStr = "Total: 807 → 806 (-1)\n• Night Egg: 807 → 806 (-1)",
-                BrontoHatchStr = "• Total hatch with Bronto: 8\n• Raccoon: 8x (1.270–2.504 kg)",
-                NormalHatchStr = "• Echo Frog: 1x (1.118–1.118 kg)\n• Hedgehog: 4x (0.904–1.780 kg)\n• Frog: 2x (1.456–1.492 kg)\n• Mole: 5x (0.908–2.058 kg)",
+                EggsTotalStr = "• Night Egg: 12x",
+                EggsCycleStr = "• Night Egg: 12x",
+                BrontoHatchStr = "• Total hatch with Bronto: 2",
+                NormalHatchStr = "• Mimic Octopus: 12x (280.0 KG)",
                 EggBackPercent = "50.00%",
-                EggBackStr = "• Night Egg: 5x",
-                SellPercent = "52.25%",
-                SellSummaryStr = "• Pets sold : 12\n• Egg back sell : Night Egg ( 6x )",
-                LuckStr = "🟢 GOOD Luck (+38)",
-                EmbedColor = 3066993 -- 0x2ECC71
+                EggBackStr = "• Night Egg: 6x",
+                SellPercent = "50.00%",
+                SellSummaryStr = "• Pets sold : 6",
+                LuckStr = "🟢 GOOD Luck",
+                EmbedColor = 3066993
             })
         else
             testPayload = BuildSimplePayload("Night Egg", "Mimic Octopus", 280.0, true, os.date("%Y-%m-%d %H:%M:%S"))
@@ -555,9 +740,7 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         end)
     end)
 
-    -- -------------------------------------------------------------
     -- [BAGIAN 4: FITUR "ON / OFF" NOTIFIKASI WEBHOOK EGG]
-    -- -------------------------------------------------------------
     local SecToggle = Instance.new("Frame", Body)
     SecToggle.Size = UDim2.new(1, 0, 0, 46)
     SecToggle.BackgroundColor3 = Color3.fromRGB(14, 18, 34)
@@ -582,7 +765,7 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
     subTog.Position = UDim2.new(0, 10, 0, 24)
     subTog.Size = UDim2.new(1, -85, 0, 14)
     subTog.BackgroundTransparency = 1
-    subTog.Text = "Kirim laporan otomatis ke Discord"
+    subTog.Text = "Kirim laporan otomatis ke Discord saat telur menetas"
     subTog.TextColor3 = Color3.fromRGB(140, 150, 180)
     subTog.Font = Enum.Font.Gotham
     subTog.TextSize = 7.5
@@ -626,14 +809,13 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         updateToggleVisual()
         saveWebhookConfig()
     end)
-
     updateToggleVisual()
 
     -- =============================================================
-    -- [5] KONEKSI TOMBOL PENGATURAN (⚙️) DI SEBELAH CONFIG
+    -- [5] KONEKSI TOMBOL PENGATURAN (⚙️)
     -- =============================================================
     if GearBtn then
-        GearBtn.MouseButton1Click:Connect(function()
+        local function toggleModal()
             Modal.Visible = not Modal.Visible
             if Modal.Visible then
                 BoxLink.Text = State.EggWebhook.Url or ""
@@ -641,31 +823,22 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
                 StatusLbl.Text = "Status: Siap mencoba koneksi"
                 StatusLbl.TextColor3 = Color3.fromRGB(150, 165, 200)
             end
-        end)
+        end
+
+        if GearBtn:IsA("GuiButton") then
+            GearBtn.Activated:Connect(toggleModal)
+        else
+            GearBtn.MouseButton1Click:Connect(toggleModal)
+        end
     end
 
     -- =============================================================
     -- [6] PUBLIC API PENGIRIMAN NOTIFIKASI
     -- =============================================================
-
-    -- Kirim notifikasi individual (Simple)
     function EggWebhookModule.SendHatchNotification(eggName, petSpecies, petWeight, isFavorite)
-        if not State.EggWebhook.Enabled or not State.EggWebhook.Url or State.EggWebhook.Url == "" then
-            return
-        end
-
-        local payload = nil
-        if State.EggWebhook.Mode == "Detail" then
-            -- Jika mode detail aktif, notifikasi diakumulasikan ke cycle atau dikirim rekap
-            return
-        else
-            payload = BuildSimplePayload(eggName, petSpecies, petWeight, isFavorite)
-        end
-
-        sendDiscordWebhook(State.EggWebhook.Url, payload)
+        onPetHatched(eggName, petSpecies, petWeight, isFavorite)
     end
 
-    -- Kirim notifikasi siklus komprehensif (Detail)
     function EggWebhookModule.SendCycleReport(cycleData)
         if not State.EggWebhook.Enabled or not State.EggWebhook.Url or State.EggWebhook.Url == "" then
             return
