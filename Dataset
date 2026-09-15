@@ -1,0 +1,3168 @@
+-- Script Path: game:GetService("ReplicatedStorage").Modules.PetServices.PetUtilities
+-- Took 0.02s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v_u_1 = game:GetService("ReplicatedStorage")
+local v_u_2 = game:GetService("Debris")
+local v_u_3 = game:GetService("RunService")
+local v_u_4 = game:GetService("ServerScriptService")
+local v_u_5 = game:GetService("Players")
+local v_u_6 = game:GetService("CollectionService")
+local v7 = v_u_1.Assets.VFX
+local v8 = require(v_u_1.Data.PetRegistry)
+local v_u_9 = require(v_u_1.Modules.CalculatePlantValue)
+local v_u_10 = require(v_u_1.Data.EnumRegistry.InventoryServiceEnums)
+local v_u_11 = require(v_u_1.Modules.TimeHelper)
+local v_u_12 = require(v_u_1.Modules.FoodService)
+require(v_u_1.Modules.PetTraitsData)
+local v_u_13 = require(v_u_1.Modules.DisplayNameSanitizer)
+require(v_u_1.Modules.ReplicationClass.DeepClone)
+local v_u_14 = v7.SpottedEffect
+local v15 = v8.PetConfig
+local v_u_16 = v8.PetList
+local v17 = v8.PetEggs
+local v_u_18 = v8.PassiveRegistry
+local v19 = v15.XP_CONFIG
+local _ = v19.XP_EXPONENTIAL
+local v_u_20 = v15.PET_FEEDING_CONFIG.HUNGER_PER_WEIGHT
+local v_u_21 = v15.WEIGHT_CONFIG.SCALE_PERCENTAGE_OF_BASE_WEIGHT_PER_LEVEL
+local v22 = require(v_u_1.Modules.ExponentialScaler)
+local v_u_23 = require(v_u_1.Data.DecimalNumberFormat)
+local v_u_24 = require(v_u_1.Modules.ReplicationClass.DeepClone)
+local v_u_25 = v22.new({
+    ["BaseCost"] = v19.XP_BASE_COST,
+    ["ScalingFactor"] = v19.XP_EXPONENTIAL
+})
+local v_u_26 = 0
+for v27 = 1, v19.MAX_LEVEL do
+    v_u_26 = v_u_26 + v_u_25:GetCost(v27)
+end
+local v_u_29 = {
+    ["GetCurrentLevelXPCost"] = function(_, p28) -- name: GetCurrentLevelXPCost
+        -- upvalues: (copy) v_u_25
+        return v_u_25:GetCost(p28)
+    end
+}
+local v_u_30 = {
+    ["Tiny Bird"] = true,
+    ["Muddy Excavator"] = true,
+    ["Fall Express"] = true,
+    ["Mighty Bear"] = true,
+    ["Wise Shopper"] = true,
+    ["Prince of Fall"] = true,
+    ["Swan Song"] = true,
+    ["Bird of Grace"] = true,
+    ["Squirrel Support"] = true,
+    ["Harvest Stash"] = true,
+    ["Whack-A-Marmot"] = true,
+    ["Sugar Gliding"] = true,
+    ["A Space Odd-Nut-sy"] = true,
+    ["Salmon School"] = true,
+    ["Woodpecking"] = true,
+    ["Southbound"] = true,
+    ["Adorable Haggler"] = true,
+    ["Grounded"] = true
+}
+local v_u_31 = {
+    ["Snow-munition"] = true,
+    ["Icy Fortifications"] = true,
+    ["Arctic Scoundrel"] = true,
+    ["Glacial Dragon"] = true,
+    ["Frost Diety"] = true,
+    ["GIANT Snow-munition"] = true,
+    ["GIANT Icy Fortifications"] = true,
+    ["Rainbow Arctic Scoundrel"] = true,
+    ["Rainbow Glacial Dragon"] = true,
+    ["Rainbow Frost Diety"] = true,
+    ["Gift Wrat"] = true,
+    ["Belly Slide"] = true,
+    ["Christmas Carrot"] = true,
+    ["Christmas Hen"] = true,
+    ["Cold Belly"] = true,
+    ["Jolly Croak"] = true,
+    ["Coal Sack"] = true,
+    ["Christmas Dove"] = true,
+    ["Sleigh Synergy"] = true,
+    ["Beast of Snow"] = true,
+    ["Nutcracker"] = true,
+    ["Yeti Night"] = true,
+    ["Cold Gears"] = true,
+    ["Festive Christmas Dove"] = true,
+    ["Festive Sleigh Synergy"] = true,
+    ["Festive Beast of Snow"] = true,
+    ["Festive Nutcracker"] = true,
+    ["Festive Yeti Night"] = true,
+    ["Festive Cold Gears"] = true,
+    ["Pine Beetle Duel"] = true,
+    ["Eggnoginator"] = true,
+    ["Cocoa Nap"] = true,
+    ["Red-Nosed Reindeer"] = true,
+    ["Shiny Nose"] = true,
+    ["Yellow Christmas"] = true,
+    ["Christmas Partridge"] = true,
+    ["Merry Beary"] = true,
+    ["Christmas Support"] = true,
+    ["FREEZE!"] = true,
+    ["Gnawing Hunger"] = true
+}
+function v_u_29.GetCurrentLevelState(_, p32, p33, p34, p35) -- name: GetCurrentLevelState
+    -- upvalues: (copy) v_u_18, (copy) v_u_3, (copy) v_u_1, (copy) v_u_5, (copy) v_u_4, (copy) v_u_30, (copy) v_u_31
+    local v36 = v_u_18[p33]
+    if not v36 then
+        warn("Could not find passive", p33)
+        return {}
+    end
+    local v37, v38, v39
+    if v_u_3:IsClient() then
+        v37 = require(v_u_1.Modules.PetServices.ActivePetsService)
+        v38 = require(v_u_1.Modules.Gears.BonfireClientService)
+        v39 = require(v_u_1.Modules.Gears.YuleLogClientService)
+        if p34 == nil then
+            p34 = v_u_5.LocalPlayer or p34
+        end
+    else
+        v37 = require(v_u_4.Modules.PetsServices.ActivePetsService)
+        v38 = require(v_u_4.Modules.Gears.BonfireService)
+        v39 = require(v_u_4.Modules.Gears.GenericGearService.Placeables.YuleLogHandler)
+    end
+    local v40 = 0
+    if p34 then
+        local v41 = p34:GetAttribute("PetPassiveBonus")
+        if typeof(v41) == "number" then
+            v40 = math.min(v41, 30)
+        end
+        local v42 = p34:GetAttribute("SprinklerPetBoost")
+        if typeof(v42) == "number" then
+            v40 = v40 + v42
+        end
+        if v_u_30[p33] then
+            local v43 = v38:GetBoost(p34)
+            if v43 then
+                v40 = v40 + v43.Pet
+            end
+        end
+        if v_u_31[p33] then
+            local v44 = v39:GetBoost(p34)
+            if v44 then
+                v40 = v40 + v44.Pet
+            end
+        end
+    end
+    local v45 = {}
+    for v46, v47 in v36.States do
+        local v48 = v47.Base
+        local v49 = v37:CalculateBoost(p34, p35, "PASSIVE_BOOST")
+        if v46 == "Cooldown" then
+            if v49 >= 0.06 then
+                local v50 = v49 - 1
+                v48 = v48 - v47.Base * v50
+            end
+        else
+            local v51 = v49 - 1
+            if p33 == "The Reins of Ruin" or (p33 == "The Ghostly Reins of Ruin" or (p33 == "Jumbo Blessing" or p33 == "Rainbow Jumbo Blessing")) then
+                if v47.Scale <= 0 then
+                    v48 = v48 - v47.Base * v51
+                else
+                    v48 = v48 + v47.Base * v51
+                end
+            else
+                v48 = v48 + v47.Base * v51
+            end
+        end
+        local v52 = p32 + v40
+        if v52 > 100 then
+            if v52 <= 120 then
+                v52 = (v52 - 100) * 0.25 + 100
+            else
+                v52 = (v52 - 120) * 0.1 + 105
+            end
+        end
+        local v53 = v48 + v47.Scale * v52
+        if v47.Min and v47.Max then
+            local v54 = v47.Min
+            local v55 = v47.Max
+            v53 = math.clamp(v53, v54, v55)
+        elseif v47.Min then
+            local v56 = v47.Min
+            v53 = math.max(v53, v56)
+        elseif v47.Max then
+            local v57 = v47.Max
+            v53 = math.min(v53, v57)
+        end
+        v45[v46] = v53
+    end
+    return v45
+end
+local v_u_63 = {
+    ["ColonTime"] = function(p58)
+        -- upvalues: (copy) v_u_11
+        return v_u_11:GenerateColonFormatFromTime(p58)
+    end,
+    ["Percentage"] = function(p59)
+        return string.format("%.2f", p59 * 100)
+    end,
+    ["NoPrecision"] = function(p60)
+        local v61 = p60 * 1000
+        local v62 = math.floor(v61) / 1000
+        return string.format("%.3f", v62)
+    end
+}
+function v_u_29.GetPassiveString(_, p64, p65, p66, p67) -- name: GetPassiveString
+    -- upvalues: (copy) v_u_29, (copy) v_u_18, (copy) v_u_63, (copy) v_u_23
+    local v68 = v_u_29:GetCurrentLevelState(p64, p65, p66, p67)
+    local v69 = v_u_18[p65]
+    local v70 = v69.Description
+    local v71 = v69.States
+    for v72, v73 in v68 do
+        local v74 = v_u_63[v71[v72].Formatter]
+        local v75 = v74 and v74(v73)
+        if not v75 then
+            local v76 = v_u_23
+            v75 = tostring(v76(v73))
+        end
+        v70 = v70:gsub(("<%*>"):format(v72), v75)
+    end
+    return v70
+end
+function v_u_29.FindLocalPetModel(_, p77) -- name: FindLocalPetModel
+    -- upvalues: (copy) v_u_6
+    for _, v78 in v_u_6:GetTagged("PetModel") do
+        if v78.Name == p77 then
+            return v78
+        end
+    end
+    return nil
+end
+function v_u_29.GetFoodWorthForAnimal(_, p79, p80, p81) -- name: GetFoodWorthForAnimal
+    -- upvalues: (copy) v_u_16, (copy) v_u_10, (copy) v_u_12, (copy) v_u_20
+    local v82 = v_u_16[p79].HungerFruitMultipliers
+    p80:GetAttribute(v_u_10.ItemName)
+    local v83 = v82[p80] or 1
+    return v_u_12:CalculateFoodValue(p80:GetAttribute(v_u_10.ITEM_UUID), p81) * v_u_20 * v83
+end
+function v_u_29.GetFruitWorthForAnimal(_, p84, p85) -- name: GetFruitWorthForAnimal
+    -- upvalues: (copy) v_u_16, (copy) v_u_10, (copy) v_u_9, (copy) v_u_20
+    local v86 = v_u_16[p84].HungerFruitMultipliers[p85:GetAttribute(v_u_10.ItemName)] or 1
+    return v_u_9(p85) * v_u_20 * v86
+end
+function v_u_29.GetFruitWorthPercentageForAnimal(_, p87, p88) -- name: GetFruitWorthPercentageForAnimal
+    -- upvalues: (copy) v_u_29, (copy) v_u_16
+    return v_u_29:GetFruitWorthForAnimal(p87, p88) / v_u_16[p87].DefaultHunger
+end
+function v_u_29.NormalizeOdds(_, p89) -- name: NormalizeOdds
+    local v90 = p89.Items
+    local v91 = 0
+    for _, v92 in v90 do
+        v91 = v91 + v92.ItemOdd
+    end
+    for v93, v94 in v90 do
+        v94.NormalizedOdd = v94.ItemOdd / v91 * 100
+        v94.Name = v93
+    end
+    p89.TotalOdds = v91
+    return p89
+end
+function v_u_29.CalculateWeight(_, p95, p96, p97) -- name: CalculateWeight
+    -- upvalues: (copy) v_u_21
+    if p97 == "Chubby Chipmunk" then
+        return p95
+    else
+        return p95 + p95 * v_u_21 * p96
+    end
+end
+function v_u_29.GetLevelProgress(_, p98) -- name: GetLevelProgress
+    -- upvalues: (copy) v_u_25, (ref) v_u_26
+    if not p98 then
+        warn("PetUtilities:GetLevelProgress | No Level!")
+        return 0
+    end
+    local v99 = 0
+    for v100 = 1, p98 do
+        v99 = v99 + v_u_25:GetCost(v100)
+    end
+    return v99 / v_u_26
+end
+for _, v101 in v17 do
+    v101.Color = v101.Color or Color3.fromRGB(255, 252, 252)
+    v101.HatchTime = v101.HatchTime or 6
+    v101.RarityData = v101.RarityData or {
+        ["Items"] = {}
+    }
+    v_u_29:NormalizeOdds(v101.RarityData)
+end
+function v_u_29.CalcBoostTotal(_, p102, p103) -- name: CalcBoostTotal
+    local v104 = math.clamp(p102, 0, 100)
+    local v105 = math.clamp(p103, 0, 100)
+    local v106 = v104 + (100 - v104) / 100 * v105
+    return math.clamp(v106, 0, 100)
+end
+function v_u_29.GetBoostedRarityData(_, p107, p108) -- name: GetBoostedRarityData
+    -- upvalues: (copy) v_u_24
+    local v109 = v_u_24(p107)
+    if p108 <= 0 then
+        return v109
+    end
+    local v110 = 0
+    for _ in v109.Items do
+        v110 = v110 + 1
+    end
+    local v111 = 1 / v110 * 100
+    local v112 = p108 / 100
+    local v113 = math.clamp(v112, 0, 1)
+    for _, v114 in v109.Items do
+        local v115 = v114.NormalizedOdd
+        local v116 = math.lerp(v115, v111, v113)
+        local v117 = math.clamp(v116, 0, 100)
+        v114.NormalizedOdd = v117
+        v114.ItemOdd = v117
+    end
+    return v109
+end
+function v_u_29.GetRandomPet(_, p_u_118, p119, p120) -- name: GetRandomPet
+    -- upvalues: (copy) v_u_29
+    if not p119 then
+        warn("PetUtilities:GetRandomPet | RandomObject was not passed, replacing with random Random object!")
+    end
+    local v121 = p119 or Random.new()
+    if not (p_u_118 and (p_u_118.TotalOdds and p_u_118.Items)) then
+        return warn("GetRandomPet | RarityData is nil or invalid!")
+    end
+    local v122 = v_u_29:GetBoostedRarityData(p_u_118, p120 or 0)
+    local v123 = v122.TotalOdds
+    local v124 = v122.Items
+    local v125 = v121:NextNumber() * v123
+    local v126 = {}
+    for v127, _ in v124 do
+        table.insert(v126, v127)
+    end
+    table.sort(v126, function(p128, p129)
+        -- upvalues: (copy) p_u_118
+        local v130 = p_u_118.Items[p128]
+        local v131 = p_u_118.Items[p129]
+        if v130.ItemOdd == v131.ItemOdd then
+            return p129 < p128
+        else
+            return v130.ItemOdd > v131.ItemOdd
+        end
+    end)
+    local v132 = 0
+    for _, v133 in v126 do
+        local v134 = v124[v133]
+        if v134 then
+            v132 = v132 + v134.ItemOdd
+            if v132 >= v125 then
+                return v134
+            end
+        else
+            warn((("No item data found for key: %*"):format(v133)))
+        end
+    end
+end
+function v_u_29.GetLookAt(_, p135, p136) -- name: GetLookAt
+    local v137 = CFrame.new
+    local v138 = p136.X
+    local v139 = p135.Y
+    local v140 = p136.Z
+    return v137(p135, (Vector3.new(v138, v139, v140)))
+end
+function v_u_29.GetGeneratedEclipsePositions(_, p141) -- name: GetGeneratedEclipsePositions
+    local v142 = p141.TargetCFrame
+    if not v142 then
+        return warn("GetGeneratedEclipsePositions: There is no TargetCFrame in Config:", p141, debug.traceback())
+    end
+    local v143 = p141.TotalPositions
+    if not v143 then
+        return warn("GetGeneratedEclipsePositions: There is no TotalPositions in Config:", p141, debug.traceback())
+    end
+    local v144 = p141.StartingRowAmount or 5
+    local v145 = p141.RadiusIncrementX or 3
+    local v146 = p141.RadiusIncrementZ or 3
+    local v147 = p141.Angle or 0.39269908169872414
+    local v148 = {}
+    local v149 = 1
+    while #v148 < v143 do
+        local v150 = v143 - #v148
+        local v151 = math.min(v144, v150)
+        local v152 = v151 == 1 and 0 or v147 * (v151 - 1) / 2
+        for v153 = 1, v151 do
+            local v154 = v147 * (v153 - 1) - v152
+            local v155 = math.sin(v154) * v149 * v145
+            local v156 = math.cos(v154) * v149 * v146
+            local v157 = (v142 * CFrame.new(v155, 0, v156)).Position
+            table.insert(v148, v157)
+        end
+        v149 = v149 + 1
+        v144 = v144 + 1
+    end
+    return v148
+end
+function v_u_29.GetPetsSortedByAge(_, p158, p159, p160, p161) -- name: GetPetsSortedByAge
+    -- upvalues: (copy) v_u_3, (copy) v_u_4, (copy) v_u_24, (copy) v_u_1
+    local v162 = p160 or false
+    local v163 = p161 or false
+    local v164 = p159 or 0
+    if not v_u_3:IsServer() then
+        if not v_u_3:IsClient() then
+            return
+        end
+        local v165 = require(v_u_1.Modules.PetServices.ActivePetsService):GetPlayerDatastorePetData(p158.Name)
+        local v166 = v165.PetInventory.Data
+        local v167 = v165.EquippedPets
+        local v168 = {}
+        for v169, v170 in v166 do
+            if v170.PetData.Level >= v164 then
+                if v163 then
+                    if table.find(v167, v169) then
+                        ::l22::
+                        local v171 = v_u_24(v170)
+                        v171.UUID = v169
+                        table.insert(v168, v171)
+                    end
+                elseif not (v162 and table.find(v167, v169)) then
+                    goto l22
+                end
+            end
+        end
+        table.sort(v168, function(p172, p173)
+            return p172.PetData.Level > p173.PetData.Level
+        end)
+        return v168
+    end
+    local v174 = require(v_u_4.Modules.DataService):GetPlayerDataAsync(p158)
+    if not v174 then
+        return
+    end
+    local v175 = v174.PetsData.PetInventory.Data
+    local v176 = v174.PetsData.EquippedPets
+    local v177 = {}
+    for v178, v179 in v175 do
+        if v179.PetData.Level >= v164 then
+            if v163 then
+                if table.find(v176, v178) then
+                    ::l11::
+                    local v180 = v_u_24(v179)
+                    v180.UUID = v178
+                    table.insert(v177, v180)
+                end
+            elseif not (v162 and table.find(v176, v178)) then
+                goto l11
+            end
+        end
+    end
+    table.sort(v177, function(p181, p182)
+        return p181.PetData.Level > p182.PetData.Level
+    end)
+    return v177
+end
+function v_u_29.HasActivePetOfType(p183, p184, p185) -- name: HasActivePetOfType
+    if not (p184 and p185) then
+        return false
+    end
+    local v186 = p183:GetPetsSortedByAge(p184, 0, false, true)
+    if not v186 then
+        return false
+    end
+    for _, v187 in v186 do
+        if v187 and (v187.PetData and v187.PetType == p185) then
+            return true
+        end
+    end
+    return false
+end
+function v_u_29.GetPetByUUID(_, p188, p189) -- name: GetPetByUUID
+    -- upvalues: (copy) v_u_3, (copy) v_u_4, (copy) v_u_24, (copy) v_u_1
+    if not (p188 and p189) then
+        return nil
+    end
+    if v_u_3:IsServer() then
+        local v190 = require(v_u_4.Modules.DataService):GetPlayerDataAsync(p188)
+        if not v190 then
+            return nil
+        end
+        local v191 = v190.PetsData.PetInventory.Data[p189]
+        if not v191 then
+            return nil
+        end
+        local v192 = v_u_24(v191)
+        v192.UUID = p189
+        return v192
+    end
+    if v_u_3:IsClient() then
+        local v193 = require(v_u_1.Modules.PetServices.ActivePetsService):GetPlayerDatastorePetData(p188.Name)
+        if not v193 then
+            return nil
+        end
+        local v194 = v193.PetInventory.Data[p189]
+        if not v194 then
+            return nil
+        end
+        local v195 = v_u_24(v194)
+        v195.UUID = p189
+        return v195
+    end
+end
+v_u_29.LOADOUT_NAME_MAX_LENGTH = 15
+function v_u_29.FilterLoadoutNameInput(_, p196) -- name: FilterLoadoutNameInput
+    -- upvalues: (copy) v_u_13
+    return v_u_13.FilterInput(p196, 15)
+end
+function v_u_29.SanitizeLoadoutName(_, p197) -- name: SanitizeLoadoutName
+    -- upvalues: (copy) v_u_13
+    return v_u_13.Sanitize(p197, 15)
+end
+function v_u_29.AbilityFX(_, p198, p199) -- name: AbilityFX
+    -- upvalues: (copy) v_u_3, (copy) v_u_14, (copy) v_u_2
+    local v200
+    if v_u_3:IsServer() then
+        v200 = require(game.ServerScriptService.Modules.PetsServices.ActivePetsService)
+    else
+        v200 = require(game.ReplicatedStorage.Modules.PetServices.ActivePetsService)
+    end
+    local v201 = v_u_14:Clone()
+    v201.CFrame = CFrame.new(v200:GetRealPosition(p198, p199)) * CFrame.new(0, 3, 0)
+    v201.Parent = workspace
+    v201.SpottedFX.SpotParticle:Emit(1)
+    v_u_2:AddItem(v201, 3)
+end
+return v_u_29
+-- Script Path: game:GetService("ReplicatedStorage").Modules.PetServices.ActivePetInputService
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v_u_1 = game:GetService("UserInputService")
+game:GetService("GuiService")
+game:GetService("CollectionService")
+game:GetService("RunService")
+local v_u_2 = game:GetService("TweenService")
+local v3 = game:GetService("ReplicatedStorage")
+local v_u_4 = game:GetService("Players").LocalPlayer
+local v_u_5 = require(v3.Modules.PetServices.PetInformationUserInterfaceService)
+local v_u_6 = require(v3.Modules.PetServices.PetActionUserInterfaceService)
+local v_u_7 = workspace.CurrentCamera
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    -- upvalues: (ref) v_u_7
+    v_u_7 = workspace.CurrentCamera
+end)
+local v_u_8 = require(v3.Modules.GetMouseToWorld)
+local v_u_9 = Instance.new("Highlight")
+v_u_9.FillTransparency = 1
+local v_u_10 = nil
+local v_u_11 = nil
+local function v_u_12() -- name: TargettingInputBegan
+    -- upvalues: (ref) v_u_11, (copy) v_u_2, (copy) v_u_9
+    if v_u_11 then
+        v_u_2:Create(v_u_9, TweenInfo.new(0.2), {
+            ["OutlineTransparency"] = 0.8
+        }):Play()
+    end
+end
+local function v_u_13() -- name: TargettingInputEnded
+    -- upvalues: (ref) v_u_11, (copy) v_u_2, (copy) v_u_9, (copy) v_u_4, (copy) v_u_6
+    if v_u_11 then
+        v_u_2:Create(v_u_9, TweenInfo.new(0.2), {
+            ["OutlineTransparency"] = 0
+        }):Play()
+        if v_u_4:GetAttribute("DontOpenAction") then
+            return
+        elseif v_u_6.Target == v_u_11 then
+            v_u_6:Toggle(false)
+        else
+            if v_u_6.Target ~= nil then
+                v_u_6:Toggle(false)
+            end
+            task.delay(0.1, function()
+                -- upvalues: (ref) v_u_6, (ref) v_u_11
+                v_u_6:SetTarget(v_u_11)
+                v_u_6:Toggle(true)
+            end)
+        end
+    else
+        return
+    end
+end
+local v_u_14 = {
+    [Enum.UserInputType.Touch] = { function(_)
+            -- upvalues: (copy) v_u_12
+            v_u_12()
+        end },
+    [Enum.UserInputType.MouseButton1] = { function()
+            -- upvalues: (copy) v_u_12
+            v_u_12()
+        end },
+    [Enum.KeyCode.ButtonR2] = { function()
+            -- upvalues: (copy) v_u_12
+            v_u_12()
+        end }
+}
+local v_u_15 = {
+    [Enum.UserInputType.Touch] = { function(_)
+            -- upvalues: (copy) v_u_13
+            v_u_13()
+        end },
+    [Enum.UserInputType.MouseButton1] = { function()
+            -- upvalues: (copy) v_u_13
+            v_u_13()
+        end },
+    [Enum.KeyCode.ButtonR2] = { function()
+            -- upvalues: (copy) v_u_13
+            v_u_13()
+        end }
+}
+v_u_1.InputBegan:Connect(function(p_u_16, _)
+    -- upvalues: (copy) v_u_14
+    local v17 = v_u_14[p_u_16.KeyCode] or v_u_14[p_u_16.UserInputType]
+    if v17 then
+        for _, v_u_18 in v17 do
+            task.spawn(function()
+                -- upvalues: (copy) v_u_18, (copy) p_u_16
+                v_u_18(p_u_16)
+            end)
+        end
+    end
+end)
+v_u_1.InputEnded:Connect(function(p_u_19, _)
+    -- upvalues: (copy) v_u_15
+    local v20 = v_u_15[p_u_19.KeyCode] or v_u_15[p_u_19.UserInputType]
+    if v20 then
+        for _, v_u_21 in v20 do
+            task.spawn(function()
+                -- upvalues: (copy) v_u_21, (copy) p_u_19
+                v_u_21(p_u_19)
+            end)
+        end
+    end
+end)
+v_u_1.TouchTap:Connect(function()
+    -- upvalues: (copy) v_u_12
+    v_u_12()
+end)
+v_u_1.TouchEnded:Connect(function()
+    -- upvalues: (copy) v_u_13
+    v_u_13()
+end)
+v_u_9.Parent = script
+task.spawn(function()
+    -- upvalues: (copy) v_u_1, (ref) v_u_10, (copy) v_u_8, (copy) v_u_6, (copy) v_u_5, (ref) v_u_11, (copy) v_u_9
+    while true do
+        v_u_10 = v_u_1:GetMouseLocation()
+        local v22 = RaycastParams.new()
+        v22.FilterDescendantsInstances = {}
+        local v23 = v_u_8(v22, 1000)
+        if v23 then
+            v23 = v23.Instance
+        end
+        if v23 then
+            v23 = v23:FindFirstAncestor("PetMover")
+        end
+        if v_u_6.Active then
+            if v_u_6.Target == v_u_6.Target then
+                v_u_5:Toggle(false)
+            end
+        else
+            v_u_5:SetTarget(v23)
+            if v23 then
+                v_u_5:Toggle(true)
+            else
+                v_u_5:Toggle(false)
+            end
+        end
+        if v23 and v23:FindFirstChildWhichIsA("Model", true) then
+            v_u_11 = v23
+            local v24 = v_u_9
+            if v23 then
+                v23 = v23:FindFirstChildWhichIsA("Model", true)
+            end
+            v24.Adornee = v23
+        else
+            v_u_11 = nil
+            v_u_9.Adornee = nil
+        end
+        task.wait(0.2)
+    end
+end)
+return {}
+-- Script Path: game:GetService("ReplicatedStorage").Modules.PetServices.ActivePetsService
+-- Took 0.04s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v1 = game:GetService("ReplicatedStorage")
+game:GetService("RunService")
+local v_u_2 = game:GetService("Players")
+local v3 = game:GetService("UserInputService")
+local v_u_4 = v_u_2.LocalPlayer
+v1:WaitForChild("Assets"):WaitForChild("Models")
+local v_u_5 = workspace:WaitForChild("PetsPhysical")
+local v_u_6 = require(v1.Modules.TwoPointCast)
+require(v1.Modules.ExponentialScaler)
+local v7 = require(v1.Modules.ReplicationClass)
+local v8 = require(v1.Data.PetRegistry)
+local v9 = v1.Modules.PetServices.AnimationEvents
+local v_u_10 = require(v1.Modules.PetServices.PetUtilities)
+local v_u_11 = require(v1.Modules.PetServices.PetSoundHandler)
+local v12 = require(v1.Modules.OptimisationControllers.IsBadDeviceHeuristic)
+local v_u_13 = require(v1.Data.PetRegistry.PetMutationRegistry)
+require(v1.Types.PetTypes)
+local v_u_14 = v12()
+local v_u_15 = RaycastParams.new()
+v_u_15.FilterDescendantsInstances = { workspace.Farm }
+v_u_15.FilterType = Enum.RaycastFilterType.Include
+local v_u_16 = RaycastParams.new()
+v_u_16.FilterDescendantsInstances = { workspace.Interaction, workspace.BasePlate }
+v_u_16.FilterType = Enum.RaycastFilterType.Include
+local v_u_17 = require(v1.Modules.PetServices.PetVFXHandler)
+require(v1.Modules.DumpTable)
+require(v1.Modules.PlatformService)
+local v_u_18 = v3.TouchEnabled and "Mobile" or "PC"
+local v_u_19 = {}
+for _, v20 in v9:GetDescendants() do
+    if v20:IsA("ModuleScript") then
+        v_u_19[v20.Name] = require(v20)
+    end
+end
+local v_u_21 = v8.PetList
+local v_u_22 = v1:WaitForChild("GameEvents"):WaitForChild("ActivePetService")
+require(v1.Modules.SelectiveAssetReplication)
+local v_u_23 = v7.new("ActivePetsService_Replicator")
+v_u_23.DontStager = true
+v_u_23:YieldUntilData()
+local v_u_24 = require(v1.Modules.GetFarm)
+local v_u_25 = {}
+local v_u_26 = {}
+v_u_25.ClientPetState = v_u_26
+local v_u_27 = {}
+v_u_25.ClientServerPetState = v_u_27
+local function v_u_34(p28, p29) -- name: RestartCurrentPetAnimation
+    -- upvalues: (copy) v_u_19
+    local v30 = p28.CurrentAnimation
+    if v30 then
+        local v31 = v_u_19[v30.Name]
+        if v31 then
+            v31 = v31.AnimationEnded
+        end
+        if v31 then
+            v31(p29)
+        end
+    end
+    local v32 = p28.LoadedAnimations
+    if v32 then
+        for _, v33 in v32 do
+            v33:Stop(0)
+        end
+    end
+    p28.CurrentAnimation = nil
+    p28.LastAnimationState = nil
+    p28.LastAngles = nil
+end
+local function v_u_39(p35) -- name: RemoveServerPet
+    -- upvalues: (copy) v_u_27, (copy) v_u_19
+    local v36 = v_u_27[p35]
+    if v36 then
+        if v36.PetSoundHandler then
+            v36.PetSoundHandler:destroy()
+        end
+        if v36.Asset then
+            v36.Asset:Destroy()
+        end
+        if v36.Model then
+            v36.Model:Destroy()
+        end
+        local v37 = v36.CurrentAnimation
+        if v37 then
+            local v38 = v_u_19[v37.Name]
+            if v38 and v38.AnimationEnded then
+                v38.AnimationEnded(p35)
+            end
+            v37:Stop()
+        end
+        v_u_27[p35] = nil
+    end
+end
+local function v_u_59(p_u_40) -- name: CreateServerPet
+    -- upvalues: (copy) v_u_23, (copy) v_u_27, (copy) v_u_5, (copy) v_u_21, (copy) v_u_4, (copy) v_u_18, (copy) v_u_11, (copy) v_u_17, (copy) v_u_39
+    local v41 = v_u_23:YieldUntilData().Table.ServerPetStates
+    local v42
+    if v41 then
+        v42 = v41[p_u_40]
+    else
+        v42 = nil
+    end
+    local v43 = v_u_23:YieldUntilData().Table.ServerPetData
+    local v44
+    if v43 then
+        v44 = v43[p_u_40]
+    else
+        v44 = nil
+    end
+    if not (v42 and v44) then
+        return nil
+    end
+    if v_u_27[p_u_40] then
+        return v_u_27[p_u_40]
+    end
+    local v45 = v_u_5:WaitForChild(p_u_40, 2)
+    if not v45 then
+        return nil
+    end
+    local v46 = v44.PetType
+    local v47 = v_u_21[v46]
+    if not v47 then
+        warn("Server pet type not found:", v46)
+        return nil
+    end
+    local v48 = Instance.new("Part")
+    v48.Size = Vector3.new(2, 2, 2)
+    v48.Transparency = 1
+    v48.Material = Enum.Material.Neon
+    v48.Color = Color3.fromRGB(255, 14, 243)
+    v48.Anchored = true
+    v48.CanQuery = false
+    v48.CanTouch = false
+    v48:AddTag("PetTargetable")
+    v48:AddTag("ServerPet")
+    v48:SetAttribute("UUID", p_u_40)
+    v48:SetAttribute("IsServerOwned", true)
+    v48.Name = "ServerPetMover"
+    v48.CanCollide = false
+    local v49 = v44.PetData
+    local v50 = (v49.BaseWeight or 1) + v47.ModelScalePerLevel * (v49.Level or 1)
+    v48:PivotTo(v42.CurrentCFrame or CFrame.new(0, 5, 0))
+    local v51 = {
+        ["Asset"] = nil,
+        ["LoadedAnimations"] = nil,
+        ["IsServerOwned"] = true,
+        ["PetType"] = nil,
+        ["Asset"] = v48,
+        ["LoadedAnimations"] = {},
+        ["PetType"] = v46
+    }
+    v_u_27[p_u_40] = v51
+    local _ = v47.Variant
+    if v_u_4:GetAttribute("PetScaling") == false then
+        v45:ScaleTo(1)
+    else
+        v45:ScaleTo((math.max(0.1, v50)))
+    end
+    v45:AddTag("PetModel")
+    v45:AddTag("ServerPetModel")
+    if not v45.PrimaryPart then
+        warn(v45, "Server pet missing PrimaryPart")
+        v48:Destroy()
+        v_u_27[p_u_40] = nil
+        return nil
+    end
+    local v52 = v45.PrimaryPart
+    local v53
+    if v52 and v48 then
+        v53 = Instance.new("Weld")
+        v53.Part0 = v52
+        v53.Part1 = v48
+        v53.Name = "Weld"
+        v53.Parent = v48
+        v53.Name = ("%*_%*_WELD"):format(v52.Name, v48.Name)
+    else
+        v53 = nil
+    end
+    v53.C1 = v53.C1 * v47.WeldOffset
+    v51.Model = v45
+    local v_u_54 = v45:FindFirstChild("AnimationController")
+    if v_u_54 then
+        v_u_54 = v_u_54:FindFirstChild("Animator")
+    end
+    if v_u_54 then
+        local v_u_55 = {}
+        v51.LoadedAnimations = v_u_55
+        for v_u_56, v_u_57 in v47.Animations do
+            task.spawn(function()
+                -- upvalues: (copy) v_u_54, (copy) v_u_57, (copy) v_u_55, (copy) v_u_56
+                local v58 = v_u_54:LoadAnimation(v_u_57)
+                v58.Looped = true
+                v_u_55[v_u_56] = v58
+                if v_u_56 == "Idle" then
+                    v58:Play()
+                end
+            end)
+        end
+    end
+    if v_u_18 == "PC" then
+        v51.PetSoundHandler = v_u_11.new(v46, v45, p_u_40)
+    end
+    v51.PetVFXHandler = v_u_17.new(v46, v45, p_u_40)
+    v45.PrimaryPart.Anchored = false
+    v45.Parent = v48
+    v48.Parent = v_u_5
+    v45.Destroying:Once(function()
+        -- upvalues: (ref) v_u_39, (copy) p_u_40
+        v_u_39(p_u_40)
+    end)
+    return v51
+end
+local function v_u_94(p60, p61, p62) -- name: CreatePetWithScale
+    -- upvalues: (copy) v_u_26, (copy) v_u_23, (copy) v_u_21, (copy) v_u_5, (copy) v_u_25, (copy) v_u_2, (copy) v_u_10, (copy) v_u_4, (copy) v_u_6, (copy) v_u_15, (copy) v_u_18, (copy) v_u_11, (copy) v_u_17
+    local v63 = v_u_26[p60]
+    if not v63 then
+        v63 = {}
+        v_u_26[p60] = v63
+    end
+    if not v63 then
+        local v64 = tonumber(p60)
+        v63 = v_u_26[v64]
+        if not v63 then
+            v63 = {}
+            v_u_26[v64] = v63
+        end
+    end
+    local v65 = v63[p61]
+    local v66 = v_u_23:YieldUntilData().Table.PlayerPetData
+    local v67 = (v66[p60] or v66[tonumber(p60)]).PetInventory.Data[p61]
+    local v68 = v_u_21[v67.PetType]
+    if v68 then
+        local _ = v68.Model
+    end
+    local v_u_69 = v65.Asset
+    if v_u_69 then
+        local v70 = v65.Model
+        if v70 then
+            v70:Destroy()
+        end
+        local v71 = v_u_5:WaitForChild(p61)
+        if v71 then
+            local v_u_72 = v71
+            local _ = v68.Variant
+            local v73 = v_u_25:CalculateBoost(v_u_2:FindFirstChild(p60), p61, "SIZE_MODIFICATION") or 1
+            local v74 = v67.PetType
+            local v75 = v67.PetData.Level or 1
+            local v76 = math.min(v75, 100)
+            local v77 = v_u_10:CalculateWeight(v67.PetData.BaseWeight or 1, v76)
+            if v74 == "Chubby Chipmunk" then
+                p62 = (math.clamp(v77, 1, 50) - 1) * 0.20408163265306123 + 1
+            end
+            local v78 = v_u_2.LocalPlayer:GetAttribute("PetScaling") == false and 1 or math.max(0.1, p62) * v73
+            v_u_72:ScaleTo(v78)
+            v65.LastScale = v78
+            local v_u_79
+            if v_u_4:GetAttribute("KeepPetOnGround") == true then
+                v_u_79 = 0
+            else
+                local v80 = v_u_6(v_u_69.Position + Vector3.new(0, 1, 0), v_u_69.Position - Vector3.new(0, 1, 0), v_u_15)
+                v_u_79 = v80 and v80.Position.Y or 0
+            end
+            local function v_u_85() -- name: SetPivotToBoundsOffset
+                -- upvalues: (ref) v_u_72, (copy) v_u_69, (ref) v_u_79
+                if v_u_72 and v_u_69 then
+                    local v81 = v_u_72:GetPivot()
+                    local v82, v83 = v_u_72:GetBoundingBox()
+                    local v84 = v82.Position - v81.Position
+                    v_u_72:PivotTo(v_u_69.CFrame * CFrame.new(0, v_u_79 + v83.Y / 2 + v84.Y, 0))
+                end
+            end
+            v_u_85()
+            v_u_72:AddTag("PetModel")
+            local v86
+            if v_u_18 == "PC" then
+                v86 = v_u_11.new(v74, v_u_72, p61)
+            else
+                v86 = false
+            end
+            v65.PetSoundHandler = v86
+            v_u_17.new(v74, v_u_72, p61)
+            v65.PetVFXHandler = v_u_17.new(v74, v_u_72, p61)
+            if v_u_72.PrimaryPart then
+                local v87 = v_u_72.PrimaryPart
+                local v88
+                if v87 and v_u_69 then
+                    v88 = Instance.new("Weld")
+                    v88.Part0 = v87
+                    v88.Part1 = v_u_69
+                    v88.Name = "Weld"
+                    v88.Parent = v_u_69
+                    v88.Name = ("%*_%*_WELD"):format(v87.Name, v_u_69.Name)
+                else
+                    v88 = nil
+                end
+                v88.C1 = v88.C1 * v68.WeldOffset
+                v65.Model = v_u_72
+                local v_u_89 = v_u_72:FindFirstChild("AnimationController")
+                if v_u_89 then
+                    v_u_89 = v_u_89:FindFirstChild("Animator")
+                end
+                if v_u_89 then
+                    local v_u_90 = {}
+                    v65.LoadedAnimations = v_u_90
+                    for v_u_91, v_u_92 in v68.Animations do
+                        task.spawn(function()
+                            -- upvalues: (copy) v_u_89, (copy) v_u_92, (copy) v_u_90, (copy) v_u_91, (copy) v_u_85
+                            local v93 = v_u_89:LoadAnimation(v_u_92)
+                            v93.Looped = true
+                            v_u_90[v_u_91] = v93
+                            if v_u_91 == "Idle" then
+                                v93:Play()
+                            end
+                            task.defer(v_u_85)
+                        end)
+                    end
+                end
+                return v_u_72
+            end
+            warn(v_u_72, "DOES NOT HAVE A PRIMARY_PART??")
+        end
+    else
+        return
+    end
+end
+local function v_u_102(p95, p96) -- name: RemovePet
+    -- upvalues: (copy) v_u_26, (copy) v_u_19
+    local v97 = v_u_26[p95]
+    if not v97 then
+        v97 = {}
+        v_u_26[p95] = v97
+    end
+    local v98 = v97[p96]
+    if v98 then
+        if v98.PetSoundHandler then
+            v98.PetSoundHandler:destroy()
+        end
+        v98.Asset:Destroy()
+        local v99 = v98.Model
+        if v99 then
+            v99:Destroy()
+        end
+    end
+    local v100 = v98.CurrentAnimation
+    if v100 then
+        local v101 = v_u_19[v100.Name]
+        if v101 then
+            v101 = v101.AnimationEnded
+        end
+        if v101 then
+            v101(p96)
+        end
+        v100:Stop()
+    end
+    v97[p96] = nil
+end
+local function v_u_131(p103, p_u_104) -- name: GetPet
+    -- upvalues: (copy) v_u_26, (copy) v_u_2, (copy) v_u_24, (copy) v_u_5, (copy) v_u_23, (copy) v_u_21, (copy) v_u_10, (copy) v_u_4, (copy) v_u_6, (copy) v_u_15, (copy) v_u_94, (copy) v_u_102
+    local v_u_105 = tostring(p103)
+    local v106 = v_u_105
+    local v107 = v_u_26[v106]
+    if not v107 then
+        v107 = {}
+        v_u_26[v106] = v107
+    end
+    if not v107 then
+        local v108 = tonumber(v_u_105)
+        v107 = v_u_26[v108]
+        if not v107 then
+            v107 = {}
+            v_u_26[v108] = v107
+        end
+    end
+    local v109 = v107[p_u_104]
+    local v110 = v_u_2:FindFirstChild(v_u_105)
+    if v110 then
+        local v111 = v_u_24(v110)
+        if v111 then
+            if not v109 then
+                local v112 = v_u_5:WaitForChild(p_u_104, 2)
+                if not v112 then
+                    return nil
+                end
+                local v113 = Instance.new("Part")
+                v113.Size = Vector3.new(2, 2, 2)
+                v113.Transparency = 1
+                v113.Material = Enum.Material.Neon
+                v113.Color = Color3.fromRGB(15, 119, 255)
+                v113.Anchored = true
+                v113.CanQuery = false
+                v113:AddTag("PetTargetable")
+                v113:SetAttribute("UUID", p_u_104)
+                v113:SetAttribute("OWNER", (tostring(v_u_105)))
+                v113.Name = "PetMover"
+                v113.CanCollide = false
+                local v114 = v_u_23:YieldUntilData().Table
+                local v115 = v114.PlayerPetData
+                local v116 = v114.ActivePetStates
+                local v117 = v115[v_u_105] or v115[tonumber(v_u_105)]
+                if not v117 then
+                    return
+                end
+                local v118 = v117.PetInventory
+                if not v118 then
+                    return
+                end
+                local v119 = v118.Data[p_u_104]
+                if not v119 then
+                    return
+                end
+                local v120 = v119.PetType
+                local v121 = v_u_21[v120]
+                if v121 then
+                    local _ = v121.Model
+                end
+                if v115.PetType == "Chubby Chipmunk" then
+                    local v122 = v_u_10:CalculateWeight(v115.PetData.BaseWeight, v115.PetData.Level, v115.PetType)
+                    if v122 < 2 then
+                        local _ = v121.Model
+                    elseif v122 < 15 then
+                        local _ = v121.Model2
+                    elseif v122 < 30 then
+                        local _ = v121.Model3
+                    elseif v122 < 40 then
+                        local _ = v121.Model4
+                    else
+                        local _ = v121.Model5
+                    end
+                end
+                local v123 = v119.PetData.BaseWeight
+                if not v121 then
+                    warn(v120, "does not have foundpettypedata")
+                    return
+                end
+                local v124 = v123 + v121.ModelScalePerLevel * v119.PetData.Level
+                local v125 = v111:FindFirstChild("PetArea")
+                local v126 = (v116[v_u_105] or v116[tonumber(v_u_105)])[p_u_104]
+                if not v126 then
+                    return
+                end
+                local v127 = v_u_4:GetAttribute("PetScaling") == false and 1 or v124
+                local v128
+                if v_u_4:GetAttribute("KeepPetOnGround") == true then
+                    v128 = 0
+                else
+                    v128 = v_u_6(v113.Position + Vector3.new(0, 2, 0), v113.Position - Vector3.new(0, 2, 0), v_u_15)
+                    if v128 then
+                        v128 = v128.Position.Y
+                    end
+                end
+                local v129 = (v128 or 0) + (v121.YHeightScaler or 0) * v127
+                v113:PivotTo(v121.MovementType == "Grounded" and CFrame.new(v126.CurrentCFrame.X, v129, v126.CurrentCFrame.Z) or (v126.CurrentCFrame or v125.CFrame))
+                v107[p_u_104] = {
+                    ["Asset"] = v113,
+                    ["LoadedAnimations"] = {}
+                }
+                local v130 = v_u_94(v_u_105, p_u_104, v124)
+                if not v130 then
+                    v113:Destroy()
+                    v107[p_u_104] = nil
+                    return nil
+                end
+                v112:PivotTo(v130:GetPivot() * CFrame.new(0, v129 + v130:GetExtentsSize().Y, 0))
+                v112.PrimaryPart.Anchored = false
+                v112.Parent = v113
+                v113.Parent = v_u_5
+                v112.Destroying:Once(function()
+                    -- upvalues: (ref) v_u_102, (ref) v_u_105, (copy) p_u_104
+                    v_u_102(v_u_105, p_u_104)
+                end)
+            end
+            return v109
+        end
+    end
+end
+local function v_u_135() -- name: UpdateServerPetsRegistry
+    -- upvalues: (copy) v_u_23, (copy) v_u_27, (copy) v_u_39, (copy) v_u_59
+    local v132 = v_u_23:YieldUntilData().Table.ServerPetStates or {}
+    for v133 in v_u_27 do
+        if not v132[v133] then
+            v_u_39(v133)
+        end
+    end
+    for v134 in v132 do
+        if not v_u_27[v134] then
+            v_u_59(v134)
+        end
+    end
+end
+local function v_u_150() -- name: UpdateRegistry
+    -- upvalues: (copy) v_u_23, (copy) v_u_26, (copy) v_u_102, (copy) v_u_14, (copy) v_u_4, (copy) v_u_5, (copy) v_u_131, (copy) v_u_135
+    local v136 = v_u_23:YieldUntilData().Table.ActivePetStates
+    for v137, v138 in v_u_26 do
+        local v139 = tostring(v137)
+        local v140 = v136[v139] or v136[tonumber(v139)]
+        if v140 then
+            for v141 in v138 do
+                if not v140[v141] then
+                    v_u_102(v139, v141)
+                end
+            end
+        else
+            local v142 = v_u_26[v139]
+            if not v142 then
+                v142 = {}
+                v_u_26[v139] = v142
+            end
+            if v142 then
+                for v143 in v142 do
+                    v_u_102(v139, v143)
+                end
+            end
+            v_u_26[v139] = nil
+        end
+    end
+    for v144, v145 in v136 do
+        local v146 = tostring(v144)
+        if v_u_14 and v146 ~= v_u_4.Name then
+            for v_u_147 in v145 do
+                task.spawn(function()
+                    -- upvalues: (ref) v_u_5, (copy) v_u_147
+                    local v148 = v_u_5:WaitForChild(v_u_147, 0.5)
+                    if v148 then
+                        v148:Destroy()
+                    end
+                end)
+            end
+        else
+            for v149 in v145 do
+                v_u_131(v146, v149)
+            end
+        end
+    end
+    v_u_135()
+end
+local _ = workspace:WaitForChild("BasePlate").Baseplate
+local v_u_151 = {}
+local v_u_152 = {}
+local v_u_153 = 0
+local v_u_154 = false
+local function v_u_252(p155) -- name: UpdatePositioning
+    -- upvalues: (ref) v_u_153, (copy) v_u_152, (copy) v_u_151, (copy) v_u_23, (copy) v_u_26, (copy) v_u_14, (copy) v_u_4, (copy) v_u_21, (copy) v_u_10, (copy) v_u_25, (copy) v_u_2, (copy) v_u_34, (copy) v_u_6, (copy) v_u_15, (copy) v_u_18, (copy) v_u_19, (copy) v_u_27, (copy) v_u_16
+    v_u_153 = 0
+    table.clear(v_u_152)
+    table.clear(v_u_151)
+    local v156 = v_u_23:YieldUntilData().Table
+    local v157 = v156.ActivePetStates
+    local v158 = v156.PlayerPetData
+    local v159 = v156.ServerPetStates or {}
+    local v160 = v156.ServerPetData or {}
+    for v161, v162 in v_u_26 do
+        if not v_u_14 or v161 == v_u_4.Name then
+            local v163 = tostring(v161)
+            local v164 = v157[v163] or v157[tonumber(v163)]
+            if v164 then
+                for v165, v166 in v162 do
+                    local v167 = v164[v165]
+                    if v167 then
+                        local v168 = v166.Asset
+                        local v169 = v167.CurrentCFrame
+                        if v169 then
+                            local v170 = (v169.Position - v168.Position).Magnitude
+                            local v171 = ((v_u_26.LastUpdatedPosition or v169.Position) - v168.Position).Magnitude
+                            local v172 = v166.IsNotFirstTime
+                            if v171 > 2 or v172 then
+                                v166.LastUpdatedPosition = v168.Position
+                                v166.IsNotFirstTime = true
+                                local v173 = v168:FindFirstChildWhichIsA("Model", true)
+                                local v174 = v158[v163] or v158[tonumber(v163)]
+                                if v174 then
+                                    local v175 = v174.PetInventory.Data[v165]
+                                    local v176
+                                    if v173 then
+                                        v176 = v173.PrimaryPart
+                                    else
+                                        v176 = v173
+                                    end
+                                    if v176 and v175 then
+                                        local v177 = v175.PetType
+                                        local v178 = v_u_21[v177]
+                                        local v179 = v167.MovementSpeed
+                                        local v180 = v178.MovementType
+                                        local v181 = v175.PetData.BaseWeight
+                                        local v182 = v179 * p155 / v170
+                                        local v183 = math.clamp(v182, 0, 1)
+                                        local v184 = v168.Position:Lerp(v169.Position, v183)
+                                        local v185 = v175.PetData.Level or 1
+                                        local v186 = math.min(v185, 100)
+                                        local v187 = v_u_10:CalculateWeight(v175.PetData.BaseWeight or 1, v186)
+                                        local v188
+                                        if v177 == "Chubby Chipmunk" then
+                                            v188 = (math.clamp(v187, 1, 50) - 1) * 0.20408163265306123 + 1
+                                        else
+                                            v188 = v181 + v178.ModelScalePerLevel * v186
+                                        end
+                                        local v189 = v188 * (v_u_25:CalculateBoost(v_u_2:FindFirstChild(v163), v165, "SIZE_MODIFICATION") or 1)
+                                        local v190 = v_u_4:GetAttribute("PetScaling") == false and 1 or v189
+                                        local v191 = math.max(0.01, v190)
+                                        if v166.LastScale ~= v191 then
+                                            v173:ScaleTo(v191)
+                                            v166.LastScale = v191
+                                            v166.LastYHeight = nil
+                                            v_u_34(v166, v165)
+                                        end
+                                        local v192 = v176.Size
+                                        local v193
+                                        if v_u_4:GetAttribute("KeepPetOnGround") == true then
+                                            v193 = 0
+                                        else
+                                            v193 = v_u_6(v168.Position + Vector3.new(0, 2, 0), v168.Position - Vector3.new(0, 2, 0), v_u_15)
+                                            if v193 then
+                                                v193 = v193.Position.Y
+                                            end
+                                        end
+                                        local v194 = v193 or 0
+                                        local v195 = v166.LastYHeight or v194
+                                        local v196 = 5 * p155
+                                        local v197 = math.lerp(v195, v194, v196)
+                                        v166.LastYHeight = v197
+                                        local v198 = (v178.YHeightScaler or 0) * v190
+                                        local v199
+                                        if v180 == "Grounded" then
+                                            v199 = CFrame.new(v184.X, (v197 or 0) + v198 + v192.Y / 2, v184.Z)
+                                        else
+                                            v199 = CFrame.new(v184)
+                                        end
+                                        local v200 = v176.Position
+                                        local v201 = v169.Position
+                                        local v202
+                                        if v180 == "Grounded" then
+                                            v202 = (Vector2.new(v200.X, v200.Z) - Vector2.new(v201.X, v201.Z)).Magnitude <= 2.5
+                                        else
+                                            v202 = false
+                                        end
+                                        local v203
+                                        if v180 == "Flight" then
+                                            v203 = (v200 - v201).Magnitude <= 1
+                                        else
+                                            v203 = false
+                                        end
+                                        local v204 = v167.CustomAnimationState or ((v203 or v202) and "Idle" or "Walk")
+                                        if not v166.LastAnimationState or v166.LastAnimationState ~= v204 then
+                                            if v_u_18 == "PC" and v166.PetSoundHandler then
+                                                v166.PetSoundHandler:playSound(v204)
+                                            end
+                                            v166.PetVFXHandler:playVFX(v204)
+                                            v166.LastAnimationState = v204
+                                        end
+                                        local v205 = v166.LoadedAnimations
+                                        local v206 = v205[v204]
+                                        local v207 = v166.CurrentAnimation
+                                        if v207 ~= v206 and v206 then
+                                            v173:FindFirstChild("AnimationController")
+                                            for _, v208 in v205 do
+                                                v208:Stop()
+                                            end
+                                            if v207 then
+                                                local v209 = v_u_19[v207.Name]
+                                                if v209 then
+                                                    v209 = v209.AnimationEnded
+                                                end
+                                                if v209 then
+                                                    v209(v165)
+                                                end
+                                                v207:Stop()
+                                            end
+                                            v166.CurrentAnimation = v206
+                                            if v206 then
+                                                local v210 = v_u_19[v206.Name]
+                                                if v210 then
+                                                    v210 = v210.AnimationStarted
+                                                end
+                                                if v210 then
+                                                    v210(v165)
+                                                end
+                                                v206:Play()
+                                            end
+                                        end
+                                        if v166.LastTargetCFrame == v169 and v166.LastAngles then
+                                            v_u_153 = v_u_153 + 1
+                                            v_u_151[v_u_153] = v168
+                                            v_u_152[v_u_153] = v199 * v166.LastAngles
+                                        else
+                                            local v211, v212, v213 = (v180 == "Grounded" and v_u_10:GetLookAt(v168.Position, v169.Position) or CFrame.new(v168.Position, v169.Position)):ToEulerAnglesXYZ()
+                                            if v211 ~= v211 or (v212 ~= v212 or v213 ~= v213) then
+                                                v211 = 0
+                                                v212 = 0
+                                                v213 = 0
+                                            end
+                                            local v214 = CFrame.Angles(v211, v212, v213)
+                                            local v215 = (v166.LastAngles or v214):Lerp(v214, 6 * p155)
+                                            v_u_153 = v_u_153 + 1
+                                            v_u_151[v_u_153] = v168
+                                            v_u_152[v_u_153] = v199 * v215
+                                            v166.LastAngles = v215
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    for v216, v217 in v_u_27 do
+        local v218 = v159[v216]
+        if v218 then
+            local v219 = v160[v216]
+            if v219 then
+                local v220 = v217.Asset
+                if v220 then
+                    local v221 = v218.CurrentCFrame
+                    if v221 then
+                        local v222 = v_u_21[v219.PetType]
+                        if v222 then
+                            local v223 = v217.Model
+                            if v223 then
+                                v223 = v223.PrimaryPart
+                            end
+                            if v223 then
+                                local v224 = v218.MovementSpeed or 10
+                                local v225 = v222.MovementType
+                                local v226 = (v221.Position - v220.Position).Magnitude
+                                if v226 < 0.1 then
+                                    v_u_153 = v_u_153 + 1
+                                    v_u_151[v_u_153] = v220
+                                    v_u_152[v_u_153] = v220.CFrame
+                                else
+                                    local v227 = v224 * p155 / v226
+                                    local v228 = math.clamp(v227, 0, 1)
+                                    local v229 = v220.Position:Lerp(v221.Position, v228)
+                                    local v230 = v229.X
+                                    local v231 = v229.Z
+                                    local v232 = Vector3.new(v230, 500, v231)
+                                    local v233 = workspace:Raycast(v232, Vector3.new(0, -1000, 0), v_u_16)
+                                    local v234 = v217.LastYHeight or v220.Position.Y
+                                    if v233 then
+                                        v234 = v233.Position.Y
+                                    end
+                                    local v235 = v217.LastYHeight or v234
+                                    local v236 = 5 * p155
+                                    local v237 = math.lerp(v235, v234, v236)
+                                    v217.LastYHeight = v237
+                                    local v238 = v223.Size
+                                    local v239 = v222.YHeightScaler or 0
+                                    local v240
+                                    if v225 == "Grounded" then
+                                        v240 = CFrame.new(v229.X, v237 + v239 + v238.Y / 2, v229.Z)
+                                    else
+                                        v240 = CFrame.new(v229)
+                                    end
+                                    local v241 = v226 <= 2.5 and "Idle" or "Walk"
+                                    if v217.LastAnimationState ~= v241 then
+                                        if v_u_18 == "PC" and v217.PetSoundHandler then
+                                            v217.PetSoundHandler:playSound(v241)
+                                        end
+                                        if v217.PetVFXHandler then
+                                            v217.PetVFXHandler:playVFX(v241)
+                                        end
+                                        v217.LastAnimationState = v241
+                                    end
+                                    local v242 = v217.LoadedAnimations[v241]
+                                    local v243 = v217.CurrentAnimation
+                                    if v243 ~= v242 and v242 then
+                                        if v243 then
+                                            v243:Stop()
+                                        end
+                                        v217.CurrentAnimation = v242
+                                        v242:Play()
+                                    end
+                                    local v244, v245, v246 = (v225 == "Grounded" and v_u_10:GetLookAt(v220.Position, v221.Position) or CFrame.new(v220.Position, v221.Position)):ToEulerAnglesXYZ()
+                                    local v247 = v244 ~= v244 and 0 or v244
+                                    local v248 = v245 ~= v245 and 0 or v245
+                                    local v249 = v246 ~= v246 and 0 or v246
+                                    local v250 = CFrame.Angles(v247, v248, v249)
+                                    local v251 = (v217.LastAngles or v250):Lerp(v250, 6 * p155)
+                                    v217.LastAngles = v251
+                                    v_u_153 = v_u_153 + 1
+                                    v_u_151[v_u_153] = v220
+                                    v_u_152[v_u_153] = v240 * v251
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    workspace:BulkMoveTo(v_u_151, v_u_152, Enum.BulkMoveMode.FireCFrameChanged)
+end
+task.spawn(function()
+    -- upvalues: (copy) v_u_18, (ref) v_u_154, (copy) v_u_252
+    while true do
+        repeat
+            local v253 = task.wait(v_u_18 == "Mobile" and 0.04 or 0.03)
+        until not v_u_154
+        v_u_154 = true
+        local v254, v255 = pcall(v_u_252, v253)
+        v_u_154 = false
+        if not v254 then
+            warn(v255)
+        end
+    end
+end)
+function v_u_25.GetServerState(_, p256, p257) -- name: GetServerState
+    -- upvalues: (copy) v_u_23
+    local v258 = v_u_23:YieldUntilData().Table.ActivePetStates
+    local v259 = v258[p256] or v258[tonumber(p256)]
+    if v259 then
+        return v259[p257]
+    end
+end
+function v_u_25.GetPlayerDatastorePetData(_, p260) -- name: GetPlayerDatastorePetData
+    -- upvalues: (copy) v_u_23
+    local v261 = v_u_23:YieldUntilData().Table.PlayerPetData
+    local v262 = v261[p260] or v261[tonumber(p260)]
+    if v262 then
+        return v262
+    end
+end
+function v_u_25.GetPetData(_, p263, p264) -- name: GetPetData
+    -- upvalues: (copy) v_u_23
+    local v265 = v_u_23:YieldUntilData().Table.PlayerPetData
+    local v266 = v265[p263] or v265[tonumber(p263)]
+    if v266 then
+        return v266.PetInventory.Data[p264]
+    end
+end
+function v_u_25.GetPetDataFromPetObject(_, p267) -- name: GetPetDataFromPetObject
+    -- upvalues: (copy) v_u_25
+    if p267 then
+        return v_u_25:GetPetData(p267:GetAttribute("OWNER"), (p267:GetAttribute("UUID")))
+    end
+end
+function v_u_25.SetPetState(_, p268, p269, p270) -- name: SetPetState
+    -- upvalues: (copy) v_u_22
+    v_u_22:FireServer("SetPetState", p268, p269, p270)
+end
+function v_u_25.GetClientPetState(_, p271) -- name: GetClientPetState
+    -- upvalues: (copy) v_u_26
+    local v272 = v_u_26[p271]
+    if not v272 then
+        v272 = {}
+        v_u_26[p271] = v272
+    end
+    return v272
+end
+function v_u_25.CalculateBoost(_, p273, p274, p275) -- name: CalculateBoost
+    -- upvalues: (copy) v_u_25, (copy) v_u_13
+    if not p273 then
+        return 1
+    end
+    local v276 = v_u_25:GetPetData(p273.Name, p274)
+    if not v276 then
+        return 1
+    end
+    local v277 = v276.PetData
+    local v278 = v276.PetData.MutationType
+    local v279 = 1
+    if v278 then
+        local v280 = v_u_13.EnumToPetMutation[v278]
+        for _, v281 in v_u_13.PetMutationRegistry[v280].Boosts do
+            if v281.BoostType == p275 then
+                v279 = v279 + v281.BoostAmount
+            end
+        end
+    end
+    local v282 = v277.Boosts
+    if not v282 then
+        return v279
+    end
+    for _, v283 in v282 do
+        if v283.BoostType == p275 then
+            v279 = v279 + v283.BoostAmount
+        end
+    end
+    return v279
+end
+function v_u_25.GetBoostsOfType(_, p284, p285, p286) -- name: GetBoostsOfType
+    -- upvalues: (copy) v_u_25, (copy) v_u_13
+    local v287 = v_u_25:GetPetData(p284.Name, p285)
+    if v287 then
+        local v288 = v287.PetData.Boosts
+        if v288 then
+            local v289 = {}
+            for _, v290 in v288 do
+                if v290.BoostType == p286 then
+                    table.insert(v289, v290)
+                end
+            end
+            local v291 = v287.PetData.MutationType
+            if v291 then
+                local v292 = v_u_13.EnumToPetMutation[v291]
+                for _, v293 in v_u_13.PetMutationRegistry[v292].Boosts do
+                    if v293.BoostType == p286 then
+                        table.insert(v289, v293)
+                    end
+                end
+            end
+            return v289
+        end
+    end
+end
+function v_u_25.GetClientPetStateUUID(_, p294, p295) -- name: GetClientPetStateUUID
+    -- upvalues: (copy) v_u_25
+    local v296 = v_u_25:GetClientPetState(p294) or v_u_25:GetClientPetState((tonumber(p294)))
+    if v296 then
+        return v296[p295]
+    end
+end
+v_u_2.PlayerRemoving:Connect(function(p297)
+    -- upvalues: (copy) v_u_26, (copy) v_u_102
+    local v298 = v_u_26[p297]
+    if not v298 then
+        v298 = {}
+        v_u_26[p297] = v298
+    end
+    if v298 then
+        for v299 in v298 do
+            v_u_102(p297, v299)
+        end
+    end
+    v_u_26[p297] = nil
+end)
+function v_u_25.Feed(_, p300) -- name: Feed
+    -- upvalues: (copy) v_u_27, (copy) v_u_22
+    local v301 = v_u_27[p300]
+    if v301 and v301.IsServerOwned then
+        v_u_22:FireServer("FeedServerPet", p300)
+    else
+        v_u_22:FireServer("Feed", p300)
+    end
+end
+function v_u_25.GetServerPetData(_, p302) -- name: GetServerPetData
+    -- upvalues: (copy) v_u_23
+    local v303 = v_u_23:YieldUntilData().Table.ServerPetData
+    if v303 then
+        return v303[p302]
+    else
+        return nil
+    end
+end
+task.delay(2, function()
+    -- upvalues: (copy) v_u_150, (copy) v_u_23
+    v_u_150()
+    v_u_23:GetPathSignal("ActivePetStates/@"):Connect(function(...)
+        -- upvalues: (ref) v_u_150
+        v_u_150()
+    end)
+end)
+v_u_150()
+require(v1.Modules.userprint)
+task.spawn(function()
+    -- upvalues: (copy) v_u_150
+    while true do
+        task.wait(2)
+        v_u_150()
+    end
+end)
+return v_u_25
+-- Script Path: game:GetService("ReplicatedStorage").Modules.ActivePetsUIController
+-- Took 0.04s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v1 = game:GetService("Players")
+local v_u_2 = game:GetService("TweenService")
+local v3 = game:GetService("ReplicatedStorage")
+local v4 = game:GetService("UserInputService")
+game:GetService("RunService")
+local v_u_5 = v1.LocalPlayer
+local v_u_6 = v_u_5:WaitForChild("PlayerGui")
+require(v3.Modules.GuiController)
+local v_u_7 = require(v3.Modules.DataService)
+local v_u_8 = require(v3.Modules.PetServices.PetUtilities)
+local v_u_9 = require(v3.Modules.PetServices.ActivePetsService)
+local v_u_10 = require(v3.Modules.PetServices.PetCardUserInterfaceService)
+local v_u_11 = require(v3.Modules.PetServices.PetsService)
+local v_u_12 = require(v3.Modules.Notification)
+local v_u_13 = require(v3.Modules.SetupButton)
+local v_u_14 = require(v3.Data.PetRegistry)
+local v_u_15 = v_u_14.PetList
+local v_u_16 = require(v3.Modules.PetServices.PetActionUserInterfaceService)
+local v_u_17 = require(v3.Data.PetRegistry.PetMutationRegistry)
+local v_u_18 = require(v3.Modules.ConfirmationPromptController)
+local v_u_19 = require(v3.Modules.GardenGuideController)
+local v20 = v3:WaitForChild("GameEvents")
+local v_u_21 = v20:WaitForChild("RefreshActivePetsUI")
+local v_u_22 = v20:WaitForChild("PetsService")
+local v_u_23 = v20:WaitForChild("PetCooldownsUpdated")
+local v_u_24 = v20:WaitForChild("PetBoostService")
+local v_u_25 = v_u_6:WaitForChild("ActivePetUI")
+local v_u_26 = v_u_25.Frame:WaitForChild("Main")
+local v27 = v_u_26.Holder:WaitForChild("Header")
+local v_u_28 = v27.Exit.SENSOR
+local v_u_29 = v27:WaitForChild("Rename").SENSOR
+local v_u_30 = v27:WaitForChild("Title")
+local v_u_31 = v_u_26.PetDisplay.ScrollingFrame
+local v_u_32 = v_u_31:WaitForChild("PetTemplate")
+local v_u_33 = v_u_25.Frame:WaitForChild("Opener")
+local v_u_34 = v_u_33:WaitForChild("SENSOR")
+local v_u_35 = v_u_33:WaitForChild("OPEN_BUTTON")
+local v_u_36 = v_u_26:WaitForChild("PetLoadout")
+local v_u_37 = {
+    v_u_36.Main.ButtonHolder:WaitForChild("PET_LOADOUT_1"),
+    v_u_36.Main.ButtonHolder:WaitForChild("PET_LOADOUT_2"),
+    v_u_36.Main.ButtonHolder:WaitForChild("PET_LOADOUT_3"),
+    v_u_36.Main.ButtonHolder:WaitForChild("PET_LOADOUT_4"),
+    v_u_36.Main.ButtonHolder:WaitForChild("PET_LOADOUT_5"),
+    v_u_36.Main.ButtonHolder:WaitForChild("PET_LOADOUT_6")
+}
+local v_u_38 = v_u_36.Main.ButtonHolder:WaitForChild("PET_LOADOUT_ADD")
+local v_u_39 = {}
+local v_u_40 = {}
+local v_u_41 = {}
+local v_u_42 = {}
+local v_u_43 = false
+local v_u_44 = os.clock()
+local v_u_45 = false
+local v_u_46 = false
+local v_u_47 = false
+local v_u_48 = 0
+local v_u_49 = 0
+local v_u_50 = 0
+local v_u_51 = 0
+local v_u_52 = v4.TouchEnabled
+local v53 = v_u_52 and 0.475 or 0.5
+local v_u_54 = UDim2.fromScale(2, v53)
+local v_u_55 = UDim2.fromScale(0.85, v53)
+local v_u_56 = UDim2.fromScale(1, 0.5)
+local v_u_57 = UDim2.fromScale(-0.25, 0.5)
+local v_u_58 = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local v_u_59 = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+local function v64(p60) -- name: ExtractLoadoutStyle
+    local v61 = {}
+    for _, v62 in p60.Detail:GetChildren() do
+        if v62:IsA("Frame") then
+            local v63 = v62.BackgroundColor3
+            table.insert(v61, v63)
+        end
+    end
+    return {
+        ["BG"] = p60.BackgroundColor3,
+        ["Stroke"] = p60.UIStroke.Color,
+        ["TextStroke"] = p60.TextLabel.UIStroke.Color,
+        ["Vignettes"] = v61
+    }
+end
+local v_u_65 = v64(v_u_37[1])
+local v_u_66 = v64(v_u_37[2])
+local function v_u_71(p67, p68) -- name: ApplyStyleToLoadout
+    p67.BackgroundColor3 = p68.BG
+    p67.UIStroke.Color = p68.Stroke
+    p67.TextLabel.UIStroke.Color = p68.TextStroke
+    for v69, v70 in p67.Detail:GetChildren() do
+        if v70:IsA("Frame") and p68.Vignettes[v69] then
+            v70.BackgroundColor3 = p68.Vignettes[v69]
+        end
+    end
+end
+local v_u_72 = 1
+local function v_u_79() -- name: RefreshLoadoutLabels
+    -- upvalues: (copy) v_u_37, (copy) v_u_7, (copy) v_u_8
+    for v73, v74 in v_u_37 do
+        local v75 = v_u_7:GetData()
+        local v76 = v75 and v75.PetsData
+        if v76 then
+            v76 = v75.PetsData.PetLoadoutNames
+        end
+        if v76 then
+            v76 = v76[v73]
+        end
+        local v77
+        if type(v76) == "string" then
+            v77 = v_u_8:SanitizeLoadoutName(v76)
+            if v77 == "" or not v77 then
+                v77 = nil
+            end
+        else
+            v77 = nil
+        end
+        local v78 = v74.TextLabel
+        v78.Text = v77 or tostring(v73)
+        v78.Size = UDim2.fromScale(1, v77 and 0.9 or 0.5)
+    end
+end
+local function v_u_89() -- name: CommitRename
+    -- upvalues: (ref) v_u_46, (ref) v_u_48, (copy) v_u_30, (copy) v_u_8, (ref) v_u_72, (copy) v_u_7, (copy) v_u_22, (ref) v_u_49, (ref) v_u_50, (copy) v_u_79
+    if v_u_46 then
+        v_u_46 = false
+        v_u_48 = os.clock()
+        v_u_30.Interactable = false
+        v_u_30.TextEditable = false
+        v_u_30.PlaceholderText = ""
+        local v80 = v_u_8:SanitizeLoadoutName(v_u_30.Text)
+        local v81 = v_u_72
+        local v82 = v_u_7:GetData()
+        local v83 = v82 and v82.PetsData
+        if v83 then
+            v83 = v82.PetsData.PetLoadoutNames
+        end
+        if v83 then
+            v83 = v83[v81]
+        end
+        local v84
+        if type(v83) == "string" then
+            v84 = v_u_8:SanitizeLoadoutName(v83)
+            if v84 == "" or not v84 then
+                v84 = nil
+            end
+        else
+            v84 = nil
+        end
+        if v80 ~= (v84 or "") then
+            v_u_22:FireServer("RenamePetLoadout", v_u_72, v80)
+        end
+        if not v_u_46 then
+            local v85 = v_u_72
+            local v86 = v_u_7:GetData()
+            local v87 = v86 and v86.PetsData
+            if v87 then
+                v87 = v86.PetsData.PetLoadoutNames
+            end
+            if v87 then
+                v87 = v87[v85]
+            end
+            local v88
+            if type(v87) == "string" then
+                v88 = v_u_8:SanitizeLoadoutName(v87)
+                if v88 == "" or not v88 then
+                    v88 = nil
+                end
+            else
+                v88 = nil
+            end
+            v_u_30.Text = ("%* (%*/%*)"):format(v88 or ("Loadout %*"):format(v_u_72), v_u_49, v_u_50)
+        end
+        v_u_79()
+    end
+end
+local function v_u_100(p90) -- name: CreatePetFrame
+    -- upvalues: (copy) v_u_32, (copy) v_u_31, (copy) v_u_13, (ref) v_u_44, (copy) v_u_5, (ref) v_u_45, (copy) v_u_12, (copy) v_u_24, (copy) v_u_8, (copy) v_u_9, (copy) v_u_10, (copy) v_u_39, (copy) v_u_16, (copy) v_u_42, (copy) v_u_40, (copy) v_u_11
+    local v_u_91 = p90.UUID
+    local v_u_92 = v_u_32:Clone()
+    v_u_92.Name = v_u_91
+    v_u_92.Visible = true
+    v_u_92.Parent = v_u_31
+    local v93 = v_u_92:WaitForChild("Dropdown")
+    local v94 = v93.Main.Main.FEED_BUTTON.Holder
+    local v95 = v93.Main.Main.VIEW_BUTTON.Holder
+    local v96 = v93.Main.Main.PICKUP_BUTTON.Holder
+    v_u_13({
+        ["instance"] = nil,
+        ["scale"] = nil,
+        ["offset"] = 0.1,
+        ["onclick"] = nil,
+        ["instance"] = v94.Main.SENSOR,
+        ["scale"] = v94.UIScale,
+        ["onclick"] = function() -- name: onclick
+            -- upvalues: (ref) v_u_44, (ref) v_u_5, (ref) v_u_45, (ref) v_u_12, (ref) v_u_24, (copy) v_u_91, (ref) v_u_8, (ref) v_u_9
+            v_u_44 = os.clock()
+            local v97 = v_u_5.Character
+            if v97 then
+                local v_u_98 = v97:FindFirstChildWhichIsA("Tool")
+                local v99
+                if v_u_98 then
+                    v99 = v_u_98:HasTag("PetBoost")
+                else
+                    v99 = v_u_98
+                end
+                v_u_45 = v99
+                if v_u_45 then
+                    if not (v_u_98 and v_u_98:HasTag("PetBoost")) then
+                        return v_u_12:CreateNotification("You are not holding a Pet Boost!")
+                    end
+                    v_u_24:FireServer("ApplyBoost", v_u_91)
+                    return
+                elseif v_u_98 and v_u_98:HasTag("ActiveUIUsableGear") then
+                    xpcall(function()
+                        -- upvalues: (copy) v_u_98, (ref) v_u_8, (ref) v_u_91
+                        game.ReplicatedStorage.GameEvents.TryUseGear:FireServer(require(game.ReplicatedStorage.Modules.InventoryService):GetToolData(v_u_98).ItemType, v_u_8:FindLocalPetModel(v_u_91))
+                    end, warn)
+                else
+                    if not (v_u_98 and (v_u_98:HasTag("FruitTool") or v_u_98:HasTag("FoodTool"))) then
+                        return v_u_12:CreateNotification("You are not holding a fruit!")
+                    end
+                    v_u_9:Feed(v_u_91)
+                end
+            else
+                return
+            end
+        end
+    })
+    v_u_13({
+        ["instance"] = nil,
+        ["scale"] = nil,
+        ["offset"] = 0.1,
+        ["onclick"] = nil,
+        ["instance"] = v95.Main.SENSOR,
+        ["scale"] = v95.UIScale,
+        ["onclick"] = function() -- name: onclick
+            -- upvalues: (ref) v_u_10, (copy) v_u_91, (ref) v_u_5, (ref) v_u_39
+            v_u_10:SetTargetFromUUID(v_u_91)
+            v_u_10.TargetPlayer = v_u_5
+            v_u_10:Toggle(true, function()
+                -- upvalues: (ref) v_u_39
+                v_u_39:Open()
+            end)
+            v_u_39:Close()
+        end
+    })
+    v_u_13({
+        ["instance"] = nil,
+        ["scale"] = nil,
+        ["offset"] = 0.1,
+        ["onclick"] = nil,
+        ["instance"] = v96.Main.SENSOR,
+        ["scale"] = v96.UIScale,
+        ["onclick"] = function() -- name: onclick
+            -- upvalues: (ref) v_u_44, (ref) v_u_16, (ref) v_u_42, (copy) v_u_91, (copy) v_u_92, (ref) v_u_40, (ref) v_u_11, (ref) v_u_39
+            v_u_44 = os.clock()
+            v_u_16.Close()
+            v_u_42[v_u_91] = os.clock()
+            v_u_92:Destroy()
+            v_u_40[v_u_91] = nil
+            v_u_11:UnequipPet(v_u_91)
+            v_u_39:RebuildPetList()
+        end
+    })
+    v_u_40[v_u_91] = v_u_92
+    return v_u_92
+end
+function v_u_39.UpdatePetStatic(_, p101, p102) -- name: UpdatePetStatic
+    -- upvalues: (copy) v_u_15, (copy) v_u_17
+    local v103 = p101.PetData
+    local v104 = v_u_15[p101.PetType]
+    local v105 = v_u_17.EnumToPetMutation[v103.MutationType]
+    local v106 = v103.Name or "Unnamed"
+    p102.Main.PET_NAME.Text = v106
+    p102.Main.PET_NAME_SHADOW.Text = v106
+    local v107 = v105 and v105 ~= "Normal" and v105 .. " " .. (p101.PetType or "Unknown") or (p101.PetType or "Unknown")
+    p102.Main.PET_TYPE.Text = v107
+    p102.Main.PET_TYPE_SHADOW.Text = v107
+    local v108 = v103.Level or "1"
+    p102.Main.PET_AGE.Text = "Age: " .. v108
+    p102.Main.PET_AGE_SHADOW.Text = "Age: " .. v108
+    p102.Main.Item.PET_IMAGE.Image = v104 and (v104.Icon or "") or ""
+    if not v104 then
+        warn((("%* lacks RegistryData"):format(p101.PetType)))
+    end
+end
+function v_u_39.RebuildPetList(p109) -- name: RebuildPetList
+    -- upvalues: (copy) v_u_7, (copy) v_u_8, (copy) v_u_5, (ref) v_u_50, (ref) v_u_49, (copy) v_u_42, (copy) v_u_40, (copy) v_u_100, (ref) v_u_46, (ref) v_u_72, (copy) v_u_30, (copy) v_u_79
+    local v110 = v_u_7:GetData()
+    local _ = v110.PetsData.EquippedPets
+    local v111 = v_u_8:GetPetsSortedByAge(v_u_5, 0, false, true)
+    local v112 = {}
+    local v113 = os.clock()
+    v_u_50 = v110.PetsData.MutableStats.MaxEquippedPets
+    v_u_49 = 0
+    for _, v114 in v111 do
+        v112[v114.UUID] = true
+    end
+    for v115, v116 in v_u_42 do
+        if v112[v115] then
+            if v113 - v116 >= 5 then
+                v_u_42[v115] = nil
+            end
+        else
+            v_u_42[v115] = nil
+        end
+    end
+    for _, v117 in v111 do
+        if not v_u_42[v117.UUID] then
+            v_u_49 = v_u_49 + 1
+            if not v_u_40[v117.UUID] then
+                v_u_100(v117)
+            end
+        end
+    end
+    local v118 = {}
+    for _, v119 in v111 do
+        if not v_u_42[v119.UUID] then
+            local v120 = v_u_40[v119.UUID]
+            if v120 then
+                v118[v119.UUID] = true
+                p109:UpdatePetStatic(v119, v120)
+            end
+        end
+    end
+    for v121, v122 in v_u_40 do
+        if not v118[v121] then
+            v122:Destroy()
+            v_u_40[v121] = nil
+        end
+    end
+    if not v_u_46 then
+        local v123 = v_u_72
+        local v124 = v_u_7:GetData()
+        local v125 = v124 and v124.PetsData
+        if v125 then
+            v125 = v124.PetsData.PetLoadoutNames
+        end
+        if v125 then
+            v125 = v125[v123]
+        end
+        local v126
+        if type(v125) == "string" then
+            v126 = v_u_8:SanitizeLoadoutName(v125)
+            if v126 == "" or not v126 then
+                v126 = nil
+            end
+        else
+            v126 = nil
+        end
+        v_u_30.Text = ("%* (%*/%*)"):format(v126 or ("Loadout %*"):format(v_u_72), v_u_49, v_u_50)
+    end
+    v_u_79()
+end
+local v_u_127 = { "Movement Variation", "Block Wandering", "Tethered Pet Mutation" }
+function v_u_39.UpdateDynamic(_) -- name: UpdateDynamic
+    -- upvalues: (copy) v_u_40, (copy) v_u_8, (copy) v_u_5, (copy) v_u_15, (copy) v_u_14, (copy) v_u_41, (copy) v_u_127
+    for v128, v129 in v_u_40 do
+        local v130 = v_u_8:GetPetByUUID(v_u_5, v128)
+        if v130 then
+            local v131 = v130.PetData
+            local v132 = v_u_15[v130.PetType]
+            local v133 = (v131.Hunger or 0) / (v132.DefaultHunger or 1)
+            local v134 = math.clamp(v133, 0, 1)
+            v129.Main.Bars.HungerBar.Bar_Actual.Size = UDim2.fromScale(v134, 1)
+            local v135 = v_u_8:GetCurrentLevelXPCost(v131.Level)
+            local v136
+            if v131.Level >= v_u_14.PetConfig.XP_CONFIG.MAX_LEVEL then
+                v136 = 1
+            else
+                local v137 = (v131.LevelProgress or 0) / (v135 > 0 and v135 and v135 or 1)
+                v136 = math.clamp(v137, 0, 1)
+            end
+            v129.Main.Bars.ExpBar.Bar_Actual.Size = UDim2.fromScale(v136, 1)
+            local v138 = v_u_41[v128]
+            local v139 = v129.Main.Cooldowns:FindFirstChild("COOLDOWN_1")
+            local v140 = v129.Main.Cooldowns:FindFirstChild("COOLDOWN_2")
+            local function v149(p141, p142) -- name: setSlot
+                -- upvalues: (ref) v_u_127
+                if not p141 then
+                    return
+                end
+                if not p142 then
+                    p141.Visible = false
+                    return
+                end
+                for _, v143 in v_u_127 do
+                    if p142.Passive == v143 then
+                        p141.Visible = false
+                        return
+                    end
+                end
+                local v144 = p142.Time
+                local v145
+                if v144 <= 0 then
+                    v145 = "\226\143\179 READY"
+                else
+                    if v144 < 60 then
+                        ::l13::
+                        v145 = "\226\143\179 " .. v144 .. "s"
+                        goto l11
+                    end
+                    local v146 = v144 / 60
+                    v145 = "\226\143\179 " .. math.floor(v146) .. ":" .. string.format("%02d", v144 % 60) .. "m"
+                    if not v145 then
+                        goto l13
+                    end
+                end
+                ::l11::
+                local v147 = p141:FindFirstChild("COOLDOWN_NAME")
+                local v148 = p141:FindFirstChild("COOLDOWN_NAME_SHADOW")
+                if v147 then
+                    v147.Text = v145
+                end
+                if v148 then
+                    v148.Text = v145
+                end
+                p141.Visible = true
+            end
+            if v138 and v138[1] then
+                v149(v139, v138[1])
+            elseif v139 then
+                v139.Visible = false
+            end
+            if v138 and v138[2] then
+                v149(v140, v138[2])
+            elseif v140 then
+                v140.Visible = false
+            end
+            local v150 = v129.Main:FindFirstChild("Boosts")
+            if v150 then
+                local v151 = { v150:FindFirstChild("BOOST_1"), v150:FindFirstChild("BOOST_2"), v150:FindFirstChild("BOOST_3") }
+                local v152 = {}
+                for _, v153 in v131.Boosts or {} do
+                    if v153 and (not v153.HideInUI and (v153.Time or 0) > 0) then
+                        table.insert(v152, v153)
+                    end
+                end
+                table.sort(v152, function(p154, p155)
+                    return (p154.Time or 0) < (p155.Time or 0)
+                end)
+                for v156 = 1, #v151 do
+                    local v157 = v151[v156]
+                    local v158 = v152[v156]
+                    if v157 then
+                        if v158 then
+                            local v159 = (v158.Time or 0) / 60
+                            local v160 = math.floor(v159)
+                            local v161 = (v158.Time or 0) % 60
+                            local v162 = string.format
+                            local v163 = v158.BoostType
+                            local v164 = v162("%s %d:%02d", v163 == "PET_XP_BOOST" and "\240\159\167\160" or (v163 == "PASSIVE_BOOST" and "\240\159\146\170" or "\226\157\147"), v160, v161)
+                            local v165 = v157:FindFirstChild("BOOST_NAME")
+                            local v166 = v157:FindFirstChild("BOOST_NAME_SHADOW")
+                            if v165 then
+                                v165.Text = v164
+                            end
+                            if v166 then
+                                v166.Text = v164
+                            end
+                            v157.Visible = true
+                        else
+                            v157.Visible = false
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+local function v_u_170() -- name: RefreshLoadoutButtons
+    -- upvalues: (copy) v_u_7, (copy) v_u_37, (copy) v_u_38, (copy) v_u_79
+    local v167 = v_u_7:GetData().PetsData.MaxLoadoutSlots or 3
+    for v168, v169 in v_u_37 do
+        v169.Visible = v168 <= v167
+        v169.LayoutOrder = v168
+    end
+    v_u_38.Visible = v167 < 6
+    v_u_79()
+end
+function v_u_39.Toggle(_) -- name: Toggle
+    -- upvalues: (ref) v_u_51, (ref) v_u_43, (copy) v_u_6, (copy) v_u_19, (ref) v_u_46, (copy) v_u_30, (copy) v_u_55, (copy) v_u_54, (copy) v_u_57, (copy) v_u_56, (copy) v_u_35, (copy) v_u_33, (copy) v_u_26, (copy) v_u_25, (copy) v_u_58, (copy) v_u_59, (copy) v_u_2
+    local v171 = os.clock()
+    if v171 - v_u_51 >= 0.3 then
+        v_u_51 = v171
+        v_u_43 = not v_u_43
+        if v_u_43 and v_u_6.GardenGuide.Enabled then
+            v_u_19:Close()
+        end
+        if not v_u_43 and v_u_46 then
+            v_u_30:ReleaseFocus()
+        end
+        local v172 = v_u_43 and v_u_55 or v_u_54
+        local v173 = v_u_43 and v_u_57 or v_u_56
+        v_u_35.Text = v_u_43 and ">>" or "<<"
+        v_u_33.Parent = v_u_43 and v_u_26 or v_u_25.Frame
+        v_u_2:Create(v_u_26, v_u_43 and v_u_58 or v_u_59, {
+            ["Position"] = v172
+        }):Play()
+        v_u_33.Position = v173
+    end
+end
+function v_u_39.Open(p174) -- name: Open
+    -- upvalues: (ref) v_u_43
+    if not v_u_43 then
+        p174:Toggle()
+    end
+end
+function v_u_39.Close(p175) -- name: Close
+    -- upvalues: (ref) v_u_43
+    if v_u_43 then
+        p175:Toggle()
+    end
+end
+function v_u_39.SetOpen(p176, p177) -- name: SetOpen
+    -- upvalues: (ref) v_u_43
+    if v_u_43 ~= p177 then
+        p176:Toggle()
+    end
+end
+function v_u_39.Start(p_u_178) -- name: Start
+    -- upvalues: (copy) v_u_32, (copy) v_u_26, (copy) v_u_54, (copy) v_u_33, (copy) v_u_56, (copy) v_u_35, (copy) v_u_25, (copy) v_u_52, (copy) v_u_36, (copy) v_u_7, (ref) v_u_72, (ref) v_u_46, (copy) v_u_30, (copy) v_u_37, (copy) v_u_71, (copy) v_u_65, (copy) v_u_66, (copy) v_u_8, (ref) v_u_49, (ref) v_u_50, (copy) v_u_170, (copy) v_u_38, (copy) v_u_79, (ref) v_u_44, (copy) v_u_12, (copy) v_u_22, (copy) v_u_13, (copy) v_u_18, (copy) v_u_29, (ref) v_u_48, (ref) v_u_47, (copy) v_u_89, (copy) v_u_28, (copy) v_u_34, (ref) v_u_43, (copy) v_u_5, (copy) v_u_41, (copy) v_u_21, (copy) v_u_23
+    v_u_32.Visible = false
+    v_u_26.Position = v_u_54
+    v_u_33.Position = v_u_56
+    v_u_35.Text = "<<"
+    v_u_25.IgnoreGuiInset = v_u_52
+    v_u_36.AnchorPoint = Vector2.new(0, v_u_52 and 1 or 0)
+    v_u_36.Position = UDim2.fromScale(-0.25, v_u_52 and 1 or 0)
+    local v_u_179 = v_u_7:GetData()
+    local function v188() -- name: UpdateLoadout
+        -- upvalues: (copy) v_u_179, (ref) v_u_72, (ref) v_u_46, (ref) v_u_30, (ref) v_u_37, (ref) v_u_71, (ref) v_u_65, (ref) v_u_66, (ref) v_u_7, (ref) v_u_8, (ref) v_u_49, (ref) v_u_50
+        local v180 = v_u_179 and (v_u_179.PetsData and v_u_179.PetsData.SelectedPetLoadout) or 1
+        if v_u_72 == v180 then
+            return
+        else
+            if v_u_46 then
+                v_u_30:ReleaseFocus()
+            end
+            v_u_72 = v180
+            local v181 = v_u_72
+            for v182, v183 in v_u_37 do
+                v_u_71(v183, v182 == v181 and v_u_65 or v_u_66)
+            end
+            if not v_u_46 then
+                local v184 = v_u_72
+                local v185 = v_u_7:GetData()
+                local v186 = v185 and v185.PetsData
+                if v186 then
+                    v186 = v185.PetsData.PetLoadoutNames
+                end
+                if v186 then
+                    v186 = v186[v184]
+                end
+                local v187
+                if type(v186) == "string" then
+                    v187 = v_u_8:SanitizeLoadoutName(v186)
+                    if v187 == "" or not v187 then
+                        v187 = nil
+                    end
+                else
+                    v187 = nil
+                end
+                v_u_30.Text = ("%* (%*/%*)"):format(v187 or ("Loadout %*"):format(v_u_72), v_u_49, v_u_50)
+            end
+        end
+    end
+    v_u_7:GetPathSignal("PetsData/SelectedPetLoadout"):Connect(v188)
+    task.spawn(v188)
+    v_u_7:GetPathSignal("PetsData/MaxLoadoutSlots"):Connect(v_u_170)
+    local v189 = v_u_7:GetData().PetsData.MaxLoadoutSlots or 3
+    for v190, v191 in v_u_37 do
+        v191.Visible = v190 <= v189
+        v191.LayoutOrder = v190
+    end
+    v_u_38.Visible = v189 < 6
+    v_u_79()
+    for v_u_192, v193 in v_u_37 do
+        v193:WaitForChild("SENSOR").MouseButton1Click:Connect(function()
+            -- upvalues: (ref) v_u_44, (ref) v_u_7, (copy) v_u_192, (ref) v_u_12, (ref) v_u_72, (ref) v_u_22
+            v_u_44 = os.clock()
+            if v_u_192 > (v_u_7:GetData().PetsData.MaxLoadoutSlots or 3) then
+                return v_u_12:CreateNotification("You have not unlocked this loadout yet!")
+            elseif v_u_72 ~= v_u_192 then
+                v_u_22:FireServer("SwapPetLoadout", v_u_192)
+            end
+        end)
+    end
+    v_u_13({
+        ["instance"] = nil,
+        ["offset"] = 0.1,
+        ["onclick"] = nil,
+        ["instance"] = v_u_38.SENSOR,
+        ["onclick"] = function() -- name: onclick
+            -- upvalues: (ref) v_u_44, (ref) v_u_7, (ref) v_u_12, (ref) v_u_22, (ref) v_u_18
+            v_u_44 = os.clock()
+            local v194 = v_u_7:GetData()
+            if v194 then
+                v194 = v194.PetsData
+            end
+            local v195 = v194 and v194.MaxLoadoutSlots or 3
+            local v196, v197
+            if v195 >= 6 then
+                v196 = nil
+                v197 = nil
+            else
+                v196 = v195 + 1
+                v197 = v196 == 4 and "10T" or (v196 == 5 and "100T" or "1Q")
+            end
+            if not v196 then
+                return v_u_12:CreateNotification("You already have all pet loadout slots.")
+            end
+            v_u_18:Open({
+                ["Title"] = "Buy Pet Loadout Slot",
+                ["Header"] = nil,
+                ["Middle"] = nil,
+                ["Footer"] = "This will unlock an extra pet loadout slot.",
+                ["Header"] = ("Unlock Pet Loadout %*?"):format(v196),
+                ["Middle"] = ("Cost: %* Sheckles"):format(v197)
+            }, {
+                ["ConfirmEvent"] = v_u_22,
+                ["ConfirmEventData"] = { "BuyLoadoutSlot" }
+            })
+        end
+    })
+    v_u_30.Interactable = false
+    v_u_30.TextEditable = false
+    v_u_30.PlaceholderText = ""
+    v_u_29.MouseButton1Click:Connect(function()
+        -- upvalues: (ref) v_u_44, (ref) v_u_46, (ref) v_u_48, (ref) v_u_30, (ref) v_u_72, (ref) v_u_47, (ref) v_u_7, (ref) v_u_8
+        v_u_44 = os.clock()
+        if v_u_46 or os.clock() - v_u_48 < 0.25 then
+            return v_u_30:ReleaseFocus()
+        elseif not v_u_46 then
+            v_u_46 = true
+            v_u_30.Interactable = true
+            v_u_30.TextEditable = true
+            v_u_30.PlaceholderText = ("Loadout %*"):format(v_u_72)
+            v_u_47 = true
+            local v198 = v_u_30
+            local v199 = v_u_72
+            local v200 = v_u_7:GetData()
+            local v201 = v200 and v200.PetsData
+            if v201 then
+                v201 = v200.PetsData.PetLoadoutNames
+            end
+            if v201 then
+                v201 = v201[v199]
+            end
+            local v202
+            if type(v201) == "string" then
+                v202 = v_u_8:SanitizeLoadoutName(v201)
+                if v202 == "" or not v202 then
+                    v202 = nil
+                end
+            else
+                v202 = nil
+            end
+            v198.Text = v202 or ""
+            v_u_47 = false
+            v_u_30:CaptureFocus()
+            v_u_30.CursorPosition = #v_u_30.Text + 1
+        end
+    end)
+    v_u_30.FocusLost:Connect(function()
+        -- upvalues: (ref) v_u_44, (ref) v_u_89
+        v_u_44 = os.clock()
+        v_u_89()
+    end)
+    v_u_30:GetPropertyChangedSignal("Text"):Connect(function()
+        -- upvalues: (ref) v_u_46, (ref) v_u_47, (ref) v_u_8, (ref) v_u_30
+        if v_u_46 and not v_u_47 then
+            local v203 = v_u_8:FilterLoadoutNameInput(v_u_30.Text)
+            if v203 ~= v_u_30.Text then
+                local v204 = v_u_30.CursorPosition
+                v_u_47 = true
+                v_u_30.Text = v203
+                local v205 = v_u_30
+                local v206 = #v203 + 1
+                v205.CursorPosition = math.min(v204, v206)
+                v_u_47 = false
+            end
+        else
+            return
+        end
+    end)
+    v_u_28.MouseButton1Click:Connect(function()
+        -- upvalues: (ref) v_u_44, (copy) p_u_178
+        v_u_44 = os.clock()
+        p_u_178:Close()
+    end)
+    v_u_34.MouseButton1Click:Connect(function()
+        -- upvalues: (ref) v_u_44, (copy) p_u_178
+        v_u_44 = os.clock()
+        p_u_178:Toggle()
+    end)
+    v_u_26.InputBegan:Connect(function()
+        -- upvalues: (ref) v_u_44
+        v_u_44 = os.clock()
+    end)
+    task.spawn(function()
+        -- upvalues: (ref) v_u_43, (ref) v_u_46, (ref) v_u_44, (ref) v_u_5, (copy) p_u_178
+        while true do
+            repeat
+                task.wait(1)
+            until v_u_43 and (not v_u_46 and (os.clock() - v_u_44 > 8 and v_u_5:GetAttribute("AutoCloseActivePetsUI") ~= false))
+            p_u_178:Close()
+        end
+    end)
+    task.spawn(function()
+        -- upvalues: (ref) v_u_43, (ref) v_u_41, (copy) p_u_178
+        while true do
+            repeat
+                task.wait(1)
+            until v_u_43
+            for _, v207 in v_u_41 do
+                for _, v208 in v207 do
+                    local v209 = v208.Time - 1
+                    v208.Time = math.max(0, v209)
+                end
+            end
+            p_u_178:UpdateDynamic()
+            p_u_178:RebuildPetList()
+        end
+    end)
+    v_u_21.OnClientEvent:Connect(function()
+        -- upvalues: (copy) p_u_178
+        p_u_178:RebuildPetList()
+    end)
+    v_u_23.OnClientEvent:Connect(function(p210, p211)
+        -- upvalues: (ref) v_u_41
+        v_u_41[p210] = p211
+    end)
+    p_u_178:RebuildPetList()
+end
+v_u_39:Start()
+local function v_u_217(p_u_212) -- name: ChangeFeedButtonText
+    -- upvalues: (copy) v_u_40
+    for v213, v_u_214 in v_u_40 do
+        local v215, v216 = pcall(function()
+            -- upvalues: (copy) v_u_214, (copy) p_u_212
+            v_u_214.Dropdown.Main.Main.FEED_BUTTON.Holder.Main.TextLabel.Text = p_u_212
+        end)
+        if game:GetService("RunService"):IsStudio() and not v215 then
+            warn("ActivePetsUIController:HandleBoostEquipped() | Failed to update feed button for" .. v_u_214.Name .. ":" .. v213)
+            warn(v216)
+        end
+    end
+end
+local function v219() -- name: HandleBoostEquipped
+    -- upvalues: (copy) v_u_5, (ref) v_u_45, (copy) v_u_217
+    local v218 = v_u_5.Character:FindFirstChildWhichIsA("Tool")
+    if v218 then
+        v218 = v218:HasTag("PetBoost")
+    end
+    v_u_45 = v218
+    if v_u_45 then
+        v_u_217("Boost")
+    else
+        v_u_217("Feed")
+    end
+end
+v_u_5.Character.ChildAdded:Connect(v219)
+v_u_5.Character.ChildRemoved:Connect(v219)
+local v220 = v_u_5.Character:FindFirstChildWhichIsA("Tool")
+if v220 then
+    v220 = v220:HasTag("PetBoost")
+end
+local v221 = v220
+if v221 then
+    v_u_217("Boost")
+else
+    v_u_217("Feed")
+end
+return v_u_39
+-- Script Path: game:GetService("ReplicatedStorage").CmdrClient.Commands.teamevent_clearcooldown
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+return {
+    ["Name"] = "teamevent_clearcooldown",
+    ["Aliases"] = nil,
+    ["Description"] = "Resets a player\'s claim cooldown in an event.",
+    ["Group"] = "GameCommands",
+    ["Args"] = nil,
+    ["Aliases"] = { "te-cc" },
+    ["Args"] = {
+        {
+            ["Type"] = "player",
+            ["Name"] = "player",
+            ["Description"] = "The player to reset cooldown for."
+        },
+        {
+            ["Type"] = "teamEventName",
+            ["Name"] = "eventName",
+            ["Description"] = "The event name."
+        }
+    }
+}
+-- Script Path: game:GetService("ReplicatedStorage").CmdrClient.Commands.togglebypasssaveslotcooldown
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+return {
+    ["Name"] = "togglebypasssaveslotcooldown",
+    ["Aliases"] = nil,
+    ["Description"] = "Toggle bypassing the save-slot load cooldown for a player.",
+    ["Group"] = "GameCommands",
+    ["Args"] = nil,
+    ["Aliases"] = {},
+    ["Args"] = {
+        {
+            ["Type"] = "player",
+            ["Name"] = "user",
+            ["Description"] = "The player to toggle the save-slot cooldown bypass for."
+        },
+        {
+            ["Type"] = "boolean",
+            ["Name"] = "bypass",
+            ["Description"] = "Whether to bypass the cooldown (defaults to true).",
+            ["Default"] = true
+        }
+    }
+}
+-- Script Path: game:GetService("ReplicatedStorage").CmdrClient
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v1 = game:GetService("RunService")
+local v2 = game:GetService("StarterGui")
+local v3 = game:GetService("Players").LocalPlayer
+local v4 = script:WaitForChild("Shared")
+local v_u_5 = require(v4:WaitForChild("Util"))
+if v1:IsClient() == false then
+    print(v1:IsClient())
+    warn("Server scripts cannot require the client library. Please require the server library to use Cmdr in your own code.")
+    return {}
+end
+local v6 = {
+    ["ReplicatedRoot"] = nil,
+    ["RemoteFunction"] = nil,
+    ["RemoteEvent"] = nil,
+    ["ActivationKeys"] = nil,
+    ["Enabled"] = true,
+    ["MashToEnable"] = false,
+    ["ActivationUnlocksMouse"] = false,
+    ["HideOnLostFocus"] = true,
+    ["PlaceName"] = "Cmdr",
+    ["Util"] = nil,
+    ["Events"] = nil,
+    ["ReplicatedRoot"] = script,
+    ["RemoteFunction"] = script:WaitForChild("CmdrFunction"),
+    ["RemoteEvent"] = script:WaitForChild("CmdrEvent"),
+    ["ActivationKeys"] = {
+        [Enum.KeyCode.F2] = true
+    },
+    ["Util"] = v_u_5,
+    ["Events"] = {}
+}
+local v_u_10 = setmetatable(v6, {
+    ["__index"] = function(p_u_7, p8) -- name: __index
+        local v_u_9 = p_u_7.Dispatcher[p8]
+        if v_u_9 and type(v_u_9) == "function" then
+            return function(_, ...)
+                -- upvalues: (copy) v_u_9, (copy) p_u_7
+                return v_u_9(p_u_7.Dispatcher, ...)
+            end
+        end
+    end
+})
+v_u_10.Registry = require(v4.Registry)(v_u_10)
+v_u_10.Dispatcher = require(v4.Dispatcher)(v_u_10)
+if v2:WaitForChild("Cmdr") and (wait() and v3:WaitForChild("PlayerGui"):FindFirstChild("Cmdr") == nil) then
+    v2.Cmdr:Clone().Parent = v3.PlayerGui
+end
+local v_u_11 = require(script.CmdrInterface)(v_u_10)
+function v_u_10.SetActivationKeys(p12, p13) -- name: SetActivationKeys
+    -- upvalues: (copy) v_u_5
+    p12.ActivationKeys = v_u_5.MakeDictionary(p13)
+end
+function v_u_10.SetPlaceName(p14, p15) -- name: SetPlaceName
+    -- upvalues: (copy) v_u_11
+    p14.PlaceName = p15
+    v_u_11.Window:UpdateLabel()
+end
+function v_u_10.SetEnabled(p16, p17) -- name: SetEnabled
+    p16.Enabled = p17
+end
+function v_u_10.SetActivationUnlocksMouse(p18, p19) -- name: SetActivationUnlocksMouse
+    p18.ActivationUnlocksMouse = p19
+end
+function v_u_10.Show(p20) -- name: Show
+    -- upvalues: (copy) v_u_11
+    if p20.Enabled then
+        v_u_11.Window:Show()
+    end
+end
+function v_u_10.Hide(_) -- name: Hide
+    -- upvalues: (copy) v_u_11
+    v_u_11.Window:Hide()
+end
+function v_u_10.Toggle(p21) -- name: Toggle
+    -- upvalues: (copy) v_u_11
+    if not p21.Enabled then
+        return p21:Hide()
+    end
+    v_u_11.Window:SetVisible(not v_u_11.Window:IsVisible())
+end
+function v_u_10.SetMashToEnable(p22, p23) -- name: SetMashToEnable
+    p22.MashToEnable = p23
+    if p23 then
+        p22:SetEnabled(false)
+    end
+end
+function v_u_10.SetHideOnLostFocus(p24, p25) -- name: SetHideOnLostFocus
+    p24.HideOnLostFocus = p25
+end
+function v_u_10.HandleEvent(p26, p27, p28) -- name: HandleEvent
+    p26.Events[p27] = p28
+end
+if v1:IsServer() == false then
+    if v1:IsStudio() then
+        print("CMDR Client about to register all...")
+    end
+    while not workspace:GetAttribute("CMDRReady") do
+        if v1:IsStudio() then
+            print("CMDR Client waiting for server to set CMDRReady..")
+        end
+        wait(1)
+    end
+    if v1:IsStudio() then
+        print("CMDR Client DONE register all")
+    end
+    v_u_10.Registry:RegisterTypesIn(script:WaitForChild("Types"))
+    v_u_10.Registry:RegisterCommandsIn(script:WaitForChild("Commands"))
+end
+v_u_10.RemoteEvent.OnClientEvent:Connect(function(p29, ...)
+    -- upvalues: (ref) v_u_10
+    if v_u_10.Events[p29] then
+        v_u_10.Events[p29](...)
+    end
+end)
+require(script.DefaultEventHandlers)(v_u_10)
+return v_u_10
+-- Script Path: game:GetService("CorePackages").Workspace.Packages._Workspace.ExpChat.ExpChat.PresetChat.PresetCooldownProvider
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v1 = script:FindFirstAncestor("ExpChat")
+local v2 = v1.Parent
+local v_u_3 = require(v2.React)
+local v_u_4 = require(v2.SignalsReact)
+local v_u_5 = require(v1.Stores.GetPresetChatStore)
+local v_u_6 = require(script.Parent.PresetCooldownContext)
+return function(p7) -- name: PresetCooldownProvider
+    -- upvalues: (copy) v_u_5, (copy) v_u_4, (copy) v_u_3, (copy) v_u_6
+    local v_u_8 = v_u_5(false)
+    local v_u_9 = v_u_4.useSignalState(v_u_8.getPresetCooldownEndsAt)
+    local v_u_10
+    if v_u_9 == nil then
+        v_u_10 = false
+    else
+        v_u_10 = os.clock() < v_u_9
+    end
+    v_u_3.useEffect(function()
+        -- upvalues: (copy) v_u_9, (copy) v_u_8
+        if v_u_9 ~= nil then
+            local v11 = v_u_9 - os.clock()
+            if v11 > 0 then
+                local v_u_12 = false
+                task.delay(v11, function()
+                    -- upvalues: (ref) v_u_12, (ref) v_u_8, (ref) v_u_9
+                    if not v_u_12 then
+                        if v_u_8.getPresetCooldownEndsAt(false) == v_u_9 then
+                            v_u_8.setPresetCooldownEndsAt(nil)
+                        end
+                    end
+                end)
+                return function()
+                    -- upvalues: (ref) v_u_12
+                    v_u_12 = true
+                end
+            end
+            v_u_8.setPresetCooldownEndsAt(nil)
+        end
+    end, { v_u_9, v_u_8.setPresetCooldownEndsAt, v_u_8.getPresetCooldownEndsAt })
+    local v13 = {
+        ["value"] = v_u_3.useMemo(function()
+            -- upvalues: (copy) v_u_9, (copy) v_u_10
+            return {
+                ["endsAt"] = v_u_9,
+                ["isCooldownActive"] = v_u_10
+            }
+        end, { v_u_9, v_u_10 })
+    }
+    return v_u_3.createElement(v_u_6.Provider, v13, p7.children)
+end
+-- Script Path: game:GetService("CorePackages").Workspace.Packages._Workspace.ExpChat.ExpChat.PresetChat.PresetCooldownContext
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v1 = script:FindFirstAncestor("ExpChat").Parent
+return require(v1.React).createContext(nil)
+-- Script Path: game:GetService("CorePackages").Workspace.Packages._Index.Moments.Moments.Flags.GetFIntMomentsImmersiveHiddenCooldownMs
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+game:DefineFastInt("MomentsImmersiveHiddenCooldownMs", 350)
+return function()
+    return game:GetFastInt("MomentsImmersiveHiddenCooldownMs")
+end
+-- Script Path: game:GetService("ReplicatedStorage").Data.QuestData.Quests.FeedAnyPetFood
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v1 = game:GetService("ReplicatedStorage")
+require(v1.Data.QuestData.Types)
+require(v1.Modules.TimeHelper)
+return {
+    ["Type"] = "FeedAnyPetFood",
+    ["Display"] = function(_, p2, p3, p4) -- name: Display
+        assert(p4)
+        return p4[1] and {
+            ["Title"] = ("Feed any pet %*x %*"):format(p3, p4[1]),
+            ["Bar"] = ("%*/%*"):format(p2, p3),
+            ["Description"] = ("Cook up %* for your pet"):format(p4[1])
+        } or {
+            ["Title"] = nil,
+            ["Bar"] = nil,
+            ["Description"] = "Cook up a treat for your pet!",
+            ["Title"] = ("Feed any pet %* time%*"):format(p3, p3 > 1 and "s" or ""),
+            ["Bar"] = ("%*/%*"):format(p2, p3)
+        }
+    end,
+    ["Use"] = function(p5, p6) -- name: Use
+        local v7 = table.clone(p6)
+        v7.Type = p5.Type
+        return v7
+    end
+}
+-- Script Path: game:GetService("ReplicatedStorage").Data.UpdateLog.UpdateLogItemData
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+return {
+    ["Moon Machine"] = {
+        ["DisplayName"] = "Moon Machine",
+        ["Description"] = "Mutate your pets with one of the 4 new mutations! Bountiful, Threshing, Lunarbound, and Starry.",
+        ["ImageID"] = "rbxassetid://115057041490829"
+    }
+}
+-- Script Path: game:GetService("CorePackages").Workspace.Packages._Workspace.BulkPurchaseApp.BulkPurchaseApp.Store.Selectors.selectItemData
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v1 = script:FindFirstAncestor("BulkPurchaseApp")
+require(v1.Store.Types)
+return function(p2) -- name: selectItemData
+    return p2.itemData or {}
+end
+-- Script Path: game:GetService("CorePackages").Workspace.Packages._Workspace.AvatarExperienceCommon.AvatarExperienceCommon.State.Selectors.ItemData
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v1 = script:FindFirstAncestor("AvatarExperienceCommon")
+local v_u_2 = require(v1.Enums.ItemTypeEnum)
+return function(p3, p4, p5)
+    -- upvalues: (copy) v_u_2
+    if p5 == v_u_2.Asset then
+        return p3.AssetInfos[p4]
+    elseif p5 == v_u_2.Bundle then
+        return p3.BundleInfos[p4]
+    else
+        return nil
+    end
+end
+-- Script Path: game:GetService("CorePackages").Workspace.Packages._Workspace.AvatarExperienceInspectAndBuy.AvatarExperienceInspectAndBuy.Hooks.useItemStatusLocalization
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v1 = script:FindFirstAncestor("AvatarExperienceInspectAndBuy")
+local v2 = v1.Parent
+local v_u_3 = require(v2.React)
+local v4 = require(v2.AXCommon)
+require(v1.Types)
+local v_u_5 = v4.Enums.ItemTypeEnum
+local v6 = require(v1.Constants)
+local v_u_7 = v6.AssetLocalizationKeys
+local v_u_8 = v6.BundleLocalizationKeys
+local v_u_9 = v6.PriceStatusLocalizationKeys
+local v_u_10 = v6.ItemDetailsLocalizationKeys
+local v_u_11 = require(v2.Cryo)
+local v_u_12 = require(v2.Localization).Hooks.useLocalization
+return function(p_u_13)
+    -- upvalues: (copy) v_u_3, (copy) v_u_5, (copy) v_u_8, (copy) v_u_7, (copy) v_u_11, (copy) v_u_9, (copy) v_u_10, (copy) v_u_12
+    local v_u_14 = v_u_3.useMemo(function()
+        -- upvalues: (copy) p_u_13, (ref) v_u_5, (ref) v_u_8, (ref) v_u_7
+        if p_u_13 and p_u_13.itemType == v_u_5.Bundle then
+            return v_u_8
+        else
+            return v_u_7
+        end
+    end, { p_u_13 })
+    return v_u_12((v_u_3.useMemo(function()
+        -- upvalues: (ref) v_u_11, (copy) v_u_14, (ref) v_u_9, (ref) v_u_10, (copy) p_u_13
+        local v15 = v_u_11.Dictionary.join
+        local v16 = v_u_14
+        local v17 = v_u_9
+        local v18 = v_u_10
+        local v19 = {
+            ["ownedItems"] = {
+                v_u_10.ownedItems,
+                ["QUANTITY"] = not (p_u_13 and p_u_13.collectibleItemDetails) and 0 or p_u_13.collectibleItemDetails.resellableCount
+            }
+        }
+        return v15(v16, v17, v18, v19)
+    end, { v_u_14, p_u_13 })))
+end
+-- Script Path: game:GetService("ReplicatedStorage").CmdrClient.Types.PetBoostType
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+game:GetService("ReplicatedStorage")
+game:GetService("ServerStorage")
+local v_u_1 = require(game.ReplicatedStorage.Code.Util)
+local v_u_2 = {
+    "PET_XP_BOOST",
+    "PASSIVE_BOOST",
+    "SIZE_MODIFICATION",
+    "LEVEL_BOOST",
+    "ABILITY_REFRESH"
+}
+local v_u_7 = {
+    ["Transform"] = function(p3) -- name: Transform
+        -- upvalues: (copy) v_u_1, (copy) v_u_2
+        return v_u_1.MakeFuzzyFinder(v_u_2)(p3)
+    end,
+    ["Validate"] = function(p4) -- name: Validate
+        return #p4 > 0, "No pet boost could be found."
+    end,
+    ["Autocomplete"] = function(p5) -- name: Autocomplete
+        -- upvalues: (copy) v_u_1
+        return v_u_1.GetNames(p5)
+    end,
+    ["Parse"] = function(p6) -- name: Parse
+        return p6[1]
+    end,
+    ["Default"] = function(_) -- name: Default
+        return "Common"
+    end,
+    ["ArgumentOperatorAliases"] = {
+        ["me"] = ".",
+        ["all"] = "*",
+        ["others"] = "**",
+        ["random"] = "?"
+    }
+}
+return function(p8)
+    -- upvalues: (copy) v_u_7
+    p8:RegisterType("petboosttype", v_u_7)
+end
+-- Script Path: game:GetService("ReplicatedStorage").Data.PetRegistry.PetBoostRegistry
+-- Took 0s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v_u_1 = game:GetService("ReplicatedStorage")
+require(v_u_1.Types.PetTypes)
+local v_u_2 = require(v_u_1.Data.PetRegistry.PetList)
+local function v7(p3) -- name: GetListOfPetsWithTrait
+    -- upvalues: (copy) v_u_1
+    local v4 = require(v_u_1.Modules.PetTraitsData)
+    if not v4[p3] then
+        warn((("PetBoostRegistry.GetListOfPetsWithTrait | No trait named %*!"):format(p3)))
+        return {}
+    end
+    local v5 = {}
+    for v6, _ in v4[p3] do
+        table.insert(v5, v6)
+    end
+    return v5
+end
+local v8 = {}
+local v9 = {
+    ["BaseValue"] = 1,
+    ["Amount"] = nil,
+    ["Time"] = nil,
+    ["Amount"] = {
+        ["Small"] = 0.1,
+        ["Medium"] = 0.2,
+        ["Large"] = 0.3
+    },
+    ["Time"] = {
+        ["Small"] = 300,
+        ["Medium"] = 300,
+        ["Large"] = 400
+    }
+}
+v8.PASSIVE_BOOST = v9
+local v10 = {
+    ["BaseValue"] = 1,
+    ["Amount"] = nil,
+    ["Time"] = nil,
+    ["Amount"] = {
+        ["Small"] = 0.5,
+        ["Medium"] = 2,
+        ["Christmas"] = 4,
+        ["Smith"] = 5
+    },
+    ["Time"] = {
+        ["Small"] = 43200,
+        ["Medium"] = 86400,
+        ["Christmas"] = 108000,
+        ["Smith"] = 129600
+    }
+}
+v8.PET_XP_BOOST = v10
+local v11 = {
+    ["BaseValue"] = 1,
+    ["Amount"] = nil,
+    ["Time"] = nil,
+    ["Amount"] = {
+        ["Small"] = 10,
+        ["Medium"] = 30
+    },
+    ["Time"] = {
+        ["Small"] = 10,
+        ["Medium"] = 30
+    }
+}
+v8.SIZE_MODIFICATION = v11
+local v12 = {
+    ["BaseValue"] = 1,
+    ["Amount"] = nil,
+    ["Time"] = nil,
+    ["Amount"] = {
+        ["Small"] = 1,
+        ["Medium"] = 1,
+        ["Levelup"] = 1,
+        ["Acorn"] = 1,
+        ["Silver"] = 5,
+        ["Gold"] = 10,
+        ["Rainbow"] = 25,
+        ["Mega"] = 100,
+        ["Pumpkin"] = 1,
+        ["Beetle"] = 1
+    },
+    ["Time"] = {
+        ["Small"] = 1,
+        ["Medium"] = 1,
+        ["Levelup"] = 1,
+        ["Acorn"] = 1,
+        ["Silver"] = 1,
+        ["Gold"] = 1,
+        ["Rainbow"] = 1,
+        ["Mega"] = 1,
+        ["Pumpkin"] = 1,
+        ["Beetle"] = 1
+    }
+}
+v8.LEVEL_BOOST = v12
+local v13 = {
+    ["BaseValue"] = 1,
+    ["Amount"] = nil,
+    ["Time"] = nil,
+    ["Amount"] = {
+        ["Energy"] = 1,
+        ["Beetle"] = 1
+    },
+    ["Time"] = {
+        ["Energy"] = 1,
+        ["Beetle"] = 1
+    }
+}
+v8.ABILITY_REFRESH = v13
+return {
+    ["BoostTypeToBaseValue"] = {
+        ["PASSIVE_BOOST"] = 1,
+        ["PET_XP_BOOST"] = 1,
+        ["SIZE_MODIFICATION"] = 1
+    },
+    ["PetModelNameToBoostType"] = {
+        ["Toy"] = "PASSIVE_BOOST",
+        ["Treat"] = "PET_XP_BOOST",
+        ["Bowl"] = "SIZE_MODIFICATION",
+        ["Lollipop"] = "LEVEL_BOOST",
+        ["Chew"] = "ABILITY_REFRESH"
+    },
+    ["BoostTypeToPetModelName"] = {
+        ["PASSIVE_BOOST"] = "Toy",
+        ["PET_XP_BOOST"] = "Treat",
+        ["SIZE_MODIFICATION"] = "Bowl",
+        ["LEVEL_BOOST"] = "Lollipop",
+        ["ABILITY_REFRESH"] = "Chew"
+    },
+    ["CleanBoostType"] = {
+        ["PASSIVE_BOOST"] = "Passive Boost",
+        ["PET_XP_BOOST"] = "XP Boost",
+        ["SIZE_MODIFICATION"] = "Size Boost",
+        ["LEVEL_BOOST"] = "Level Boost",
+        ["ABILITY_REFRESH"] = "Ability Refresh"
+    },
+    ["BoostTypeStatData"] = v8,
+    ["BoostPetWhitelist"] = {
+        ["Acorn Lollipop"] = v7("Fall"),
+        ["Pumpkin Lollipop"] = v7("Halloween"),
+        ["Beetle Lollipop"] = (function(p14) -- name: GetPetsWithName
+            -- upvalues: (copy) v_u_1, (copy) v_u_2
+            local v15 = require(v_u_1.Modules.PetTraitsData)
+            local v16 = string.lower(p14) .. "$"
+            for v17 in v_u_2 do
+                if string.match(string.lower(v17), v16) and not v15[p14][v17] then
+                    v15.AddToTrait(v17, p14)
+                end
+            end
+            if not v15[p14] then
+                warn((("PetBoostRegistry.GetListOfPetsWithTrait | No trait named %*!"):format(p14)))
+                return {}
+            end
+            local v18 = {}
+            for v19, _ in v15[p14] do
+                table.insert(v18, v19)
+            end
+            return v18
+        end)("Beetle"),
+        ["Beetle Chew"] = v7("Beetle"),
+        ["Christmas Treat"] = v7("Christmas")
+    },
+    ["ShouldDisplayConfirmationPrompt"] = {
+        ["Silver Lollipop"] = true,
+        ["Gold Lollipop"] = true,
+        ["Rainbow Lollipop"] = true,
+        ["Mega Lollipop"] = true
+    }
+}
+-- Script Path: game:GetService("Players").Hercules_GRIB.Backpack["Medium Pet Toy x48[Passive Boost]"].PetBoostLocalScript
+-- Took 0.01s to decompile.
+-- Executor: Delta (1.1.738.1397)
+
+local v_u_1 = game:GetService("ReplicatedStorage")
+local v2 = game:GetService("Players")
+game:GetService("UserInputService")
+local v_u_3 = game:GetService("RunService")
+local v_u_4 = game:GetService("UserInputService")
+local v_u_5 = v_u_1:WaitForChild("GameEvents").PetBoostService
+local v_u_6 = require(v_u_1.Modules.Chalk)
+require(v_u_1.Code.Manhattan2D)
+require(v_u_1.Modules.GetFarmAsync)
+local v_u_7 = require(v_u_1.Modules.Notification)
+local v8 = require(v_u_1.Modules.BindToDestroy)
+require(v_u_1.Modules.MutationHandler)
+local v_u_9 = require(v_u_1.Modules.GetMouseToWorld)
+local v_u_10 = require(v_u_1.Modules.PetServices.PetsService)
+local v_u_11 = require(v_u_1.Data.PetRegistry.PetBoostRegistry)
+local v_u_12 = require(v_u_1.Modules.ProximityPromptController)
+local v_u_13 = require(v_u_1.Data.EnumRegistry.InventoryServiceEnums)
+local v_u_14 = require(v_u_1.Modules.ConfirmationPromptController)
+local v_u_15 = v2.LocalPlayer
+local v_u_16 = script.Parent
+local v_u_17 = true
+local v_u_18 = nil
+local v_u_19 = 0
+Color3.new(1, 1, 1)
+local v_u_20 = nil
+local v_u_21 = {
+    ["Acorn"] = "fall-related pets only"
+}
+local function v31() -- name: UpdateToolName
+    -- upvalues: (copy) v_u_16, (copy) v_u_13, (copy) v_u_11, (copy) v_u_21
+    local v22 = v_u_16:GetAttribute(v_u_13.PetBoostType) or "Pet Boost"
+    local v23 = v_u_16:GetAttribute(v_u_13.PetBoostSize) or "Size"
+    local v24 = v_u_16:GetAttribute(v_u_13.PetBoostAmount) or "Amount"
+    local v25 = v_u_16:GetAttribute(v_u_13.PetBoostTime) or "Time"
+    local v26 = v_u_16:GetAttribute(v_u_13.Uses) or "Uses"
+    local v27 = v_u_11.BoostTypeToPetModelName[v22]
+    local v28 = v_u_11.CleanBoostType[v22]
+    local v29 = ("%* Pet %* x%*[%*]"):format(v23, v27, v26, v28)
+    local v30 = ("Give your pet a %* %* for %*s."):format(v23, v28, v25)
+    if v22 == "LEVEL_BOOST" then
+        v23 = (v23 == "Small" or v23 == "Medium") and "Levelup" or v23
+        v29 = ("%* %* x%*"):format(v23, v27, v26)
+        v30 = ("Give your pet %* level%*"):format(v24, v24 == 1 and "" or "s")
+        if v_u_21[v23] then
+            v30 = v30 .. (" (%*)"):format(v_u_21[v23])
+        end
+    end
+    if v22 == "ABILITY_REFRESH" then
+        v29 = ("%* %* x%*"):format(v23, v27, v26)
+        v30 = "Refresh your pet\'s ability cooldowns"
+    end
+    v_u_16.Name = v29
+    v_u_16.ToolTip = v30
+end
+local function v_u_35() -- name: UpdateTarget
+    -- upvalues: (ref) v_u_18, (copy) v_u_15, (copy) v_u_16, (copy) v_u_9, (ref) v_u_19
+    v_u_18 = nil
+    if v_u_15 and v_u_15.Character then
+        if v_u_16.Parent == v_u_15.Character then
+            local v32 = RaycastParams.new()
+            v32.FilterDescendantsInstances = { workspace.PetsPhysical }
+            v32.FilterType = Enum.RaycastFilterType.Include
+            local v33 = v_u_9(v32, 1000)
+            local v34 = v33 and v33.Instance
+            if v34 then
+                v34 = v33.Instance:FindFirstAncestorWhichIsA("Model")
+            end
+            if v34 and v34:HasTag("PetModel") then
+                v_u_18 = v34
+                v_u_19 = time()
+            end
+        else
+            return
+        end
+    else
+        return
+    end
+end
+local function v46() -- name: Activate
+    -- upvalues: (copy) v_u_15, (copy) v_u_16, (ref) v_u_17, (copy) v_u_4, (copy) v_u_35, (ref) v_u_18, (copy) v_u_7, (copy) v_u_13, (copy) v_u_11, (copy) v_u_10, (copy) v_u_6, (copy) v_u_1, (ref) v_u_20, (copy) v_u_14, (copy) v_u_5
+    if v_u_15 and v_u_15.Character then
+        if v_u_16.Parent == v_u_15.Character then
+            if v_u_17 then
+                v_u_17 = false
+                task.delay(0.4, function()
+                    -- upvalues: (ref) v_u_17
+                    v_u_17 = true
+                end)
+                if v_u_4.TouchEnabled then
+                    v_u_35()
+                end
+                if v_u_18 then
+                    local v36 = v_u_18:FindFirstAncestor("PetMover")
+                    if v_u_18 and v_u_18:HasTag("PetModel") then
+                        local v37 = v36:GetAttribute("UUID")
+                        local v38 = v_u_16:GetAttribute(v_u_13.PetBoostType) or "Pet Boost"
+                        local v39 = ("%* %*"):format(v_u_16:GetAttribute(v_u_13.PetBoostSize) or "Size", v_u_11.BoostTypeToPetModelName[v38])
+                        if v_u_11.ShouldDisplayConfirmationPrompt[v39] then
+                            local v40 = v_u_10:GetPlayerPetData(v37)
+                            local v41 = "Common"
+                            local v42
+                            if v40 then
+                                v42 = ("on your %*?"):format((v_u_6.yellow(v40.PetType)))
+                                local v43 = require(v_u_1.Data.PetRegistry.PetList)[v40.PetType]
+                                if v43 then
+                                    v41 = v43.Rarity
+                                end
+                            else
+                                v42 = "on your pet?"
+                            end
+                            v_u_20 = v37
+                            local v44 = v_u_14
+                            local v45 = {
+                                ["Title"] = "Pet Boost Confirmation",
+                                ["Header"] = "Are you sure you want to use:",
+                                ["Middle"] = nil,
+                                ["Footer"] = nil,
+                                ["AnimatedWords"] = nil,
+                                ["TextLabel"] = "Footer",
+                                ["Middle"] = ("%*"):format((v_u_6.pink(v39))),
+                                ["Footer"] = v42,
+                                ["AnimatedWords"] = {
+                                    [("%*"):format(v40.PetType)] = v41
+                                }
+                            }
+                            v44:Open(v45, {
+                                ["ConfirmEvent"] = v_u_5,
+                                ["ConfirmEventData"] = { "ApplyBoost", v37 }
+                            })
+                        else
+                            v_u_5:FireServer("ApplyBoost", v37)
+                        end
+                    else
+                        v_u_7:CreateNotification("You must give this to a valid pet!")
+                        return
+                    end
+                else
+                    return
+                end
+            else
+                return
+            end
+        else
+            return
+        end
+    else
+        return
+    end
+end
+local v_u_47 = nil
+local function v48() -- name: Cleanup
+    -- upvalues: (ref) v_u_47, (copy) v_u_14, (copy) v_u_12
+    if v_u_47 then
+        v_u_47:Disconnect()
+        v_u_47 = nil
+    end
+    v_u_14:Close("Pet Boost Confirmation")
+    v_u_12:RemoveDisabler("PetBoost")
+end
+local function v49() -- name: StartUpdate
+    -- upvalues: (ref) v_u_47, (copy) v_u_3, (copy) v_u_35
+    if v_u_47 then
+        v_u_47:Disconnect()
+        v_u_47 = nil
+    end
+    v_u_47 = v_u_3.Heartbeat:Connect(function()
+        -- upvalues: (ref) v_u_35
+        v_u_35()
+    end)
+end
+v_u_16.Activated:Connect(v46)
+v_u_16.Equipped:Connect(v49)
+v_u_16.Unequipped:Connect(v48)
+v8(v_u_16, function()
+    -- upvalues: (copy) v_u_12
+    v_u_12:RemoveDisabler("PetBoost")
+end)
+v_u_16:GetAttributeChangedSignal(v_u_13.Uses):Connect(v31)
+v31()
