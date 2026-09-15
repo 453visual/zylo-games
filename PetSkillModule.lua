@@ -94,12 +94,57 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
         return s
     end
 
-    -- [5] GET ALL EQUIPPED PETS IN GARDEN (DENGAN UUID & TOOL)
+    -- [5] GET ALL EQUIPPED PETS IN GARDEN (DENGAN UUID & TOOL & MODEL FISIK)
     local function GetEquippedGardenPets()
         local equipped = {}
         local seenUUID = {}
 
-        -- 1. DataService
+        -- 1. Scan Model Fisik di Kebun Pemain (PetArea & Important)
+        local farm = GetFarm()
+        local function scanGardenContainer(cont)
+            if not cont then return end
+            for _, obj in ipairs(cont:GetChildren()) do
+                local owner = obj:GetAttribute("OWNER") or (obj:FindFirstChild("Owner") and obj.Owner.Value)
+                local uuid = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
+                if not uuid then
+                    for _, sub in ipairs(obj:GetChildren()) do
+                        local sU = sub:GetAttribute("UUID") or sub:GetAttribute("PET_UUID")
+                        if sU then uuid = sU break end
+                    end
+                end
+
+                if (not owner or owner == LocalPlayer.Name or owner == LocalPlayer.UserId) and uuid then
+                    local sUuid = tostring(uuid)
+                    local cleanU = sUuid:gsub("[{}]", ""):lower()
+                    if not seenUUID[cleanU] then
+                        seenUUID[cleanU] = true
+                        local nameOnly = cleanPetName(obj.Name)
+                        local weight = obj.Name:match("%[([%d%.]+)%s*KG%]") or obj.Name:match("([%d%.]+)%s*KG") or "?"
+                        local age = obj.Name:match("%[Age%s*(%d+)%]") or obj.Name:match("Age%s*(%d+)") or "?"
+                        table.insert(equipped, {
+                            UUID = sUuid,
+                            Model = obj,
+                            FullName = obj.Name,
+                            Name = nameOnly,
+                            Species = nameOnly,
+                            Weight = weight,
+                            Age = age,
+                            InGarden = true
+                        })
+                    end
+                end
+            end
+        end
+
+        if farm then
+            scanGardenContainer(farm:FindFirstChild("PetArea"))
+            if farm:FindFirstChild("Important") then
+                scanGardenContainer(farm.Important:FindFirstChild("Objects_Physical"))
+            end
+        end
+        scanGardenContainer(workspace:FindFirstChild("PetsPhysical"))
+
+        -- 2. DataService (Data Resmi Inventory)
         pcall(function()
             local DataService = require(ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("DataService", 2))
             local data = DataService and DataService:GetData()
@@ -107,21 +152,24 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
                 local eqList = data.PetsData.EquippedPets or {}
                 local inv = data.PetsData.PetInventory and data.PetsData.PetInventory.Data or {}
                 for _, uuid in ipairs(eqList) do
+                    local sUuid = tostring(uuid)
+                    local cleanU = sUuid:gsub("[{}]", ""):lower()
                     local pData = inv[uuid]
-                    if pData and not seenUUID[uuid] then
-                        seenUUID[uuid] = true
+                    if pData and not seenUUID[cleanU] then
+                        seenUUID[cleanU] = true
                         local species = cleanPetName(pData.PetType or pData.Species or pData.Name or "Pet")
                         table.insert(equipped, {
-                            UUID = tostring(uuid),
+                            UUID = sUuid,
                             Species = species,
-                            Name = species
+                            Name = species,
+                            InGarden = true
                         })
                     end
                 end
             end
         end)
 
-        -- 2. Character & Backpack
+        -- 3. Character & Backpack
         local containers = { LocalPlayer.Character, LocalPlayer:FindFirstChild("Backpack") }
         for _, container in ipairs(containers) do
             if container then
@@ -138,22 +186,24 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
 
                         if isPet and uuidAttr then
                             local uStr = tostring(uuidAttr)
+                            local cleanU = uStr:gsub("[{}]", ""):lower()
                             local spName = speciesAttr or cleanPetName(item.Name)
                             local found = false
                             for _, p in ipairs(equipped) do
-                                if p.UUID == uStr or p.UUID:gsub("[{}]", "") == uStr:gsub("[{}]", "") then
+                                if p.UUID:gsub("[{}]", ""):lower() == cleanU then
                                     p.Tool = item
                                     found = true
                                     break
                                 end
                             end
-                            if not found and not seenUUID[uStr] and container == LocalPlayer.Character then
-                                seenUUID[uStr] = true
+                            if not found and not seenUUID[cleanU] and container == LocalPlayer.Character then
+                                seenUUID[cleanU] = true
                                 table.insert(equipped, {
                                     UUID = uStr,
                                     Species = spName,
                                     Name = spName,
-                                    Tool = item
+                                    Tool = item,
+                                    InGarden = true
                                 })
                             end
                         end
@@ -165,42 +215,136 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
         return equipped
     end
 
-    -- [6] HELPER MENCARI TOOL PET DI BACKPACK BERDASARKAN UUID / SPESIES (DENGAN DUKUNGAN SEMUA ATRIBUT)
-    local function FindPetToolInBackpack(uuid, species)
-        local bp = LocalPlayer:FindFirstChild("Backpack")
-        if not bp then return nil end
+    -- [6] HELPER MENCARI MODEL FISIK PET DI KEBUN BERDASARKAN UUID
+    local function FindPetModelInGarden(uuid)
+        if not uuid then return nil end
+        local sUuid = tostring(uuid):gsub("[{}]", ""):lower()
+        local farm = GetFarm()
+        local containers = {}
+        if farm then
+            table.insert(containers, farm:FindFirstChild("PetArea"))
+            if farm:FindFirstChild("Important") then
+                table.insert(containers, farm.Important:FindFirstChild("Objects_Physical"))
+            end
+        end
+        table.insert(containers, workspace:FindFirstChild("PetsPhysical"))
 
-        local cleanUUID = uuid and tostring(uuid):gsub("[{}]", ""):lower() or nil
-        local targetClean = species and cleanPetName(species):lower() or nil
-
-        -- Prioritas 1: Berdasarkan PET_UUID / UUID
-        if cleanUUID then
-            for _, tool in ipairs(bp:GetChildren()) do
-                if tool:IsA("Tool") then
-                    local u = tool:GetAttribute("PET_UUID") 
-                           or tool:GetAttribute("UUID") 
-                           or tool:GetAttribute("PetUUID") 
-                           or tool:GetAttribute("petId") 
-                           or tool:GetAttribute("Id")
-                           or (tool:FindFirstChild("PET_UUID") and tool.PET_UUID.Value)
-                    if u and tostring(u):gsub("[{}]", ""):lower() == cleanUUID then
-                        return tool
+        for _, cont in ipairs(containers) do
+            if cont then
+                for _, obj in ipairs(cont:GetChildren()) do
+                    local owner = obj:GetAttribute("OWNER") or (obj:FindFirstChild("Owner") and obj.Owner.Value)
+                    if not owner or owner == LocalPlayer.Name or owner == LocalPlayer.UserId then
+                        local objUUID = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
+                        if not objUUID then
+                            for _, sub in ipairs(obj:GetChildren()) do
+                                local sU = sub:GetAttribute("UUID") or sub:GetAttribute("PET_UUID")
+                                if sU then objUUID = sU break end
+                            end
+                        end
+                        if objUUID and tostring(objUUID):gsub("[{}]", ""):lower() == sUuid then
+                            return obj
+                        end
                     end
                 end
             end
         end
+        return nil
+    end
 
-        -- Prioritas 2: Berdasarkan nama spesies
-        if targetClean then
-            for _, tool in ipairs(bp:GetChildren()) do
-                if tool:IsA("Tool") then
-                    local isPet = tool:FindFirstChild("PetToolLocal") 
-                               or tool:FindFirstChild("PetData") 
-                               or tool:GetAttribute("PET_UUID") ~= nil
-                               or tool:GetAttribute("Species") ~= nil
-                    if isPet then
-                        local tClean = cleanPetName(tool.Name):lower()
-                        if tClean == targetClean or tClean:find(targetClean, 1, true) or targetClean:find(tClean, 1, true) then
+    -- [7] HELPER MEMBACA UUID TOOL PET DENGAN LENGKAP & PRESISI
+    local function GetToolUUID(tool)
+        if not tool or not tool:IsA("Tool") then return nil end
+
+        -- Cek langsung atribut tool
+        for _, attr in ipairs({"PET_UUID", "UUID", "PetUUID", "petId", "Id", "pet_uuid", "uuid"}) do
+            local val = tool:GetAttribute(attr)
+            if val then return tostring(val):gsub("[{}]", ""):lower() end
+        end
+
+        -- Cek semua atribut generik jika ada ID panjang
+        for attrName, attrVal in pairs(tool:GetAttributes()) do
+            local aLow = attrName:lower()
+            if aLow:find("uuid") or aLow:find("id") then
+                if type(attrVal) == "string" and #attrVal > 6 then
+                    return tostring(attrVal):gsub("[{}]", ""):lower()
+                end
+            end
+        end
+
+        -- Cek di dalam PetData folder/configuration jika ada
+        local pData = tool:FindFirstChild("PetData")
+        if pData then
+            for _, attr in ipairs({"PET_UUID", "UUID", "PetUUID", "petId", "Id", "pet_uuid", "uuid"}) do
+                local val = pData:GetAttribute(attr)
+                if val then return tostring(val):gsub("[{}]", ""):lower() end
+            end
+            for _, childName in ipairs({"PET_UUID", "UUID", "PetUUID", "petId", "Id"}) do
+                local ch = pData:FindFirstChild(childName)
+                if ch and ch:IsA("ValueBase") and ch.Value then
+                    return tostring(ch.Value):gsub("[{}]", ""):lower()
+                end
+            end
+        end
+
+        -- Cek direct children ValueBase
+        for _, ch in ipairs(tool:GetChildren()) do
+            local n = ch.Name:lower()
+            if (n:find("uuid") or n == "id" or n == "petid") and ch:IsA("ValueBase") and ch.Value then
+                return tostring(ch.Value):gsub("[{}]", ""):lower()
+            end
+        end
+
+        return nil
+    end
+
+    -- [8] HELPER MENCARI TOOL PET ASLI DI BACKPACK (100% AKURAT, ANTI SWAP DENGAN PET LAIN)
+    local function FindExactPetTool(targetUUID, expectedFullName, expectedSpecies, toolsBefore)
+        local bp = LocalPlayer:FindFirstChild("Backpack")
+        if not bp then return nil end
+
+        local cleanTargetUUID = targetUUID and tostring(targetUUID):gsub("[{}]", ""):lower() or nil
+        local cleanSpecies = expectedSpecies and cleanPetName(expectedSpecies):lower() or nil
+        local cleanFullName = expectedFullName and expectedFullName:lower():gsub("%s+", " ") or nil
+
+        local candidateTools = {}
+        for _, item in ipairs(bp:GetChildren()) do
+            if item:IsA("Tool") then
+                table.insert(candidateTools, item)
+            end
+        end
+        if LocalPlayer.Character then
+            for _, item in ipairs(LocalPlayer.Character:GetChildren()) do
+                if item:IsA("Tool") then
+                    table.insert(candidateTools, item)
+                end
+            end
+        end
+
+        -- TAHAP 1: MATCH BY EXACT UUID (Prioritas tertinggi dan mutlak)
+        if cleanTargetUUID then
+            for _, tool in ipairs(candidateTools) do
+                local tUUID = GetToolUUID(tool)
+                if tUUID and tUUID == cleanTargetUUID then
+                    return tool
+                end
+            end
+        end
+
+        -- TAHAP 2: DELTA TRACKING (Tool yang baru saja tiba setelah unequip)
+        -- Tool ini TIDAK ADA di tas sebelum unequip dilakukan.
+        -- Syarat: Tidak boleh memiliki UUID yang berbeda dari cleanTargetUUID!
+        if toolsBefore then
+            for _, tool in ipairs(candidateTools) do
+                if not toolsBefore[tool] then
+                    local tUUID = GetToolUUID(tool)
+                    -- Pastikan bukan pet lain yang memiliki UUID berbeda
+                    if not tUUID or not cleanTargetUUID or tUUID == cleanTargetUUID then
+                        local tName = tool.Name:lower():gsub("%s+", " ")
+                        local tSpecies = cleanPetName(tool.Name):lower()
+                        local matchesSpecies = cleanSpecies and (tSpecies == cleanSpecies or tSpecies:find(cleanSpecies, 1, true) or cleanSpecies:find(tSpecies, 1, true))
+                        local matchesFullName = cleanFullName and (tName:find(cleanFullName, 1, true) or cleanFullName:find(tName, 1, true))
+                        
+                        if matchesFullName or matchesSpecies then
                             return tool
                         end
                     end
@@ -208,10 +352,25 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
             end
         end
 
+        -- TAHAP 3: MATCH BY EXACT FULL NAME (Termasuk berat KG & Umur yang identik)
+        -- Hanya jika nama persis sama dan UUID tidak bertabrakan dengan pet lain
+        if cleanFullName then
+            for _, tool in ipairs(candidateTools) do
+                local tUUID = GetToolUUID(tool)
+                if not tUUID or not cleanTargetUUID or tUUID == cleanTargetUUID then
+                    local tName = tool.Name:lower():gsub("%s+", " ")
+                    if tName == cleanFullName then
+                        return tool
+                    end
+                end
+            end
+        end
+
+        -- PERLINDUNGAN: Jangan pernah memilih tool acak yang sudah ada di tas sebelumnya!
         return nil
     end
 
-    -- [7] HELPER DETEKSI ITEM BOOST / TOY DI BACKPACK
+    -- [9] HELPER DETEKSI ITEM BOOST / TOY DI BACKPACK
     local function GetOwnedBoostTools()
         local boostTools = {}
         local bp = LocalPlayer:FindFirstChild("Backpack")
@@ -248,7 +407,7 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
         return boostTools
     end
 
-    -- [8] HELPER VALIDASI MULTI-SELEKSI
+    -- [10] HELPER VALIDASI MULTI-SELEKSI
     local function IsPetSelectedForPNP(species)
         local sel = State.PNP.SelectedPets or {}
         if sel["All Equipped Pets"] then return true end
@@ -300,7 +459,7 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
 
     -- =====================================================================
     -- [LOGIKA 1: EKSEKUTOR FITUR PNP (PICK AND PLACE)]
-    -- 100% TERJAMIN: MENUNGGU TOOL TIBA DI TAS + TRIPLE PLACE EXECUTION
+    -- 100% PRESISI & AKURAT: PET YANG DI-PICK ADALAH PET YANG SAMA SAAT DI-PLACE
     -- =====================================================================
     local isPnPBusy = {}
     local previousCooldowns = {}
@@ -310,10 +469,64 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
         isPnPBusy[petUUID] = true
 
         task.spawn(function()
-            local stripped = petUUID:gsub("[{}]", "")
-            print(string.format("[ZyloHub PNP] ⚡ Pet %s (%s) skill aktif! Memulai Pick...", petSpecies or "Unknown", stripped))
+            local stripped = tostring(petUUID):gsub("[{}]", "")
 
-            -- 1. TAHAP PICK (Ambil pet ke tas via Remote & Module)
+            -- 1. IDENTIFIKASI MODEL PET DI KEBUN SEBELUM DI-PICK (Ambil CFrame asli & FullName)
+            local petModel = FindPetModelInGarden(petUUID)
+            local originalCFrame = nil
+            local petFullName = nil
+            if petModel then
+                pcall(function()
+                    originalCFrame = petModel:GetPivot()
+                    petFullName = petModel.Name
+                end)
+            end
+
+            -- Jika belum dapat FullName dari model fisik, ambil dari DataService
+            if not petFullName then
+                pcall(function()
+                    local DataService = require(ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("DataService", 2))
+                    local data = DataService and DataService:GetData()
+                    if data and data.PetsData and data.PetsData.PetInventory and data.PetsData.PetInventory.Data then
+                        local entry = data.PetsData.PetInventory.Data[petUUID] or data.PetsData.PetInventory.Data[stripped]
+                        if entry then
+                            local pData = entry.PetData or {}
+                            local sp = entry.PetType or pData.Species or pData.Name
+                            local bw = pData.BaseWeight or pData.Weight
+                            if sp and bw then
+                                petFullName = string.format("%s [%s KG]", sp, tostring(bw))
+                            end
+                        end
+                    end
+                end)
+            end
+
+            print(string.format("[ZyloHub PNP] ⚡ Pet %s (%s) skill aktif! Target: %s", petSpecies or "Unknown", stripped, petFullName or "Pet Model"))
+
+            -- 2. SNAPSHOT TOOL TAS SEBELUM UNEQUIP (Untuk Delta Tracking)
+            local toolsBefore = {}
+            local bp = LocalPlayer:FindFirstChild("Backpack")
+            if bp then
+                for _, t in ipairs(bp:GetChildren()) do
+                    if t:IsA("Tool") then toolsBefore[t] = true end
+                end
+            end
+            if LocalPlayer.Character then
+                for _, t in ipairs(LocalPlayer.Character:GetChildren()) do
+                    if t:IsA("Tool") then toolsBefore[t] = true end
+                end
+            end
+
+            -- 3. TAHAP PICK (Trigger ProximityPrompt model fisik asli + Remote + Module)
+            if petModel then
+                local prompt = petModel:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if prompt and prompt.Parent then
+                    prompt.HoldDuration = 0
+                    prompt.RequiresLineOfSight = false
+                    pcall(function() fireproximityprompt(prompt) end)
+                end
+            end
+
             if PetsServiceMod and PetsServiceMod.UnequipPet then
                 pcall(function() PetsServiceMod:UnequipPet(petUUID) end)
                 pcall(function() PetsServiceMod:UnequipPet(stripped) end)
@@ -325,27 +538,34 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
                 pcall(function() PetsServiceRemote:FireServer("Unequip", stripped) end)
             end
 
-            -- 2. TAHAP JEDA (Waktu jeda yang ditentukan pemain)
+            -- 4. TAHAP JEDA (Waktu jeda yang ditentukan pemain)
             local userDelay = math.max(0.05, tonumber(State.PNP.DelaySeconds) or 0.1)
             task.wait(userDelay)
 
-            -- 3. TUNGGU TOOL MUNCUL DI TAS DENGAN LOOP RETRY (Mencegah gagal karena lag server)
+            -- 5. TUNGGU TOOL ASLI TIBA DI TAS DENGAN POLLING REAKTIF (Hingga 3.0 detik)
             local petTool = nil
             local startWait = tick()
             while tick() - startWait < 3.0 do
-                petTool = FindPetToolInBackpack(petUUID, petSpecies)
+                petTool = FindExactPetTool(petUUID, petFullName, petSpecies, toolsBefore)
                 if petTool then break end
                 task.wait(0.08)
             end
 
-            -- 4. TAHAP PLACE: KEMBALIKAN PET KE KEBUN DENGAN 3 LAPIS EKSEKUSI
+            if petTool then
+                print(string.format("[ZyloHub PNP] 🎯 Tool pet asli terverifikasi: %s", petTool.Name))
+            else
+                print(string.format("[ZyloHub PNP] ⚠️ Tool spesifik belum di tas, melanjutkan penempatan via Server Remote ke posisi semula..."))
+            end
+
+            -- 6. TAHAP PLACE: KEMBALIKAN PET KE POSISI ASLI KEBUN DENGAN MULTI-LAYER PRESISI
             local farm = GetFarm()
             local petArea = farm and farm:FindFirstChild("PetArea")
-            local targetPos = (petArea and petArea.CFrame + Vector3.new(0, 2, 0))
+            local targetPos = originalCFrame
+                or (petArea and petArea.CFrame + Vector3.new(0, 2, 0))
                 or (LocalPlayer.Character and LocalPlayer.Character:GetPivot())
                 or CFrame.new(0, 5, 0)
 
-            -- Lapis 1: Remote resmi EquipPet ke CFrame kebun
+            -- Lapis 1: Remote resmi EquipPet langsung ke target CFrame
             if PetsServiceRemote then
                 pcall(function() PetsServiceRemote:FireServer("EquipPet", petUUID, targetPos) end)
                 pcall(function() PetsServiceRemote:FireServer("EquipPet", stripped, targetPos) end)
@@ -359,29 +579,24 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
                 pcall(function() PetsServiceMod:EquipPet(stripped, targetPos) end)
             end
 
-            -- Lapis 3: Humanoid Equip & Tool Activate (Trigger penempatan fisik di kebun)
+            -- Lapis 3: Humanoid Equip & Tool Placement jika tool ada di tas
             if petTool and LocalPlayer.Character then
                 local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
                 if humanoid and petTool.Parent == LocalPlayer:FindFirstChild("Backpack") then
                     humanoid:EquipTool(petTool)
-                    task.wait(0.1)
-                    pcall(function() petTool:Activate() end)
-                    pcall(function()
-                        if VirtualUser then
-                            VirtualUser:Button1Down(Vector2.new(0, 0))
-                            task.wait(0.05)
-                            VirtualUser:Button1Up(Vector2.new(0, 0))
-                        end
-                    end)
-                    task.wait(0.1)
-                    -- Jika masih tersisa di tangan karakter, kembalikan ke tas
+                    task.wait(0.12)
+                    if petTool.Parent == LocalPlayer.Character then
+                        pcall(function() petTool:Activate() end)
+                    end
+                    task.wait(0.12)
+                    -- Bersihkan dari tangan jika server sudah menempatkan pet
                     if petTool.Parent == LocalPlayer.Character then
                         pcall(function() petTool.Parent = LocalPlayer:FindFirstChild("Backpack") end)
                     end
                 end
             end
 
-            print(string.format("[ZyloHub PNP] ✅ Pet %s berhasil ditaruh kembali ke kebun!", petSpecies or stripped))
+            print(string.format("[ZyloHub PNP] ✅ Pet %s (%s) sukses ditaruh kembali dengan presisi!", petFullName or petSpecies or "Pet", stripped))
             task.wait(0.3)
             isPnPBusy[petUUID] = nil
         end)
@@ -413,6 +628,12 @@ function PetSkillModule.Init(ParentContainer, State, ZyloLib, MainScreen)
                     end
 
                     local speciesName = matchedPet and matchedPet.Species or pName
+                    if not matchedPet or matchedPet.Species == "Pet" or matchedPet.Species == "Unknown" then
+                        local m = FindPetModelInGarden(uStr)
+                        if m then
+                            speciesName = cleanPetName(m.Name)
+                        end
+                    end
                     if IsPetSelectedForPNP(speciesName) then
                         ExecutePickAndPlace(uStr, speciesName)
                     end
