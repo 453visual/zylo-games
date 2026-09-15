@@ -1,7 +1,8 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
+--  Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
 --  Presisi 100% Sesuai Screenshot Referensi (Tanpa Warna Kuning)
 -- =========================================================================
 
@@ -11,7 +12,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     local C = ZyloLib.Colors
 
     -- State Inisialisasi Mutasi
-    State.MutasiActiveCategory = State.MutasiActiveCategory or "Nightmare"
+    State.MutasiActiveCategory = State.MutasiActiveCategory or "Elephant"
     State.MutasiEquipAge = State.MutasiEquipAge or 20
     State.MutasiUnequipAge = State.MutasiUnequipAge or 0
     State.MutasiMode = State.MutasiMode or "Mode: A"
@@ -29,27 +30,35 @@ return function(ParentContainer, State, ZyloLib, Main)
     MutasiLayout.Padding = UDim.new(0, 6)
 
     -- =====================================================================
-    -- 1. SUB-NAVIGASI KATEGORI (Nightmare | 100 Age | XP | GBXP | Config + ⚙)
+    -- 1. SUB-NAVIGASI KATEGORI (HORIZONTAL SCROLLING PILLS)
+    -- Urutan: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config + ⚙
     -- =====================================================================
-    local NavRow = Instance.new("Frame", MutasiWrapper)
-    NavRow.Size = UDim2.new(1, 0, 0, 28)
-    NavRow.BackgroundTransparency = 1
-    NavRow.LayoutOrder = 1
+    local NavScroll = Instance.new("ScrollingFrame", MutasiWrapper)
+    NavScroll.Size = UDim2.new(1, 0, 0, 30)
+    NavScroll.BackgroundTransparency = 1
+    NavScroll.ScrollBarThickness = 0
+    NavScroll.ScrollingDirection = Enum.ScrollingDirection.Horizontal
+    NavScroll.LayoutOrder = 1
 
-    local NavList = Instance.new("UIListLayout", NavRow)
+    local NavList = Instance.new("UIListLayout", NavScroll)
     NavList.FillDirection = Enum.FillDirection.Horizontal
     NavList.HorizontalAlignment = Enum.HorizontalAlignment.Left
     NavList.VerticalAlignment = Enum.VerticalAlignment.Center
-    NavList.Padding = UDim.new(0, 5)
+    NavList.Padding = UDim.new(0, 6)
 
-    local Categories = { "Nightmare", "100 Age", "XP", "GBXP", "Config" }
+    local Categories = { "Elephant", "Machine", "Nightmare", "100 Age", "XP", "GBXP", "Config" }
     local CategoryButtons = {}
     local updateThresholdTitle
+    local updateActionButton
     local refreshPetList
 
+    local totalNavWidth = 0
     for _, catName in ipairs(Categories) do
-        local btn = Instance.new("TextButton", NavRow)
-        btn.Size = UDim2.new(0, (catName == "Nightmare" and 72) or (catName == "100 Age" and 64) or (catName == "Config" and 54) or 48, 0, 26)
+        local btnW = (catName == "Nightmare" and 76) or (catName == "Elephant" and 68) or (catName == "Machine" and 66) or (catName == "100 Age" and 64) or (catName == "Config" and 54) or 46
+        totalNavWidth = totalNavWidth + btnW + 6
+
+        local btn = Instance.new("TextButton", NavScroll)
+        btn.Size = UDim2.new(0, btnW, 0, 26)
         btn.BackgroundColor3 = (State.MutasiActiveCategory == catName) and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
         btn.Text = catName
         btn.TextColor3 = (State.MutasiActiveCategory == catName) and Color3.fromRGB(255, 255, 255) or C.TEXT_M
@@ -72,12 +81,13 @@ return function(ParentContainer, State, ZyloLib, Main)
                 data.stroke.Thickness = isActive and 1.5 or 1
             end
             if updateThresholdTitle then updateThresholdTitle() end
+            if updateActionButton then updateActionButton() end
             if refreshPetList then refreshPetList() end
         end)
     end
 
     -- Tombol ⚙ (Settings Gear di Ujung Kanan)
-    local GearBtn = Instance.new("TextButton", NavRow)
+    local GearBtn = Instance.new("TextButton", NavScroll)
     GearBtn.Size = UDim2.new(0, 26, 0, 26)
     GearBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 34)
     GearBtn.Text = "⚙"
@@ -87,6 +97,9 @@ return function(ParentContainer, State, ZyloLib, Main)
     Instance.new("UICorner", GearBtn).CornerRadius = UDim.new(0, 13)
     local gearStroke = Instance.new("UIStroke", GearBtn)
     gearStroke.Color = Color3.fromRGB(38, 45, 70)
+    totalNavWidth = totalNavWidth + 32
+    NavScroll.CanvasSize = UDim2.new(0, totalNavWidth + 10, 0, 0)
+
     GearBtn.MouseButton1Click:Connect(function()
         ZyloLib:Notify("Settings", "Pengaturan konfigurasi mutasi aktif.", 2)
     end)
@@ -130,7 +143,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     -- 3. BODY COLLAPSIBLE: STATS ROW + EQUIP/UNEQUIP AGE INPUTS
     -- =====================================================================
     local ThreshBody = Instance.new("Frame", MutasiWrapper)
-    ThreshBody.Size = UDim2.new(1, 0, 0, 84)
+    ThreshBody.Size = UDim2.new(1, 0, 0, 86)
     ThreshBody.BackgroundTransparency = 1
     ThreshBody.LayoutOrder = 3
 
@@ -146,20 +159,22 @@ return function(ParentContainer, State, ZyloLib, Main)
         thArrow.Text = isThreshOpen and "▼" or "▶"
     end)
 
-    -- Row 3A: Inline Stats Row (🌙 Nightmare (7)  💯 100 Age (6)  📘 XP (6)  🧪 GBXP (55))
-    local StatsRow = Instance.new("Frame", ThreshBody)
-    StatsRow.Size = UDim2.new(1, 0, 0, 20)
-    StatsRow.BackgroundTransparency = 1
-    StatsRow.LayoutOrder = 1
+    -- Row 3A: Inline Stats Row (Horizontal Scrollable agar muat 6 Counter Lengkap)
+    local StatsScroll = Instance.new("ScrollingFrame", ThreshBody)
+    StatsScroll.Size = UDim2.new(1, 0, 0, 22)
+    StatsScroll.BackgroundTransparency = 1
+    StatsScroll.ScrollBarThickness = 0
+    StatsScroll.ScrollingDirection = Enum.ScrollingDirection.Horizontal
+    StatsScroll.LayoutOrder = 1
 
-    local StatsLayout = Instance.new("UIListLayout", StatsRow)
+    local StatsLayout = Instance.new("UIListLayout", StatsScroll)
     StatsLayout.FillDirection = Enum.FillDirection.Horizontal
     StatsLayout.Padding = UDim.new(0, 10)
     StatsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    local function CreateStatItem(parent, icon, name, initialVal, accentColor)
+    local function CreateStatItem(parent, icon, name, initialVal, accentColor, itemWidth)
         local item = Instance.new("TextLabel", parent)
-        item.Size = UDim2.new(0, 75, 1, 0)
+        item.Size = UDim2.new(0, itemWidth or 78, 1, 0)
         item.BackgroundTransparency = 1
         item.Text = icon .. " " .. name .. " (" .. tostring(initialVal) .. ")"
         item.TextColor3 = accentColor or C.TEXT_M
@@ -169,10 +184,13 @@ return function(ParentContainer, State, ZyloLib, Main)
         return item
     end
 
-    local statNM   = CreateStatItem(StatsRow, "🌙", "Nightmare", 0, C.PURPLE_L)
-    local stat100  = CreateStatItem(StatsRow, "💯", "100 Age", 0, C.CYAN)
-    local statXP   = CreateStatItem(StatsRow, "📘", "XP", 0, Color3.fromRGB(130, 200, 255))
-    local statGBXP = CreateStatItem(StatsRow, "🧪", "GBXP", 0, Color3.fromRGB(180, 140, 255))
+    local statEle  = CreateStatItem(StatsScroll, "🐘", "Elephant", 0, Color3.fromRGB(150, 210, 255), 78)
+    local statMac  = CreateStatItem(StatsScroll, "⚙️", "Machine", 0, Color3.fromRGB(255, 185, 100), 76)
+    local statNM   = CreateStatItem(StatsScroll, "🌙", "Nightmare", 0, C.PURPLE_L, 82)
+    local stat100  = CreateStatItem(StatsScroll, "💯", "100 Age", 0, C.CYAN, 74)
+    local statXP   = CreateStatItem(StatsScroll, "📘", "XP", 0, Color3.fromRGB(130, 200, 255), 62)
+    local statGBXP = CreateStatItem(StatsScroll, "🧪", "GBXP", 0, Color3.fromRGB(180, 140, 255), 72)
+    StatsScroll.CanvasSize = UDim2.new(0, 480, 0, 0)
 
     -- Row 3B: Equip Age
     local RowEq = Instance.new("Frame", ThreshBody)
@@ -259,7 +277,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     ListTitle.TextXAlignment = Enum.TextXAlignment.Left
 
     -- =====================================================================
-    -- 5. DAFTAR PET (CARD LIST SESUAI SCREENSHOT)
+    -- 5. DAFTAR PET (CARD LIST SESUAI SCREENSHOT DENGAN FILTER PURE PET)
     -- =====================================================================
     local PetListScroll = Instance.new("ScrollingFrame", MutasiWrapper)
     PetListScroll.Size = UDim2.new(1, 0, 0, 165)
@@ -279,6 +297,24 @@ return function(ParentContainer, State, ZyloLib, Main)
     PlsPadding.PaddingLeft = UDim.new(0, 6)
     PlsPadding.PaddingRight = UDim.new(0, 6)
 
+    -- Filter agar item consumable (treat, shard, reroller) tidak ikut masuk
+    local BLACKLIST_ITEM_KEYWORDS = {
+        "shard", "treat", "reroll", "pack", "bundle", "crate", "chest", "box", "gift", 
+        "potion", "elixir", "scroll", "book", "tome", "ticket", "token", "pass", "badge",
+        "watering can", "sprinkler", "shovel", "hoe", "net", "fertilizer"
+    }
+
+    local function isPurePetTool(tool)
+        if not tool:IsA("Tool") then return false end
+        if tool:FindFirstChild("Item_String") then return false end
+        local nLower = tool.Name:lower()
+        if nLower:find("seed") or nLower:find("egg") then return false end
+        for _, kw in ipairs(BLACKLIST_ITEM_KEYWORDS) do
+            if nLower:find(kw) then return false end
+        end
+        return tool:FindFirstChild("PetData") or (not tool:FindFirstChild("PetEggToolLocal"))
+    end
+
     local function GetBackpackPets()
         local pets = {}
         local bp = LocalPlayer:FindFirstChild("Backpack")
@@ -286,7 +322,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         local function scan(container)
             if not container then return end
             for _, tool in ipairs(container:GetChildren()) do
-                if tool:IsA("Tool") and (tool:FindFirstChild("PetData") or tool.Name:lower():find("pet") or tool:GetAttribute("Pet")) then
+                if isPurePetTool(tool) then
                     local pName = tool.Name:gsub("%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
                     local mutation = tool:GetAttribute("Mutation") or (tool.Name:match("%[(.-)%]") or "Normal")
                     local age = tool:GetAttribute("Age") or tonumber(tool.Name:match("Age%s*(%d+)")) or 1
@@ -319,18 +355,23 @@ return function(ParentContainer, State, ZyloLib, Main)
         local pets = GetBackpackPets()
         local count = 0
 
-        -- Update status counter
-        local cNM, c100, cXP, cGBXP = 0, 0, 0, 0
+        -- Update status counter untuk semua kategori
+        local cEle, cMac, cNM, c100, cXP, cGBXP = 0, 0, 0, 0, 0, 0
         for _, p in ipairs(pets) do
+            local pNameLow = p.Name:lower()
             local mLow = p.Mutation:lower()
+            if pNameLow:find("elephant") or mLow:find("elephant") then cEle = cEle + 1 end
+            if pNameLow:find("machine") or mLow:find("machine") or mLow:find("mechanic") then cMac = cMac + 1 end
             if mLow:find("nightmare") or mLow:find("mutasi") then cNM = cNM + 1 end
             if p.Age >= 100 then c100 = c100 + 1 end
             if mLow:find("xp") and not mLow:find("gbxp") then cXP = cXP + 1 end
             if mLow:find("gbxp") then cGBXP = cGBXP + 1 end
         end
-        statNM.Text = "🌙 Nightmare (" .. cNM .. ")"
-        stat100.Text = "💯 100 Age (" .. c100 .. ")"
-        statXP.Text = "📘 XP (" .. cXP .. ")"
+        statEle.Text  = "🐘 Elephant (" .. cEle .. ")"
+        statMac.Text  = "⚙️ Machine (" .. cMac .. ")"
+        statNM.Text   = "🌙 Nightmare (" .. cNM .. ")"
+        stat100.Text  = "💯 100 Age (" .. c100 .. ")"
+        statXP.Text   = "📘 XP (" .. cXP .. ")"
         statGBXP.Text = "🧪 GBXP (" .. cGBXP .. ")"
 
         for _, pet in ipairs(pets) do
@@ -363,7 +404,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             local empty = Instance.new("TextLabel", PetListScroll)
             empty.Size = UDim2.new(1, 0, 1, 0)
             empty.BackgroundTransparency = 1
-            empty.Text = "Belum ada pet terdeteksi di Backpack / Karakter."
+            empty.Text = "Belum ada pet murni terdeteksi di Backpack / Karakter."
             empty.TextColor3 = C.TEXT_M
             empty.Font = Enum.Font.GothamMedium
             empty.TextSize = 8.5
@@ -389,11 +430,11 @@ return function(ParentContainer, State, ZyloLib, Main)
     ActLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
     ActLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    -- Tombol 1: START NM+LVL
+    -- Tombol 1: START Action (Dinamis sesuai Tab Aktif)
     local StartBtn = Instance.new("TextButton", ActionRow)
     StartBtn.Size = UDim2.new(0.42, -5, 0, 30)
     StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
-    StartBtn.Text = "⚡ START NM+LVL"
+    StartBtn.Text = "⚡ START " .. State.MutasiActiveCategory:upper()
     StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     StartBtn.Font = Enum.Font.GothamBold
     StartBtn.TextSize = 9
@@ -402,11 +443,17 @@ return function(ParentContainer, State, ZyloLib, Main)
     startStroke.Color = C.PURPLE
     startStroke.Thickness = 1.5
 
-    -- Tombol 2: STOP NM+LVL
+    updateActionButton = function()
+        if not State.MutasiRunning then
+            StartBtn.Text = "⚡ START " .. State.MutasiActiveCategory:upper()
+        end
+    end
+
+    -- Tombol 2: STOP Action
     local StopBtn = Instance.new("TextButton", ActionRow)
     StopBtn.Size = UDim2.new(0.34, -5, 0, 30)
     StopBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
-    StopBtn.Text = "STOP NM+LVL"
+    StopBtn.Text = "STOP " .. State.MutasiActiveCategory:upper()
     StopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     StopBtn.Font = Enum.Font.GothamBold
     StopBtn.TextSize = 9
@@ -441,14 +488,14 @@ return function(ParentContainer, State, ZyloLib, Main)
         State.MutasiRunning = true
         StartBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 80)
         StartBtn.Text = "RUNNING (" .. State.MutasiMode .. ")"
-        ZyloLib:Notify("Auto Mutasi", "Memulai proses mutasi (" .. State.MutasiMode .. ")", 2.5)
+        ZyloLib:Notify("Auto Mutasi", "Memulai proses " .. State.MutasiActiveCategory .. " (" .. State.MutasiMode .. ")", 2.5)
     end)
 
     StopBtn.MouseButton1Click:Connect(function()
         State.MutasiRunning = false
         StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
-        StartBtn.Text = "⚡ START NM+LVL"
-        ZyloLib:Notify("Auto Mutasi", "Proses mutasi dihentikan.", 2)
+        StartBtn.Text = "⚡ START " .. State.MutasiActiveCategory:upper()
+        ZyloLib:Notify("Auto Mutasi", "Proses " .. State.MutasiActiveCategory .. " dihentikan.", 2)
     end)
 
     return {
