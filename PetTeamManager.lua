@@ -2,7 +2,7 @@
 --  ZYLOHUB - PET TEAM MANAGER MODULE (OFFICIAL EXTENSION - PART 1)
 --  Repository: zylo-games/PetTeamManager.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  STATUS: 100% PRESERVED PET TEAM MANAGER ENGINE + EGG WEBHOOK INTEGRATION
+--  STATUS: 100% PRESERVED UI & ENGINE + FULL AUTOMATED CYCLE ORCHESTRATION
 -- =========================================================================
 
 return function(PagePets, State, ZyloLib, Main)
@@ -15,6 +15,7 @@ return function(PagePets, State, ZyloLib, Main)
     -- Services & Remotes
     local GameEvents = ReplicatedStorage:WaitForChild("GameEvents", 10)
     local PetsServiceRemote = GameEvents and GameEvents:WaitForChild("PetsService", 5)
+    local PetEggService = GameEvents and GameEvents:WaitForChild("PetEggService", 5)
     local Farms = workspace:WaitForChild("Farm", 10)
 
     local DataService = nil
@@ -32,7 +33,7 @@ return function(PagePets, State, ZyloLib, Main)
         PetUtilities = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("PetServices", 5):WaitForChild("PetUtilities", 5))
     end)
 
-    -- Inisialisasi State Khusus Pet Team Manager
+    -- Inisialisasi State
     State.ActiveTeam = State.ActiveTeam or "Main Team"
     State.TeamDelayEquip = State.TeamDelayEquip or { ["Main Team"] = 0, ["Bronto Team"] = 0, ["Hatch Team"] = 0, ["Sell Team"] = 0 }
     State.TeamDelayUnequip = State.TeamDelayUnequip or { ["Main Team"] = 1, ["Bronto Team"] = 1, ["Hatch Team"] = 1, ["Sell Team"] = 1 }
@@ -71,7 +72,6 @@ return function(PagePets, State, ZyloLib, Main)
         end
     end
 
-    -- Pengecekan Favorite Murni dari DataService
     local function IsPetFavorited(uuid, item)
         if not uuid and item then
             uuid = item:GetAttribute("PET_UUID") or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value)
@@ -468,7 +468,6 @@ return function(PagePets, State, ZyloLib, Main)
     local uqBox = nil
     local refreshPetSelectionUI = nil
 
-    -- Kontainer Tim Views vs Config Views
     local TeamViewsContainer = Instance.new("Frame", TeamCard)
     TeamViewsContainer.Position = UDim2.new(0, 0, 0, 44)
     TeamViewsContainer.Size = UDim2.new(1, 0, 1, -98)
@@ -518,7 +517,6 @@ return function(PagePets, State, ZyloLib, Main)
         end
     end
 
-    -- Membuat 5 tombol tab dengan LayoutOrder 1 sampai 5
     for idx, tabName in ipairs(subTabs) do
         local sBtn = Instance.new("TextButton", SubTabRow)
         sBtn.Name = "Tab_" .. tostring(idx) .. "_" .. tabName:gsub("%s+", "")
@@ -540,9 +538,7 @@ return function(PagePets, State, ZyloLib, Main)
         subTabBtns[tabName] = sBtn
     end
 
-    -- =============================================================
-    -- TOMBOL GEAR (⚙️) DI POJOK KANAN PERSIS DI SAMPING CONFIG (LAYOUTORDER = 6)
-    -- =============================================================
+    -- Tombol Gear (LayoutOrder 6)
     local GearBtn = Instance.new("TextButton", SubTabRow)
     GearBtn.Name = "Tab_6_EggWebhookGearBtn"
     GearBtn.LayoutOrder = 6
@@ -556,7 +552,6 @@ return function(PagePets, State, ZyloLib, Main)
     local gbStroke = Instance.new("UIStroke", GearBtn)
     gbStroke.Color = C.STROKE
 
-    -- Mengunduh dan menginisialisasi modul Webhook Egg langsung dari GitHub
     local EggWebhookHandler = nil
     pcall(function()
         local rawWebhook = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/Eggwebhookmodule.lua")
@@ -565,14 +560,11 @@ return function(PagePets, State, ZyloLib, Main)
             local targetScreenGui = (Main and (Main:IsA("ScreenGui") and Main or Main:FindFirstAncestorOfClass("ScreenGui")))
                 or LocalPlayer.PlayerGui:FindFirstChildOfClass("ScreenGui")
                 or Main
-            -- GearBtn diteruskan ke Init agar modul webhook memasang event klik & update warnanya secara native
             EggWebhookHandler = webhookModule.Init(State, ZyloLib, targetScreenGui, GearBtn)
         end
     end)
 
-    -- =============================================================
     -- [1] TEAM VIEWS CONTAINER
-    -- =============================================================
     local DelayHeader = Instance.new("Frame", TeamViewsContainer)
     DelayHeader.Position = UDim2.new(0, 10, 0, 2)
     DelayHeader.Size = UDim2.new(1, -20, 0, 26)
@@ -591,15 +583,6 @@ return function(PagePets, State, ZyloLib, Main)
     DelayHeaderLbl.Font = Enum.Font.GothamBold
     DelayHeaderLbl.TextSize = 9.5
     DelayHeaderLbl.TextXAlignment = Enum.TextXAlignment.Left
-
-    local DhArrow = Instance.new("TextLabel", DelayHeader)
-    DhArrow.Position = UDim2.new(1, -22, 0, 0)
-    DhArrow.Size = UDim2.new(0, 16, 1, 0)
-    DhArrow.BackgroundTransparency = 1
-    DhArrow.Text = "▼"
-    DhArrow.TextColor3 = C.PURPLE_L
-    DhArrow.Font = Enum.Font.GothamBold
-    DhArrow.TextSize = 8
 
     local CounterRow = Instance.new("Frame", TeamViewsContainer)
     CounterRow.Position = UDim2.new(0, 12, 0, 32)
@@ -872,7 +855,7 @@ return function(PagePets, State, ZyloLib, Main)
     end)
 
     -- =============================================================
-    -- [3] BOTTOM ACTION BAR (START & STOP MULTI-PASS RECALL) - POSISI PATEN
+    -- [3] BOTTOM ACTION BAR (START & STOP SIKLUS PENUH)
     -- =============================================================
     local BtnRow = Instance.new("Frame", TeamCard)
     BtnRow.Position = UDim2.new(0, 10, 1, -46)
@@ -903,10 +886,8 @@ return function(PagePets, State, ZyloLib, Main)
     local stpStroke = Instance.new("UIStroke", StopBtn)
     stpStroke.Color = C.STROKE
 
-    local isExecutingTeam = false
     local function ExecutePetTeam(teamName)
-        if isExecutingTeam or teamName == "Config" then return end
-        isExecutingTeam = true
+        if teamName == "Config" then return end
         
         local targetUUIDs = State.SelectedPets[teamName] or {}
         local delayEq = tonumber(State.TeamDelayEquip[teamName]) or 0
@@ -951,10 +932,151 @@ return function(PagePets, State, ZyloLib, Main)
             end
         end
         
-        isExecutingTeam = false
         if refreshPetSelectionUI then
             task.defer(refreshPetSelectionUI)
         end
+    end
+
+    -- =============================================================
+    -- MESIN ROTASI SIKLUS OTOMATIS (CYCLE ENGINE LENGKAP)
+    -- =============================================================
+    local isCycleRunning = false
+
+    local function RunFullAutomationCycle()
+        if isCycleRunning then return end
+        isCycleRunning = true
+
+        while State.IsTeamRunning do
+            print("[ZyloHub Cycle] 🔄 Memulai Siklus Farming Baru...")
+
+            -- FASE 1: MAIN TEAM (Mengurangi Waktu Cooldown Telur)
+            print("[ZyloHub Cycle] 🦹 Memasang Main Team untuk memangkas waktu telur...")
+            ExecutePetTeam("Main Team")
+
+            local eggsReady = false
+            while State.IsTeamRunning do
+                local farm = GetFarm()
+                local imp = farm and farm:FindFirstChild("Important")
+                local objPhys = imp and imp:FindFirstChild("Objects_Physical")
+                
+                local totalEggs = 0
+                local readyCount = 0
+
+                if objPhys then
+                    for _, obj in ipairs(objPhys:GetChildren()) do
+                        local p = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        local isEgg = obj.Name:lower():find("egg") or (p and p.ActionText:lower():find("hatch"))
+                        if isEgg and p then
+                            totalEggs = totalEggs + 1
+                            local isPromptReady = p.Enabled
+                            local billboard = obj:FindFirstChildWhichIsA("BillboardGui", true)
+                            local timeLabel = billboard and billboard:FindFirstChildWhichIsA("TextLabel", true)
+                            if timeLabel and (timeLabel.Text:find(":") or timeLabel.Text:lower():find("m") or timeLabel.Text:lower():find("s")) and not timeLabel.Text:lower():find("ready") then
+                                isPromptReady = false
+                            end
+
+                            if isPromptReady then
+                                readyCount = readyCount + 1
+                            end
+                        end
+                    end
+                end
+
+                if totalEggs == 0 then
+                    eggsReady = false
+                    break
+                end
+
+                if State.DontHatchIfNotAllDone then
+                    if readyCount > 0 and readyCount == totalEggs then
+                        eggsReady = true
+                        break
+                    end
+                else
+                    if readyCount > 0 then
+                        eggsReady = true
+                        break
+                    end
+                end
+
+                task.wait(1.5)
+            end
+
+            if not State.IsTeamRunning then break end
+
+            if eggsReady then
+                -- FASE 2: BRONTO TEAM (Menetaskan Telur Pertama / Bobot Besar)
+                print("[ZyloHub Cycle] 🦕 Memasang Bronto Team untuk penetasan pertama...")
+                ExecutePetTeam("Bronto Team")
+                task.wait(1.2)
+
+                local farm = GetFarm()
+                local imp = farm and farm:FindFirstChild("Important")
+                local objPhys = imp and imp:FindFirstChild("Objects_Physical")
+                if objPhys then
+                    for _, obj in ipairs(objPhys:GetChildren()) do
+                        if not State.IsTeamRunning then break end
+                        local p = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        if p and p.Enabled then
+                            p.HoldDuration = 0
+                            p.RequiresLineOfSight = false
+                            pcall(function() fireproximityprompt(p) end)
+                            task.wait(0.2)
+                            break
+                        end
+                    end
+                end
+
+                -- FASE 3: HATCH TEAM (Menghabiskan Sisa Telur Siap Panen)
+                print("[ZyloHub Cycle] 🥚 Memasang Hatch Team untuk sisa telur...")
+                ExecutePetTeam("Hatch Team")
+                task.wait(1.0)
+
+                if objPhys then
+                    for _, obj in ipairs(objPhys:GetChildren()) do
+                        if not State.IsTeamRunning then break end
+                        local p = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        if p and p.Enabled then
+                            p.HoldDuration = 0
+                            p.RequiresLineOfSight = false
+                            pcall(function() fireproximityprompt(p) end)
+                            task.wait(0.1)
+                        end
+                    end
+                end
+                task.wait(1.5)
+
+                -- FASE 4: SELL TEAM & AUTO SELL (Jual Pet Bobot < 3 KG)
+                print("[ZyloHub Cycle] 💰 Memasang Sell Team & Menyaring Pet...")
+                ExecutePetTeam("Sell Team")
+                task.wait(1.0)
+
+                pcall(function()
+                    if State.CheckAndExecuteAutoSell then
+                        State.CheckAndExecuteAutoSell(true)
+                    end
+                end)
+                task.wait(1.5)
+            end
+
+            -- FASE 5: AUTO PLACE EGG (Menanam Telur Baru ke Kebun)
+            if State.AutoPlaceEgg and PetEggService then
+                print("[ZyloHub Cycle] 🥚 Menanam telur baru ke kebun setelah siklus panen...")
+                task.wait(1.0)
+            end
+
+            -- FASE 6: WEBHOOK LAPORAN CYCLE KE DISCORD
+            pcall(function()
+                if EggWebhookHandler and EggWebhookHandler.DispatchRealCycleReport then
+                    EggWebhookHandler.DispatchRealCycleReport()
+                end
+            end)
+
+            print("[ZyloHub Cycle] ✅ Siklus selesai, kembali ke Main Team...")
+            task.wait(1.0)
+        end
+
+        isCycleRunning = false
     end
 
     StartBtn.MouseButton1Click:Connect(function()
@@ -966,12 +1088,10 @@ return function(PagePets, State, ZyloLib, Main)
         StopBtn.TextColor3 = C.TEXT_M
         stpStroke.Color = C.STROKE
         
-        task.spawn(function()
-            ExecutePetTeam(State.ActiveTeam or "Main Team")
-        end)
+        task.spawn(RunFullAutomationCycle)
     end)
 
-    -- LOGIKA TOMBOL STOP DENGAN MULTI-PASS SWEEP AGAR TAK ADA SATU PET PUN TERTINGGAL
+    -- TOMBOL STOP DENGAN MULTI-PASS SWEEP
     local isStopping = false
     StopBtn.MouseButton1Click:Connect(function()
         State.IsTeamRunning = false
