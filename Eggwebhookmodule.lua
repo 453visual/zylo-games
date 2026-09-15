@@ -40,17 +40,14 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
     State.EggWebhook.Url = State.EggWebhook.Url or ""
     State.EggWebhook.Enabled = (State.EggWebhook.Enabled ~= nil) and State.EggWebhook.Enabled or false
     State.EggWebhook.Mode = State.EggWebhook.Mode or "Simple" -- "Simple" atau "Detail"
-    State.EggWebhook.SendTestStatus = ""
 
-    -- Tracking State untuk Detail Mode
+    -- Tracking State untuk Detail Mode (DATA REAL)
     State.EggWebhook.Tracking = State.EggWebhook.Tracking or {
         Cycle = 1,
         TotalHatch = 0,
         StartTime = os.time(),
         CycleStartTime = os.time(),
-        StartEggCounts = {},
-        PrevCycleEggCounts = {},
-        CurrentEggCounts = {},
+        EggsHatchedBreakdown = {},
         BrontoHatchCount = 0,
         BrontoHatchBreakdown = {},
         NormalHatchBreakdown = {},
@@ -160,6 +157,14 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         processQueue()
     end
 
+    local function formatSeconds(secs)
+        secs = math.max(0, math.floor(tonumber(secs) or 0))
+        local h = math.floor(secs / 3600)
+        local m = math.floor((secs % 3600) / 60)
+        local s = secs % 60
+        return string.format("%02d:%02d:%02d", h, m, s)
+    end
+
     local function getGamePing()
         local ping = 50
         pcall(function()
@@ -207,25 +212,25 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
 
     local function BuildDetailPayload(customData)
         local d = customData or {}
-        local cycleNum = d.Cycle or 1
-        local cycleDur = d.CycleDuration or "00:00:53"
+        local cycleNum = d.Cycle or State.EggWebhook.Tracking.Cycle or 1
+        local cycleDur = d.CycleDuration or formatSeconds(os.time() - (State.EggWebhook.Tracking.CycleStartTime or os.time()))
         local player = d.Player or LocalPlayer.Name
-        local totalHatch = d.TotalHatch or 0
-        local totalDur = d.Duration or "00:00:00"
+        local totalHatch = d.TotalHatch or State.EggWebhook.Tracking.TotalHatch or 0
+        local totalDur = d.Duration or formatSeconds(os.time() - (State.EggWebhook.Tracking.StartTime or os.time()))
         local ping = d.Ping or getGamePing()
         local invTotal = d.InvTotal or 0
         local invMax = d.InvMax or 285
         local invFree = math.max(0, invMax - invTotal)
 
-        local eggsTotalStr = d.EggsTotalStr or "Total: 0"
-        local eggsCycleStr = d.EggsCycleStr or "Total: 0"
+        local eggsTotalStr = d.EggsTotalStr or "• None"
+        local eggsCycleStr = d.EggsCycleStr or "• None"
         local brontoHatchStr = d.BrontoHatchStr or "• None"
         local normalHatchStr = d.NormalHatchStr or "• None"
         local eggBackStr = d.EggBackStr or "• None"
         local eggBackPercent = d.EggBackPercent or "0.00%"
-        local sellSummaryStr = d.SellSummaryStr or "• Pets sold : 0"
+        local sellSummaryStr = d.SellSummaryStr or "• Pets sold : " .. tostring(State.EggWebhook.Tracking.PetsSold or 0)
         local sellPercent = d.SellPercent or "0.00%"
-        local luckStr = d.LuckStr or "🟢 Normal"
+        local luckStr = d.LuckStr or "🟢 Normal Luck"
         local embedColor = d.EmbedColor or 3066993
 
         local contentText = string.format(
@@ -272,10 +277,12 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
     end
 
     -- =============================================================
-    -- [3] REAL-TIME AUTO HATCH DETECTOR ENGINE (DETEKSI NYATA)
+    -- [3] REAL-TIME AUTO HATCH DETECTOR ENGINE (LIVE DATABASE SCANNER)
     -- =============================================================
     local knownPetUUIDs = {}
     local isDetectorInitialized = false
+    local lastHatchActivityTime = 0
+    local hasPendingCycleReport = false
 
     local function GetFarm()
         if not Farms then return nil end
@@ -290,7 +297,7 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         return nil
     end
 
-    -- Deteksi Nama Telur Aktif di Kebun Pemain
+    -- Ambil nama telur fisik yang ada di kebun pemain
     local function GetCurrentGardenEggName()
         local farm = GetFarm()
         local imp = farm and farm:FindFirstChild("Important")
@@ -309,134 +316,236 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         return "Garden Egg"
     end
 
-    -- Catat semua pet yang sudah ada saat skrip pertama kali dijalankan
-    local function snapshotExistingPets()
+    -- Ambil seluruh peta pet yang ada saat ini di akun (DataService & Backpack)
+    local function GetCurrentPetMap()
+        local map = {}
         if not DataService then
             pcall(function()
                 DataService = require(ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("DataService", 2))
             end)
         end
+        if not PetUtilities then
+            pcall(function()
+                PetUtilities = require(ReplicatedStorage:WaitForChild("Modules", 2):WaitForChild("PetServices", 2):WaitForChild("PetUtilities", 2))
+            end)
+        end
+
+        -- 1. Scan DataService
         if DataService and DataService.GetData then
             pcall(function()
                 local data = DataService:GetData()
                 if data and data.PetsData and data.PetsData.PetInventory and data.PetsData.PetInventory.Data then
-                    for uuid, _ in pairs(data.PetsData.PetInventory.Data) do
-                        knownPetUUIDs[tostring(uuid)] = true
-                        knownPetUUIDs[tostring(uuid):gsub("[{}]", "")] = true
+                    for uuid, entry in pairs(data.PetsData.PetInventory.Data) do
+                        local sU = tostring(uuid)
+                        local stripped = sU:gsub("[{}]", "")
+                        local petData = entry.PetData or {}
+                        local rawType = entry.PetType or petData.Species or petData.Name or "Pet"
+                        local species = rawType:gsub("%s*%[.-%]", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                        local lvl = petData.Level or 1
+
+                        local numW = 0
+                        local weightVal = "0.0"
+                        if PetUtilities and PetUtilities.CalculateWeight and petData.BaseWeight then
+                            local calcW = PetUtilities:CalculateWeight(petData.BaseWeight, lvl) * 100
+                            numW = math.round(calcW) / 100
+                            weightVal = string.format("%.2f", numW)
+                        elseif petData.BaseWeight then
+                            numW = tonumber(petData.BaseWeight) or 0
+                            weightVal = string.format("%.2f", numW)
+                        elseif petData.Weight then
+                            numW = tonumber(petData.Weight) or 0
+                            weightVal = string.format("%.2f", numW)
+                        end
+
+                        local isFav = (petData.IsFavorite == true) or (entry.IsFavorite == true)
+                        local petObj = {
+                            UUID = sU,
+                            Species = species,
+                            Weight = weightVal,
+                            NumericWeight = numW,
+                            IsFavorite = isFav
+                        }
+                        map[sU] = petObj
+                        map[stripped] = petObj
                     end
                 end
             end)
         end
 
+        -- 2. Scan Backpack Tools
         local bp = LocalPlayer:FindFirstChild("Backpack")
         if bp then
             for _, item in ipairs(bp:GetChildren()) do
                 if item:IsA("Tool") then
-                    local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or item.Name
-                    knownPetUUIDs[tostring(u)] = true
-                    knownPetUUIDs[tostring(u):gsub("[{}]", "")] = true
+                    local isPet = item:FindFirstChild("PetToolLocal") or item:FindFirstChild("PetData") or item:GetAttribute("PET_UUID") or item.Name:find("%[")
+                    if isPet then
+                        local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or item.Name
+                        local sU = tostring(u)
+                        local stripped = sU:gsub("[{}]", "")
+                        if not map[sU] and not map[stripped] then
+                            local species = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                            local weightStr = item.Name:match("%[([%d%.]+)%s*[kK]?[gG]?%]") or "0.0"
+                            local numW = tonumber(weightStr) or 0
+                            local isFav = (item:GetAttribute("IsFavorite") == true) or (item:GetAttribute("Favorite") == true)
+                            local petObj = {
+                                UUID = sU,
+                                Species = species,
+                                Weight = string.format("%.2f", numW),
+                                NumericWeight = numW,
+                                IsFavorite = isFav
+                            }
+                            map[sU] = petObj
+                            map[stripped] = petObj
+                        end
+                    end
                 end
             end
+        end
+
+        return map
+    end
+
+    -- Snapshot Awal (Semua pet yang sudah ada tidak akan dilaporkan sebagai hatch baru)
+    local function snapshotInitialPets()
+        local initialMap = GetCurrentPetMap()
+        for u, _ in pairs(initialMap) do
+            knownPetUUIDs[u] = true
         end
         isDetectorInitialized = true
     end
 
-    task.defer(snapshotExistingPets)
+    task.defer(snapshotInitialPets)
 
-    -- Fungsi Kirim Notifikasi saat Pet Menetas
-    local function onPetHatched(eggName, petSpecies, petWeight, isFavorite)
+    -- Fungsi Mengirim Laporan Siklus (Detail) Berdasarkan Data NYATA
+    local function DispatchRealCycleReport()
         if not State.EggWebhook.Enabled or not State.EggWebhook.Url or State.EggWebhook.Url == "" then
             return
         end
 
-        if State.EggWebhook.Mode == "Detail" then
-            local trk = State.EggWebhook.Tracking
-            trk.TotalHatch = trk.TotalHatch + 1
-            local sp = tostring(petSpecies)
-            trk.NormalHatchBreakdown[sp] = (trk.NormalHatchBreakdown[sp] or 0) + 1
-        else
-            local payload = BuildSimplePayload(eggName, petSpecies, petWeight, isFavorite)
-            sendDiscordWebhook(State.EggWebhook.Url, payload)
+        local trk = State.EggWebhook.Tracking
+        if trk.TotalHatch == 0 then return end
+
+        local currentPetsMap = GetCurrentPetMap()
+        local totalPetsCount = 0
+        for _, _ in pairs(currentPetsMap) do totalPetsCount = totalPetsCount + 1 end
+        totalPetsCount = math.floor(totalPetsCount / 2) -- Karena kita simpan 2 key (raw & stripped)
+
+        -- Susun teks Normal Hatch Breakdown dari data nyata
+        local normalList = {}
+        for sp, data in pairs(trk.NormalHatchBreakdown) do
+            local minW = data.MinW or 0
+            local maxW = data.MaxW or 0
+            table.insert(normalList, string.format("• %s: %dx (%.3f–%.3f kg)", sp, data.Count, minW, maxW))
         end
-    end
+        local normalStr = (#normalList > 0) and table.concat(normalList, "\n") or "• None"
 
-    -- Listener 1: Deteksi Instan via Backpack.ChildAdded (Saat pet masuk ke tas)
-    local function monitorBackpack(bp)
-        if not bp then return end
-        bp.ChildAdded:Connect(function(item)
-            if not isDetectorInitialized or not State.EggWebhook.Enabled then return end
-            task.wait(0.2) -- Jeda singkat agar atribut/data tool selesai ter-load
+        -- Susun teks Bronto Hatch Breakdown
+        local brontoList = {}
+        for sp, data in pairs(trk.BrontoHatchBreakdown) do
+            table.insert(brontoList, string.format("• %s: %dx (%.3f–%.3f kg)", sp, data.Count, data.MinW or 0, data.MaxW or 0))
+        end
+        local brontoStr = string.format("• Total hatch with Bronto: %d\n%s", trk.BrontoHatchCount or 0, (#brontoList > 0 and table.concat(brontoList, "\n") or "• None"))
 
-            if item:IsA("Tool") then
-                local isPet = item:FindFirstChild("PetToolLocal") or item:FindFirstChild("PetData") or item:GetAttribute("PET_UUID") or item.Name:find("%[")
-                if isPet then
-                    local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or item.Name
-                    local sU = tostring(u)
-                    local stripped = sU:gsub("[{}]", "")
+        -- Susun teks Egg Breakdown
+        local eggList = {}
+        for eggN, count in pairs(trk.EggsHatchedBreakdown) do
+            table.insert(eggList, string.format("• %s: %dx", eggN, count))
+        end
+        local eggsStr = (#eggList > 0) and table.concat(eggList, "\n") or "• None"
 
-                    if not knownPetUUIDs[sU] and not knownPetUUIDs[stripped] then
-                        knownPetUUIDs[sU] = true
-                        knownPetUUIDs[stripped] = true
+        local payload = BuildDetailPayload({
+            Cycle = trk.Cycle,
+            CycleDuration = formatSeconds(os.time() - (trk.CycleStartTime or os.time())),
+            Player = LocalPlayer.Name,
+            TotalHatch = trk.TotalHatch,
+            Duration = formatSeconds(os.time() - (trk.StartTime or os.time())),
+            Ping = getGamePing(),
+            InvTotal = totalPetsCount,
+            InvMax = 285,
+            EggsTotalStr = string.format("Total Hatched: %d\n%s", trk.TotalHatch, eggsStr),
+            EggsCycleStr = string.format("Cycle Hatched: %d\n%s", trk.TotalHatch, eggsStr),
+            BrontoHatchStr = brontoStr,
+            NormalHatchStr = normalStr,
+            EggBackStr = "• None",
+            EggBackPercent = "0.00%",
+            SellSummaryStr = string.format("• Pets sold : %d", trk.PetsSold or 0),
+            SellPercent = "0.00%",
+            LuckStr = "🟢 Active Farm Cycle",
+            EmbedColor = 3066993
+        })
 
-                        local species = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s+", ""):gsub("%s+$", "")
-                        local weightStr = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "0.0"
-                        local isFav = (item:GetAttribute("IsFavorite") == true) or (item:GetAttribute("Favorite") == true)
-                        local eggName = GetCurrentGardenEggName()
-
-                        onPetHatched(eggName, species, weightStr, isFav)
-                    end
-                end
+        sendDiscordWebhook(State.EggWebhook.Url, payload, function(ok, msg)
+            if ok then
+                print(string.format("[ZyloHub Webhook] ✅ Sukses mengirim Detail Cycle #%d ke Discord!", trk.Cycle))
+                trk.Cycle = trk.Cycle + 1
+                trk.CycleStartTime = os.time()
+                trk.NormalHatchBreakdown = {}
+                trk.BrontoHatchBreakdown = {}
+                trk.EggsHatchedBreakdown = {}
+                hasPendingCycleReport = false
             end
         end)
     end
 
-    monitorBackpack(LocalPlayer:FindFirstChild("Backpack"))
-    LocalPlayer.ChildAdded:Connect(function(child)
-        if child.Name == "Backpack" then
-            monitorBackpack(child)
+    -- Handler Saat Telur Pecah & Pet Baru Lahir (100% NYATA)
+    local function onPetHatchedReal(eggName, petInfo)
+        if not State.EggWebhook.Enabled or not State.EggWebhook.Url or State.EggWebhook.Url == "" then
+            return
         end
-    end)
 
-    -- Listener 2: Deteksi Akurat via DataService Loop (Paling Lengkap & Presisi)
+        local sp = petInfo.Species or "Pet"
+        local w = petInfo.NumericWeight or 0
+        local isFav = petInfo.IsFavorite or false
+
+        lastHatchActivityTime = tick()
+        hasPendingCycleReport = true
+
+        -- Akumulasi Data Nyata ke Tracking State
+        local trk = State.EggWebhook.Tracking
+        trk.TotalHatch = trk.TotalHatch + 1
+        trk.EggsHatchedBreakdown[eggName] = (trk.EggsHatchedBreakdown[eggName] or 0) + 1
+
+        local entry = trk.NormalHatchBreakdown[sp] or { Count = 0, MinW = w, MaxW = w }
+        entry.Count = entry.Count + 1
+        if w < entry.MinW or entry.MinW == 0 then entry.MinW = w end
+        if w > entry.MaxW then entry.MaxW = w end
+        trk.NormalHatchBreakdown[sp] = entry
+
+        -- Pengiriman Berdasarkan Mode
+        if State.EggWebhook.Mode == "Simple" then
+            local payload = BuildSimplePayload(eggName, sp, petInfo.Weight, isFav)
+            sendDiscordWebhook(State.EggWebhook.Url, payload, function(ok, msg)
+                if ok then
+                    print(string.format("[ZyloHub Webhook] 🚀 [Real Hatch] Sukses terkirim: %s (%s KG)", sp, tostring(petInfo.Weight)))
+                end
+            end)
+        else
+            print(string.format("[ZyloHub Webhook] 📊 [Real Hatch Detail Mode] Ditambahkan ke Cycle: %s (%s KG)", sp, tostring(petInfo.Weight)))
+        end
+    end
+
+    -- LOOP DETEKTOR REAL-TIME (Memeriksa setiap 0.35 detik)
     task.spawn(function()
         while true do
-            task.wait(0.5)
+            task.wait(0.35)
+
             if isDetectorInitialized and State.EggWebhook.Enabled and State.EggWebhook.Url ~= "" then
-                if DataService and DataService.GetData then
-                    pcall(function()
-                        local data = DataService:GetData()
-                        if data and data.PetsData and data.PetsData.PetInventory and data.PetsData.PetInventory.Data then
-                            for uuid, entry in pairs(data.PetsData.PetInventory.Data) do
-                                local sUuid = tostring(uuid)
-                                local stripped = sUuid:gsub("[{}]", "")
+                local currentMap = GetCurrentPetMap()
+                local eggName = GetCurrentGardenEggName()
 
-                                if not knownPetUUIDs[sUuid] and not knownPetUUIDs[stripped] then
-                                    knownPetUUIDs[sUuid] = true
-                                    knownPetUUIDs[stripped] = true
+                for uuid, petObj in pairs(currentMap) do
+                    if not knownPetUUIDs[uuid] then
+                        -- PET BARU TERDETEKSI!
+                        knownPetUUIDs[uuid] = true
+                        knownPetUUIDs[uuid:gsub("[{}]", "")] = true
 
-                                    local petData = entry.PetData or {}
-                                    local rawType = entry.PetType or petData.Species or petData.Name or "Pet"
-                                    local species = rawType:gsub("%s*%[.-%]", ""):gsub("^%s+", ""):gsub("%s+$", "")
-                                    local isFav = (petData.IsFavorite == true) or (entry.IsFavorite == true)
-                                    local level = petData.Level or 1
+                        onPetHatchedReal(eggName, petObj)
+                    end
+                end
 
-                                    local weightVal = "0.0"
-                                    if PetUtilities and PetUtilities.CalculateWeight and petData.BaseWeight then
-                                        local calcW = PetUtilities:CalculateWeight(petData.BaseWeight, level) * 100
-                                        calcW = math.round(calcW) / 100
-                                        weightVal = string.format("%.2f", calcW)
-                                    elseif petData.BaseWeight then
-                                        weightVal = string.format("%.2f", tonumber(petData.BaseWeight) or 0)
-                                    elseif petData.Weight then
-                                        weightVal = string.format("%.2f", tonumber(petData.Weight) or 0)
-                                    end
-
-                                    local eggName = GetCurrentGardenEggName()
-                                    onPetHatched(eggName, species, weightVal, isFav)
-                                end
-                            end
-                        end
-                    end)
+                -- Jika Mode Detail aktif dan sudah tidak ada telur baru yang menetas selama 4 detik, kirim laporan Cycle!
+                if State.EggWebhook.Mode == "Detail" and hasPendingCycleReport and (tick() - lastHatchActivityTime > 4.0) then
+                    DispatchRealCycleReport()
                 end
             end
         end
@@ -636,9 +745,9 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         bdStroke.Color = not isSimple and Color3.fromRGB(200, 130, 255) or Color3.fromRGB(45, 55, 85)
 
         if isSimple then
-            lblModeDesc.Text = "ℹ️ Simple: Notifikasi instan per telur (Jenis telur, pet, bobot KG, status)"
+            lblModeDesc.Text = "ℹ️ Simple: Notifikasi per pet menetas (Telur, pet, bobot KG asli, status)"
         else
-            lblModeDesc.Text = "ℹ️ Detail: Rekap Cycle lengkap (Tracking durasi, hatch, sell & luck)"
+            lblModeDesc.Text = "ℹ️ Detail: Rekap Cycle otomatis (Total hatch, rincian pet, sell & status)"
         end
     end
 
@@ -706,26 +815,26 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         if mode == "Detail" then
             testPayload = BuildDetailPayload({
                 Cycle = 1,
-                CycleDuration = "00:01:00",
-                Player = LocalPlayer.Name,
-                TotalHatch = 12,
-                Duration = "00:15:30",
+                CycleDuration = "00:00:30",
+                Player = LocalPlayer.Name .. " [TEST]",
+                TotalHatch = 1,
+                Duration = "00:00:30",
                 Ping = getGamePing(),
-                InvTotal = 15,
+                InvTotal = 1,
                 InvMax = 285,
-                EggsTotalStr = "• Night Egg: 12x",
-                EggsCycleStr = "• Night Egg: 12x",
-                BrontoHatchStr = "• Total hatch with Bronto: 2",
-                NormalHatchStr = "• Mimic Octopus: 12x (280.0 KG)",
-                EggBackPercent = "50.00%",
-                EggBackStr = "• Night Egg: 6x",
-                SellPercent = "50.00%",
-                SellSummaryStr = "• Pets sold : 6",
-                LuckStr = "🟢 GOOD Luck",
+                EggsTotalStr = "• Test Egg: 1x",
+                EggsCycleStr = "• Test Egg: 1x",
+                BrontoHatchStr = "• None",
+                NormalHatchStr = "• Test Pet: 1x (100.0 KG)",
+                EggBackPercent = "0.00%",
+                EggBackStr = "• None",
+                SellPercent = "0.00%",
+                SellSummaryStr = "• Pets sold : 0",
+                LuckStr = "🧪 Test Message",
                 EmbedColor = 3066993
             })
         else
-            testPayload = BuildSimplePayload("Night Egg", "Mimic Octopus", 280.0, true, os.date("%Y-%m-%d %H:%M:%S"))
+            testPayload = BuildSimplePayload("Test Egg", "Test Pet [CONTOH]", 100.0, true, os.date("%Y-%m-%d %H:%M:%S"))
         end
 
         sendDiscordWebhook(url, testPayload, function(success, message)
@@ -836,7 +945,12 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
     -- [6] PUBLIC API PENGIRIMAN NOTIFIKASI
     -- =============================================================
     function EggWebhookModule.SendHatchNotification(eggName, petSpecies, petWeight, isFavorite)
-        onPetHatched(eggName, petSpecies, petWeight, isFavorite)
+        onPetHatchedReal(eggName, {
+            Species = petSpecies,
+            Weight = tostring(petWeight),
+            NumericWeight = tonumber(petWeight) or 0,
+            IsFavorite = isFavorite
+        })
     end
 
     function EggWebhookModule.SendCycleReport(cycleData)
@@ -854,6 +968,7 @@ function EggWebhookModule.Init(State, ZyloLib, MainScreen, GearBtn)
         Toggle = function() Modal.Visible = not Modal.Visible end,
         SendHatchNotification = EggWebhookModule.SendHatchNotification,
         SendCycleReport = EggWebhookModule.SendCycleReport,
+        DispatchRealCycleReport = DispatchRealCycleReport,
         BuildSimplePayload = BuildSimplePayload,
         BuildDetailPayload = BuildDetailPayload
     }
