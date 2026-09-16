@@ -4,16 +4,17 @@
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Sub-Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
 --  Mode Pipeline: Modal Popup Selector (Mode A - F)
---  Pembaruan Spesifik:
---    1. Auto-Confirm Dialog Mesin Mutasi: Mendeteksi pop-up Submit Pet dan
---       otomatis mengklik tombol hijau [Confirm].
---    2. Machine Booster Deployment: Pet target di dalam mesin, seluruh pet
---       booster Machine otomatis dipasang di kebun untuk mereduce waktu mutasi.
---    3. Auto-Claim via PetReady: Memantau status PetReady (DataService & Prompt),
+--  Pembaruan Sesuai Instruksi:
+--    1. Auto-Confirm Dialog Mesin Mutasi: Otomatis mengklik tombol [Confirm].
+--    2. Auto-Press E [Start Mutation]: Otomatis menekan E kedua untuk memulai
+--       putaran mesin mutasi sehingga timer aktif.
+--    3. Machine Booster Deployment: Kembali ke kebun dan memasang seluruh
+--       booster Machine di kebun untuk mereduce waktu mutasi.
+--    4. Auto-Claim via PetReady: Memantau status PetReady (DataService & Prompt),
 --       lalu otomatis teleport dan tekan E untuk mengklaim pet mutasi.
---    4. Strict Single Batch Lock: GBXP tidak menyuplai pet baru sebelum
+--    5. Strict Single Batch Lock: GBXP tidak menyuplai pet baru sebelum
 --       rombongan sebelumnya menyelesaikan tahap akhir mode.
---    5. Clean START & STOP: Saat START pet langsung ke kebun, saat STOP
+--    6. Clean START & STOP: Saat START pet langsung ke kebun, saat STOP
 --       seluruh pet di kebun langsung ditarik (recall) ke dalam tas.
 -- =========================================================================
 
@@ -1221,7 +1222,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             id = "Mode: C",
             letter = "MODE C",
             route = "GBXP > XP > MACHINE > INVENTORY",
-            desc = "Suplai GBXP > Tim XP > Mutasikan langsung di Mesin Mutasi (Boosted).",
+            desc = "Suplai GBXP > Tim XP > Mutasikan di Mesin (Auto Confirm & Start + Booster).",
             stages = { "XP", "Machine" },
             order = 3
         },
@@ -1245,7 +1246,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             id = "Mode: F",
             letter = "MODE F",
             route = "GBXP > XP > ELEPHANT > MACHINE > 100 AGE > INVENTORY",
-            desc = "Sempurna: Base Weight max > Mutasi Mesin (Boosted) > Push umur hingga 500.",
+            desc = "Sempurna: Base Weight max > Mutasi Mesin (Auto Start + Booster) > Push umur 500.",
             stages = { "XP", "Elephant", "Machine", "100 Age" },
             order = 6
         }
@@ -1462,7 +1463,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end
 
-    -- Pencari Instance Mesin Mutasi (menggunakan Tag CollectionService / Workspace)
     GetMutationMachineInstance = function()
         if CollectionService then
             local tagged = CollectionService:GetTagged("PetMutationMachine")
@@ -1476,7 +1476,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         return workspace:FindFirstChild("PetMutationMachine", true)
     end
 
-    -- Helper otomatis untuk mengklik tombol [Confirm] pada dialog pop-up Submit Pet
     local function AutoClickMachineConfirmButton()
         local pGui = LocalPlayer:FindFirstChild("PlayerGui")
         if not pGui then return false end
@@ -1486,11 +1485,9 @@ return function(ParentContainer, State, ZyloLib, Main)
                 for _, desc in ipairs(gui:GetDescendants()) do
                     if desc:IsA("TextButton") or desc:IsA("ImageButton") then
                         local btnText = (desc:IsA("TextButton") and desc.Text) or desc.Name
-                        local parentName = desc.Parent and desc.Parent.Name or ""
                         if tostring(btnText):lower():find("confirm") or tostring(desc.Name):lower():find("confirm") then
                             pcall(function()
                                 if desc.Visible then
-                                    -- Eksekusi klik tombol Confirm
                                     if desc.MouseButton1Click then
                                         for _, con in pairs(getconnections(desc.MouseButton1Click)) do
                                             con:Fire()
@@ -1512,7 +1509,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         return false
     end
 
-    -- Pengecek status apakah mutasi mesin sudah selesai (PetReady)
     local function IsMachinePetReady()
         if DataService then
             local ok, data = pcall(function() return DataService:GetData() end)
@@ -1547,7 +1543,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 13. AUTOMATION RUNNER ENGINE: PIPELINE DENGAN SISTEM MESIN MUTASI LENGKAP
+    -- 13. AUTOMATION RUNNER ENGINE: ESTAFET + AUTO CONFIRM + AUTO START MUTATION
     -- =====================================================================
     local runnerThread = nil
 
@@ -1635,7 +1631,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                     updateStatusUI(string.format("Rombongan Siap (%d Pet): %s", #currentBatch, table.concat(batchNames, ", ")), true)
                     task.wait(1.5)
 
-                    -- 3. JALUR ESTAFET DENGAN SISTEM KHUSUS MESIN & BOOSTER SWAPPING
+                    -- 3. JALUR ESTAFET DENGAN PERGANTIAN BOOSTER & SISTEM MESIN MUTASI LENGKAP
                     local previousStageName = nil
 
                     for stageIdx, stageName in ipairs(modeConfig.stages) do
@@ -1659,7 +1655,6 @@ return function(ParentContainer, State, ZyloLib, Main)
                         -- =================================================================
                         if stageName == "Machine" then
                             local character = LocalPlayer.Character
-                            local hrp = character and character:FindFirstChild("HumanoidRootPart")
                             local humanoid = character and character:FindFirstChildOfClass("Humanoid")
                             local backpack = LocalPlayer:FindFirstChild("Backpack")
                             local farmArea = GetFarmPetArea()
@@ -1684,7 +1679,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                                     UnequipPetByUUID(pUuid)
                                     task.wait(0.4)
 
-                                    -- Pegang tool pet di tangan
+                                    -- 1. Pegang tool pet di tangan
                                     local petTool = nil
                                     local function getTool(cont)
                                         if not cont then return nil end
@@ -1705,12 +1700,12 @@ return function(ParentContainer, State, ZyloLib, Main)
                                         task.wait(0.3)
                                     end
 
-                                    -- Teleport ke Mesin
+                                    -- 2. Teleport ke Mesin
                                     updateStatusUI(string.format("[Mesin]: Teleport untuk Submit %s...", pName), true)
                                     if character then character:PivotTo(targetCF) end
                                     task.wait(0.4)
 
-                                    -- Tekan Tombol E pada Mesin
+                                    -- 3. Tekan Tombol E pada Mesin (Submit Prompt)
                                     if prompt then
                                         prompt.HoldDuration = 0
                                         prompt.RequiresLineOfSight = false
@@ -1718,31 +1713,42 @@ return function(ParentContainer, State, ZyloLib, Main)
                                         task.wait(0.3)
                                     end
 
-                                    -- FITUR BARU: AUTO-CLICK TOMBOL [CONFIRM] DI LAYAR
+                                    -- 4. AUTO-CLICK TOMBOL [CONFIRM] DI LAYAR
                                     updateStatusUI("[Mesin]: Menekan tombol [Confirm]...", true)
-                                    for clickAttempt = 1, 5 do
+                                    for clickAttempt = 1, 6 do
                                         local clicked = AutoClickMachineConfirmButton()
                                         if clicked then break end
                                         task.wait(0.2)
                                     end
+                                    task.wait(0.6)
 
-                                    -- Backup Remote jika game mengandalkan remote submit
+                                    -- 5. BARU: AUTO-PRESS E UNTUK [START MUTATION]
+                                    updateStatusUI("[Mesin]: Menekan prompt [Start Mutation]...", true)
+                                    local startPrompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                    if startPrompt then
+                                        startPrompt.HoldDuration = 0
+                                        startPrompt.RequiresLineOfSight = false
+                                        pcall(function() fireproximityprompt(startPrompt) end)
+                                        task.wait(0.4)
+                                    end
+
+                                    -- Backup remote jika server game menggunakan remote Start
                                     if PetMutationMachineRemote then
                                         pcall(function()
-                                            PetMutationMachineRemote:FireServer("SubmitPet", pUuid)
-                                            PetMutationMachineRemote:FireServer(pUuid)
+                                            PetMutationMachineRemote:FireServer("StartMachine")
+                                            PetMutationMachineRemote:FireServer("Start")
                                         end)
                                     end
                                     task.wait(0.5)
 
-                                    -- KEMBALI KE KEBUN & DEPLOY BOOSTER MACHINE DI KEBUN
+                                    -- 6. KEMBALI KE KEBUN & DEPLOY BOOSTER MACHINE DI KEBUN
                                     updateStatusUI("[Mesin]: Kembali ke kebun & Memasang booster tim Machine...", true)
                                     if character then character:PivotTo(farmPos) end
                                     task.wait(0.4)
                                     EquipSupportPets("Machine")
                                     task.wait(0.5)
 
-                                    -- TUNGGU SAMPAI PET DI MESIN SELESAI (PETREADY)
+                                    -- 7. TUNGGU SAMPAI MUTASI SELESAI (PETREADY)
                                     updateStatusUI(string.format("[Mesin]: Menunggu mutasi %s selesai (Booster aktif)...", pName), true)
                                     local waitStart = os.time()
                                     while State.MutasiRunning do
@@ -1752,22 +1758,23 @@ return function(ParentContainer, State, ZyloLib, Main)
                                             break
                                         end
 
-                                        -- Fallback darurat jika timer game selesai lebih dari 3 menit
-                                        if os.time() - waitStart > 180 then
-                                            updateStatusUI("[Mesin]: Batas waktu tercapai, memeriksa klaim mesin...", true)
+                                        -- Fallback darurat
+                                        if os.time() - waitStart > 300 then
+                                            updateStatusUI("[Mesin]: Memeriksa klaim mesin mutasi...", true)
                                             break
                                         end
                                         task.wait(2)
                                     end
 
-                                    -- TELEPORT KEMBALI UNTUK CLAIM PET DENGAN TOMBOL E
+                                    -- 8. TELEPORT KEMBALI UNTUK CLAIM PET DENGAN TOMBOL E
                                     if State.MutasiRunning then
                                         if character then character:PivotTo(targetCF) end
                                         task.wait(0.4)
-                                        if prompt then
-                                            prompt.HoldDuration = 0
-                                            prompt.RequiresLineOfSight = false
-                                            pcall(function() fireproximityprompt(prompt) end)
+                                        local claimPrompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                        if claimPrompt then
+                                            claimPrompt.HoldDuration = 0
+                                            claimPrompt.RequiresLineOfSight = false
+                                            pcall(function() fireproximityprompt(claimPrompt) end)
                                             task.wait(0.5)
                                         end
                                         updateStatusUI(string.format("[Mesin]: %s berhasil diambil!", pName), true)
