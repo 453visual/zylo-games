@@ -1,21 +1,16 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.8.0 - ULTIMATE ENGINE)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.9.0 - COMPLETE ENGINE)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Sub-Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
 --  Mode Pipeline: Modal Popup Selector (Mode A - F)
---  Pembaruan Sesuai Instruksi:
---    1. Auto-Confirm Dialog Mesin Mutasi: Otomatis mengklik tombol [Confirm].
---    2. Auto-Press E [Start Mutation]: Otomatis menekan E kedua untuk memulai
---       putaran mesin mutasi sehingga timer aktif.
---    3. Machine Booster Deployment: Kembali ke kebun dan memasang seluruh
---       booster Machine di kebun untuk mereduce waktu mutasi.
---    4. Auto-Claim via PetReady: Memantau status PetReady (DataService & Prompt),
---       lalu otomatis teleport dan tekan E untuk mengklaim pet mutasi.
---    5. Strict Single Batch Lock: GBXP tidak menyuplai pet baru sebelum
---       rombongan sebelumnya menyelesaikan tahap akhir mode.
---    6. Clean START & STOP: Saat START pet langsung ke kebun, saat STOP
---       seluruh pet di kebun langsung ditarik (recall) ke dalam tas.
+--  Fitur Unggulan Terpadu:
+--    1. Auto-Confirm & Auto-Start Mesin Mutasi (LOCKED & PATEN)
+--    2. Machine Booster Deployment ke Kebun & Auto-Claim via PetReady (LOCKED & PATEN)
+--    3. Strict Single Batch Lock & Recall saat Stop (LOCKED & PATEN)
+--    4. BARU: Target Mutasi Mesin & Nightmare
+--    5. BARU: Discord Webhook Integration (Embed Ungu ZyloHub)
+--    6. BARU: Auto Clean Pet Shard jika Target Mutasi Belum Tercapai (Looping Otomatis)
 -- =========================================================================
 
 return function(ParentContainer, State, ZyloLib, Main)
@@ -54,7 +49,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- SERVICES & REMOTES RESMI DARI GAME MODULES
+    -- SERVICES & REMOTES RESMI
     -- =====================================================================
     local GameEvents = ReplicatedStorage:WaitForChild("GameEvents", 10)
     local PetsServiceRemote = GameEvents and GameEvents:FindFirstChild("PetsService")
@@ -87,11 +82,38 @@ return function(ParentContainer, State, ZyloLib, Main)
     State.CompletedPets = State.CompletedPets or {}
     State.MutasiStatusText = "IDLE - Siap Memulai Pipeline"
 
-    -- Konfigurasi Spesifik GBXP
+    -- Target Mutasi & Pengaturan Eksternal
+    State.MachineTargetMutation = State.MachineTargetMutation or "Any Mutation"
+    State.NightmareTargetMutation = State.NightmareTargetMutation or "Any Mutation"
+    State.MutasiWebhookURL = State.MutasiWebhookURL or ""
+    State.AutoCleanIfNotTarget = State.AutoCleanIfNotTarget or false
+
+    -- Helper Services (Lazy Loader dari GitHub)
+    local WebhookService = nil
+    local CleanMutasiService = nil
+
+    local function GetWebhookService()
+        if not WebhookService then
+            pcall(function()
+                WebhookService = loadstring(game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/MutasiWebhook.lua"))()
+            end)
+        end
+        return WebhookService
+    end
+
+    local function GetCleanMutasiService()
+        if not CleanMutasiService then
+            pcall(function()
+                CleanMutasiService = loadstring(game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/CleanMutasi.lua"))()
+            end)
+        end
+        return CleanMutasiService
+    end
+
+    -- Konfigurasi GBXP & Threshold
     State.GBXPMaxEquip = State.GBXPMaxEquip or 2
     State.GBXPSelectMode = State.GBXPSelectMode or "auto"
 
-    -- Threshold Age per Tim (Mendukung hingga 500 Age)
     State.MutasiTeamThresholds = State.MutasiTeamThresholds or {
         Elephant    = { EquipAge = 20, UnequipAge = 0 },
         Machine     = { EquipAge = 20, UnequipAge = 0 },
@@ -102,20 +124,9 @@ return function(ParentContainer, State, ZyloLib, Main)
         Config      = { EquipAge = 20, UnequipAge = 0 }
     }
 
-    if not State.MutasiTeamThresholds.GBXP then
-        State.MutasiTeamThresholds.GBXP = { EquipAge = 0, UnequipAge = 100 }
-    end
-    if not State.MutasiTeamThresholds.XP then
-        State.MutasiTeamThresholds.XP = { EquipAge = 0, UnequipAge = 50 }
-    end
-    if not State.MutasiTeamThresholds["100 Age"] then
-        State.MutasiTeamThresholds["100 Age"] = { EquipAge = 50, UnequipAge = 500 }
-    end
-
     State.MutasiEquipAge = State.MutasiTeamThresholds[State.MutasiActiveCategory] and State.MutasiTeamThresholds[State.MutasiActiveCategory].EquipAge or 20
     State.MutasiUnequipAge = State.MutasiTeamThresholds[State.MutasiActiveCategory] and State.MutasiTeamThresholds[State.MutasiActiveCategory].UnequipAge or 0
 
-    -- Tabel Seleksi Pet per Tim Kategori
     State.MutasiSelectedTeams = State.MutasiSelectedTeams or {
         Elephant    = {},
         Machine     = {},
@@ -124,9 +135,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         XP          = {},
         GBXP        = {}
     }
-    for _, cat in ipairs({"Elephant", "Machine", "Nightmare", "100 Age", "XP", "GBXP"}) do
-        State.MutasiSelectedTeams[cat] = State.MutasiSelectedTeams[cat] or {}
-    end
 
     -- Forward declarations
     local GetAllPets
@@ -143,7 +151,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     local UnequipSupportPets
     local GetMutationMachineInstance
 
-    -- Hitung jumlah pet yang sudah dipilih di dalam tim
     local function GetTeamSelectedCount(catName)
         if catName == "GBXP" and State.GBXPSelectMode == "auto" then
             if GetAllPets then
@@ -191,25 +198,20 @@ return function(ParentContainer, State, ZyloLib, Main)
     MutasiLayout.Padding = UDim.new(0, 6)
 
     -- =====================================================================
-    -- 1. SUB-NAVIGASI KATEGORI (FULL WIDTH PILLS ROW)
+    -- 1. SUB-NAVIGASI KATEGORI
     -- =====================================================================
     local NavRow = Instance.new("Frame", MutasiWrapper)
     NavRow.Size = UDim2.new(1, 0, 0, 28)
     NavRow.BackgroundTransparency = 1
     NavRow.BorderSizePixel = 0
-    NavRow.ClipsDescendants = false
     NavRow.LayoutOrder = 1
 
     local PillsContainer = Instance.new("Frame", NavRow)
     PillsContainer.Size = UDim2.new(1, -32, 1, 0)
-    PillsContainer.Position = UDim2.new(0, 0, 0, 0)
     PillsContainer.BackgroundTransparency = 1
-    PillsContainer.BorderSizePixel = 0
-    PillsContainer.ClipsDescendants = false
 
     local NavList = Instance.new("UIListLayout", PillsContainer)
     NavList.FillDirection = Enum.FillDirection.Horizontal
-    NavList.HorizontalAlignment = Enum.HorizontalAlignment.Left
     NavList.VerticalAlignment = Enum.VerticalAlignment.Center
     NavList.Padding = UDim.new(0, 5)
 
@@ -265,7 +267,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 2. DROPDOWN HEADER: ( [Category] Team ) Threshold Age & Kg
+    -- 2. DROPDOWN HEADER
     -- =====================================================================
     local ThreshHeader = Instance.new("TextButton", MutasiWrapper)
     ThreshHeader.Size = UDim2.new(1, 0, 0, 28)
@@ -300,11 +302,18 @@ return function(ParentContainer, State, ZyloLib, Main)
     thArrow.TextSize = 9
 
     -- =====================================================================
-    -- 3. BODY COLLAPSIBLE: TIM BADGES + THRESHOLDS + KONTROL GBXP
+    -- 3. BODY: BADGES + THRESHOLDS + TARGET MUTASI + KONTROL GBXP
     -- =====================================================================
     local isGBXPActive = (State.MutasiActiveCategory == "GBXP")
+    local isMachineActive = (State.MutasiActiveCategory == "Machine")
+    local isNightmareActive = (State.MutasiActiveCategory == "Nightmare")
+
     local ThreshBody = Instance.new("Frame", MutasiWrapper)
-    ThreshBody.Size = UDim2.new(1, 0, 0, isGBXPActive and 148 or 88)
+    local initialHeight = 88
+    if isGBXPActive then initialHeight = 148
+    elseif isMachineActive or isNightmareActive then initialHeight = 118 end
+
+    ThreshBody.Size = UDim2.new(1, 0, 0, initialHeight)
     ThreshBody.BackgroundTransparency = 1
     ThreshBody.LayoutOrder = 3
 
@@ -319,7 +328,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         thArrow.Text = isThreshOpen and "▼" or "▶"
     end)
 
-    -- Row 3A: TIM STATUS ROW DENGAN COUNTER REAL-TIME
+    -- Badges
     local StatsScroll = Instance.new("ScrollingFrame", ThreshBody)
     StatsScroll.Size = UDim2.new(1, 0, 0, 24)
     StatsScroll.BackgroundColor3 = Color3.fromRGB(11, 14, 26)
@@ -341,7 +350,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     StatPad.PaddingRight = UDim.new(0, 6)
 
     local TeamBadges = {}
-
     local function CreateTeamBadge(parent, icon, name, catKey, baseColor, itemWidth)
         local btn = Instance.new("TextButton", parent)
         btn.Size = UDim2.new(0, itemWidth or 86, 0, 20)
@@ -353,7 +361,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
         local bStroke = Instance.new("UIStroke", btn)
         bStroke.Color = Color3.fromRGB(36, 44, 70)
-        bStroke.Thickness = 1
 
         btn.MouseButton1Click:Connect(function()
             SwitchCategory(catKey)
@@ -376,7 +383,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     CreateTeamBadge(StatsScroll, "📘", "XP", "XP", Color3.fromRGB(130, 200, 255), 72)
     CreateTeamBadge(StatsScroll, "🧪", "GBXP", "GBXP", Color3.fromRGB(180, 140, 255), 84)
 
-    -- Row 3B: Equip Age
+    -- Row Equip Age
     local RowEq = Instance.new("Frame", ThreshBody)
     RowEq.Size = UDim2.new(1, 0, 0, 25)
     RowEq.BackgroundTransparency = 1
@@ -418,7 +425,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end)
 
-    -- Row 3C: Unequip Age (Mendukung hingga 500 Age)
+    -- Row Unequip Age
     local RowUneq = Instance.new("Frame", ThreshBody)
     RowUneq.Size = UDim2.new(1, 0, 0, 25)
     RowUneq.BackgroundTransparency = 1
@@ -460,11 +467,66 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end)
 
-    -- Row 3D: GBXP Max Equip
+    -- BARU: Row Target Mutasi (Tampil di Tab Machine & Nightmare)
+    local RowTargetMut = Instance.new("Frame", ThreshBody)
+    RowTargetMut.Size = UDim2.new(1, 0, 0, 25)
+    RowTargetMut.BackgroundTransparency = 1
+    RowTargetMut.LayoutOrder = 4
+    RowTargetMut.Visible = (isMachineActive or isNightmareActive)
+
+    local TargetMutLabel = Instance.new("TextLabel", RowTargetMut)
+    TargetMutLabel.Position = UDim2.new(0, 4, 0, 0)
+    TargetMutLabel.Size = UDim2.new(0.55, 0, 1, 0)
+    TargetMutLabel.BackgroundTransparency = 1
+    TargetMutLabel.Text = "Target Mutasi (" .. State.MutasiActiveCategory .. ")"
+    TargetMutLabel.TextColor3 = C.TEXT_W
+    TargetMutLabel.Font = Enum.Font.GothamMedium
+    TargetMutLabel.TextSize = 9.5
+    TargetMutLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+    local TargetMutBtn = Instance.new("TextButton", RowTargetMut)
+    TargetMutBtn.Position = UDim2.new(1, -135, 0.5, -12)
+    TargetMutBtn.Size = UDim2.new(0, 135, 0, 24)
+    TargetMutBtn.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
+    TargetMutBtn.Text = (isMachineActive and State.MachineTargetMutation or State.NightmareTargetMutation) .. " ▾"
+    TargetMutBtn.TextColor3 = C.CYAN
+    TargetMutBtn.Font = Enum.Font.GothamBold
+    TargetMutBtn.TextSize = 8.5
+    Instance.new("UICorner", TargetMutBtn).CornerRadius = UDim.new(0, 6)
+    local tmStroke = Instance.new("UIStroke", TargetMutBtn)
+    tmStroke.Color = Color3.fromRGB(42, 50, 78)
+
+    local MachineTargetOptions = { "Any Mutation", "Mega", "Transcendent", "Inferno", "Forger", "Oxpecker", "Lion" }
+    local NightmareTargetOptions = { "Any Mutation", "Blossoming", "Venom", "Everchanted", "Ember", "Nightmare" }
+
+    TargetMutBtn.MouseButton1Click:Connect(function()
+        local isMach = (State.MutasiActiveCategory == "Machine")
+        local list = isMach and MachineTargetOptions or NightmareTargetOptions
+        local current = isMach and State.MachineTargetMutation or State.NightmareTargetMutation
+        local nextIdx = 1
+
+        for i, val in ipairs(list) do
+            if val == current then
+                nextIdx = (i % #list) + 1
+                break
+            end
+        end
+
+        local selected = list[nextIdx]
+        if isMach then
+            State.MachineTargetMutation = selected
+        else
+            State.NightmareTargetMutation = selected
+        end
+        TargetMutBtn.Text = selected .. " ▾"
+        updateStatusUI("Target Mutasi " .. State.MutasiActiveCategory .. " diubah ke: " .. selected, false)
+    end)
+
+    -- GBXP Controls
     local RowGBXPMax = Instance.new("Frame", ThreshBody)
     RowGBXPMax.Size = UDim2.new(1, 0, 0, 25)
     RowGBXPMax.BackgroundTransparency = 1
-    RowGBXPMax.LayoutOrder = 4
+    RowGBXPMax.LayoutOrder = 5
     RowGBXPMax.Visible = isGBXPActive
 
     local GBXPMaxLabel = Instance.new("TextLabel", RowGBXPMax)
@@ -486,8 +548,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     GBXPMaxBox.Font = Enum.Font.GothamBold
     GBXPMaxBox.TextSize = 9.5
     Instance.new("UICorner", GBXPMaxBox).CornerRadius = UDim.new(0, 6)
-    local gMaxStroke = Instance.new("UIStroke", GBXPMaxBox)
-    gMaxStroke.Color = Color3.fromRGB(42, 50, 78)
 
     GBXPMaxBox:GetPropertyChangedSignal("Text"):Connect(function()
         local num = tonumber(GBXPMaxBox.Text)
@@ -496,11 +556,10 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end)
 
-    -- Row 3E: GBXP Select Mode
     local RowGBXPMode = Instance.new("Frame", ThreshBody)
     RowGBXPMode.Size = UDim2.new(1, 0, 0, 25)
     RowGBXPMode.BackgroundTransparency = 1
-    RowGBXPMode.LayoutOrder = 5
+    RowGBXPMode.LayoutOrder = 6
     RowGBXPMode.Visible = isGBXPActive
 
     local GBXPModeLabel = Instance.new("TextLabel", RowGBXPMode)
@@ -522,8 +581,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     GBXPModeBtn.Font = Enum.Font.GothamBold
     GBXPModeBtn.TextSize = 9
     Instance.new("UICorner", GBXPModeBtn).CornerRadius = UDim.new(0, 6)
-    local gModeStroke = Instance.new("UIStroke", GBXPModeBtn)
-    gModeStroke.Color = Color3.fromRGB(42, 50, 78)
 
     GBXPModeBtn.MouseButton1Click:Connect(function()
         if State.GBXPSelectMode == "auto" then
@@ -579,14 +636,14 @@ return function(ParentContainer, State, ZyloLib, Main)
     ListTitle.Position = UDim2.new(0, 4, 0, 0)
     ListTitle.Size = UDim2.new(1, -8, 1, 0)
     ListTitle.BackgroundTransparency = 1
-    ListTitle.Text = (State.MutasiActiveCategory == "GBXP") and "Gudang Suplai GBXP (Pet Non-Favorit)" or ("Select Pet " .. State.MutasiActiveCategory .. " Team (Favorite List)")
+    ListTitle.Text = "Select Pet " .. State.MutasiActiveCategory .. " Team"
     ListTitle.TextColor3 = C.TEXT_M
     ListTitle.Font = Enum.Font.GothamMedium
     ListTitle.TextSize = 9
     ListTitle.TextXAlignment = Enum.TextXAlignment.Left
 
     -- =====================================================================
-    -- 5. "SELECT OPTIONAL" QUICK SEARCH BAR
+    -- 5. SEARCH BAR
     -- =====================================================================
     local SearchBarRow = Instance.new("Frame", MutasiWrapper)
     SearchBarRow.Size = UDim2.new(1, 0, 0, 28)
@@ -643,7 +700,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 6. SCANNER SISTEM: IS FAVORITED & GET ALL PETS
+    -- 6. SCANNER SISTEM
     -- =====================================================================
     local function IsPetFavorited(uuid, item)
         if not uuid and item then
@@ -670,15 +727,10 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
 
         if item then
-            local isFavAttr = item:GetAttribute("IsFavorite") or item:GetAttribute("Favorite") or item:GetAttribute("FAVORITE") or item:GetAttribute("IsFav")
+            local isFavAttr = item:GetAttribute("IsFavorite") or item:GetAttribute("Favorite") or item:GetAttribute("FAVORITE")
             if isFavAttr == true or isFavAttr == 1 or isFavAttr == "true" then return true end
-            local favVal = item:FindFirstChild("IsFavorite") or item:FindFirstChild("Favorite") or item:FindFirstChild("Fav")
+            local favVal = item:FindFirstChild("IsFavorite") or item:FindFirstChild("Favorite")
             if favVal and (favVal.Value == true or favVal.Value == 1) then return true end
-            local petData = item:FindFirstChild("PetData")
-            if petData then
-                local pFav = petData:FindFirstChild("IsFavorite") or petData:FindFirstChild("Favorite") or petData:FindFirstChild("Fav")
-                if pFav and (pFav.Value == true or pFav.Value == 1) then return true end
-            end
         end
         return false
     end
@@ -718,7 +770,6 @@ return function(ParentContainer, State, ZyloLib, Main)
             registerTools(LocalPlayer.Character)
         end
 
-        -- 1. Scan DataService Inventory
         if DataService then
             local ok, data = pcall(function() return DataService:GetData() end)
             if ok and data and data.PetsData and data.PetsData.PetInventory and data.PetsData.PetInventory.Data then
@@ -774,7 +825,6 @@ return function(ParentContainer, State, ZyloLib, Main)
             end
         end
 
-        -- 2. Fallback scan dari Backpack & Character Tools
         local function scanFallbackTools(container)
             if not container then return end
             for _, item in ipairs(container:GetChildren()) do
@@ -818,11 +868,13 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 7. FUNGSI GANTI KATEGORI (SWITCH CATEGORY)
+    -- 7. GANTI KATEGORI
     -- =====================================================================
     SwitchCategory = function(catName)
         State.MutasiActiveCategory = catName
         local isGB = (catName == "GBXP")
+        local isMach = (catName == "Machine")
+        local isNight = (catName == "Nightmare")
 
         for cName, data in pairs(CategoryButtons) do
             local isActive = (cName == catName)
@@ -834,7 +886,17 @@ return function(ParentContainer, State, ZyloLib, Main)
 
         RowGBXPMax.Visible = isGB
         RowGBXPMode.Visible = isGB
-        ThreshBody.Size = UDim2.new(1, 0, 0, isGB and 148 or 88)
+        RowTargetMut.Visible = (isMach or isNight)
+
+        if isMach or isNight then
+            TargetMutLabel.Text = "Target Mutasi (" .. catName .. ")"
+            TargetMutBtn.Text = (isMach and State.MachineTargetMutation or State.NightmareTargetMutation) .. " ▾"
+        end
+
+        local h = 88
+        if isGB then h = 148
+        elseif isMach or isNight then h = 118 end
+        ThreshBody.Size = UDim2.new(1, 0, 0, h)
 
         if State.MutasiTeamThresholds[catName] then
             State.MutasiEquipAge = State.MutasiTeamThresholds[catName].EquipAge
@@ -852,7 +914,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 8. DAFTAR PET DENGAN FILTER GUDANG GBXP & TIM FAVORIT
+    -- 8. DAFTAR PET & HALAMAN CONFIG LENGKAP
     -- =====================================================================
     local PetListScroll = Instance.new("ScrollingFrame", MutasiWrapper)
     PetListScroll.Size = UDim2.new(1, 0, 0, 145)
@@ -880,7 +942,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         if isGBXP then
             ListTitle.Text = string.format("Gudang Suplai GBXP (Non-Fav, Age %d-%d)", State.MutasiTeamThresholds.GBXP.EquipAge or 0, State.MutasiTeamThresholds.GBXP.UnequipAge or 100)
         elseif activeCat == "Config" then
-            ListTitle.Text = "Configuration & Delays"
+            ListTitle.Text = "Pengaturan Webhook Discord & Clean Pet Shard"
         else
             ListTitle.Text = "Select Pet " .. activeCat .. " Team (Favorite List)"
         end
@@ -893,15 +955,103 @@ return function(ParentContainer, State, ZyloLib, Main)
 
         if updateTeamBadgesUI then updateTeamBadgesUI() end
 
+        -- HALAMAN CONFIG: WEBHOOK & AUTO CLEAN SHARD
         if activeCat == "Config" then
-            local cfgInfo = Instance.new("TextLabel", PetListScroll)
-            cfgInfo.Size = UDim2.new(1, 0, 1, 0)
-            cfgInfo.BackgroundTransparency = 1
-            cfgInfo.Text = "Pengaturan Otomasi: Gunakan input Equip Age & Unequip Age di atas (hingga 500).\nTekan tab kategori tim untuk memilih daftar pet."
-            cfgInfo.TextColor3 = C.TEXT_M
-            cfgInfo.Font = Enum.Font.GothamMedium
-            cfgInfo.TextSize = 9
-            PetListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+            -- 1. Webhook Input Row
+            local WhLabel = Instance.new("TextLabel", PetListScroll)
+            WhLabel.Size = UDim2.new(1, 0, 0, 16)
+            WhLabel.BackgroundTransparency = 1
+            WhLabel.Text = "🌐 Discord Webhook URL:"
+            WhLabel.TextColor3 = C.CYAN
+            WhLabel.Font = Enum.Font.GothamBold
+            WhLabel.TextSize = 9
+            WhLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+            local WhRow = Instance.new("Frame", PetListScroll)
+            WhRow.Size = UDim2.new(1, 0, 0, 28)
+            WhRow.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
+            Instance.new("UICorner", WhRow).CornerRadius = UDim.new(0, 6)
+            local wrStroke = Instance.new("UIStroke", WhRow)
+            wrStroke.Color = Color3.fromRGB(40, 48, 76)
+
+            local WhBox = Instance.new("TextBox", WhRow)
+            WhBox.Position = UDim2.new(0, 8, 0, 0)
+            WhBox.Size = UDim2.new(1, -75, 1, 0)
+            WhBox.BackgroundTransparency = 1
+            WhBox.PlaceholderText = "Paste Discord Webhook URL disini..."
+            WhBox.PlaceholderColor3 = Color3.fromRGB(115, 128, 160)
+            WhBox.Text = State.MutasiWebhookURL or ""
+            WhBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+            WhBox.Font = Enum.Font.GothamMedium
+            WhBox.TextSize = 8.5
+            WhBox.TextXAlignment = Enum.TextXAlignment.Left
+            WhBox.ClearTextOnFocus = false
+
+            WhBox:GetPropertyChangedSignal("Text"):Connect(function()
+                State.MutasiWebhookURL = WhBox.Text
+            end)
+
+            local TestWhBtn = Instance.new("TextButton", WhRow)
+            TestWhBtn.Position = UDim2.new(1, -65, 0.5, -11)
+            TestWhBtn.Size = UDim2.new(0, 60, 0, 22)
+            TestWhBtn.BackgroundColor3 = Color3.fromRGB(48, 24, 80)
+            TestWhBtn.Text = "TEST"
+            TestWhBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            TestWhBtn.Font = Enum.Font.GothamBold
+            TestWhBtn.TextSize = 8.5
+            Instance.new("UICorner", TestWhBtn).CornerRadius = UDim.new(0, 5)
+
+            TestWhBtn.MouseButton1Click:Connect(function()
+                local service = GetWebhookService()
+                if service then
+                    updateStatusUI("Mengirim pesan tes ke Discord Webhook...", true)
+                    local ok, err = service:SendTest(State.MutasiWebhookURL)
+                    if ok then
+                        updateStatusUI("✓ Pesan tes Discord Webhook berhasil terkirim!", false)
+                    else
+                        updateStatusUI("Gagal kirim Webhook: " .. tostring(err), false)
+                    end
+                else
+                    updateStatusUI("Error: File MutasiWebhook.lua belum terpasang di GitHub!", false)
+                end
+            end)
+
+            -- 2. Toggle Auto Clean Shard Row
+            local CleanRow = Instance.new("Frame", PetListScroll)
+            CleanRow.Size = UDim2.new(1, 0, 0, 32)
+            CleanRow.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
+            Instance.new("UICorner", CleanRow).CornerRadius = UDim.new(0, 6)
+            local clStroke = Instance.new("UIStroke", CleanRow)
+            clStroke.Color = Color3.fromRGB(40, 48, 76)
+
+            local CleanLabel = Instance.new("TextLabel", CleanRow)
+            CleanLabel.Position = UDim2.new(0, 8, 0, 0)
+            CleanLabel.Size = UDim2.new(0.7, 0, 1, 0)
+            CleanLabel.BackgroundTransparency = 1
+            CleanLabel.Text = "Auto Clean Shard jika Target Belum Tercapai"
+            CleanLabel.TextColor3 = C.TEXT_W
+            CleanLabel.Font = Enum.Font.GothamMedium
+            CleanLabel.TextSize = 8.5
+            CleanLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+            local CleanToggleBtn = Instance.new("TextButton", CleanRow)
+            CleanToggleBtn.Position = UDim2.new(1, -65, 0.5, -11)
+            CleanToggleBtn.Size = UDim2.new(0, 60, 0, 22)
+            CleanToggleBtn.BackgroundColor3 = State.AutoCleanIfNotTarget and Color3.fromRGB(40, 150, 80) or Color3.fromRGB(30, 34, 52)
+            CleanToggleBtn.Text = State.AutoCleanIfNotTarget and "ON" or "OFF"
+            CleanToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            CleanToggleBtn.Font = Enum.Font.GothamBold
+            CleanToggleBtn.TextSize = 8.5
+            Instance.new("UICorner", CleanToggleBtn).CornerRadius = UDim.new(0, 5)
+
+            CleanToggleBtn.MouseButton1Click:Connect(function()
+                State.AutoCleanIfNotTarget = not State.AutoCleanIfNotTarget
+                CleanToggleBtn.Text = State.AutoCleanIfNotTarget and "ON" or "OFF"
+                CleanToggleBtn.BackgroundColor3 = State.AutoCleanIfNotTarget and Color3.fromRGB(40, 150, 80) or Color3.fromRGB(30, 34, 52)
+                updateStatusUI("Auto Clean Shard: " .. (State.AutoCleanIfNotTarget and "AKTIF" or "NONAKTIF"), false)
+            end)
+
+            PetListScroll.CanvasSize = UDim2.new(0, 0, 0, 120)
             return
         end
 
@@ -950,12 +1100,8 @@ return function(ParentContainer, State, ZyloLib, Main)
                 aSel = true
                 bSel = true
             end
-            if aSel ~= bSel then
-                return aSel == true
-            end
-            if a.Age ~= b.Age then
-                return a.Age > b.Age
-            end
+            if aSel ~= bSel then return aSel == true end
+            if a.Age ~= b.Age then return a.Age > b.Age end
             return a.Name < b.Name
         end)
 
@@ -970,7 +1116,6 @@ return function(ParentContainer, State, ZyloLib, Main)
             itemBtn.Size = UDim2.new(1, 0, 0, 28)
             itemBtn.LayoutOrder = (isSelected or isAutoMode) and idx or (1000 + idx)
             Instance.new("UICorner", itemBtn).CornerRadius = UDim.new(0, 6)
-
             local iStroke = Instance.new("UIStroke", itemBtn)
 
             if isAutoMode then
@@ -1026,7 +1171,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             if isGBXP then
                 empty.Text = string.format("Tidak ada pet Non-Fav di gudang dengan rentang umur %d - %d.", minGBAge, maxGBAge)
             else
-                empty.Text = "Belum ada pet FAVORITE di kategori ini. Silakan beri bintang/favorit pada pet di inventory game terlebih dahulu!"
+                empty.Text = "Belum ada pet FAVORITE di kategori ini. Beri bintang pada pet di game terlebih dahulu!"
             end
             empty.TextColor3 = C.TEXT_M
             empty.Font = Enum.Font.GothamMedium
@@ -1044,7 +1189,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 9. BOTTOM ACTION BUTTONS: [ ⚡ START ] [ STOP ] [ Mode: A ▾ ]
+    -- 9. TOMBOL AKSI BAWAH
     -- =====================================================================
     local ActionRow = Instance.new("Frame", MutasiWrapper)
     ActionRow.Size = UDim2.new(1, 0, 0, 32)
@@ -1101,7 +1246,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     modeStroke.Thickness = 1.5
 
     -- =====================================================================
-    -- 10. STATUS BAR & ACTIVITY MONITOR
+    -- 10. STATUS BAR
     -- =====================================================================
     local StatusBar = Instance.new("Frame", MutasiWrapper)
     StatusBar.Size = UDim2.new(1, 0, 0, 24)
@@ -1144,13 +1289,12 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 11. MODAL POPUP: MODE PIPELINE SELECTOR
+    -- 11. MODAL POPUP SELECTOR (MODE A - F)
     -- =====================================================================
     local ModePopup = Instance.new("Frame", ParentContainer)
     ModePopup.Size = UDim2.new(1, 0, 0, 235)
     ModePopup.Position = UDim2.new(0, 0, 1, -268)
     ModePopup.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
-    ModePopup.BorderSizePixel = 0
     ModePopup.ZIndex = 40
     ModePopup.Visible = false
     Instance.new("UICorner", ModePopup).CornerRadius = UDim.new(0, 8)
@@ -1161,7 +1305,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     local MpHeader = Instance.new("Frame", ModePopup)
     MpHeader.Size = UDim2.new(1, 0, 0, 28)
     MpHeader.BackgroundColor3 = Color3.fromRGB(16, 20, 38)
-    MpHeader.BorderSizePixel = 0
     MpHeader.ZIndex = 41
     Instance.new("UICorner", MpHeader).CornerRadius = UDim.new(0, 8)
 
@@ -1191,7 +1334,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     MpScroll.Position = UDim2.new(0, 6, 0, 32)
     MpScroll.Size = UDim2.new(1, -12, 1, -38)
     MpScroll.BackgroundTransparency = 1
-    MpScroll.BorderSizePixel = 0
     MpScroll.ScrollBarThickness = 3
     MpScroll.ScrollBarImageColor3 = C.PURPLE
     MpScroll.ZIndex = 41
@@ -1202,58 +1344,15 @@ return function(ParentContainer, State, ZyloLib, Main)
     MpList.Padding = UDim.new(0, 5)
 
     local PipelineModes = {
-        {
-            id = "Mode: A",
-            letter = "MODE A",
-            route = "GBXP > XP > 100 AGE > INVENTORY",
-            desc = "Suplai GBXP > Tim XP > Push umur akhir di 100 Age (hingga 500).",
-            stages = { "XP", "100 Age" },
-            order = 1
-        },
-        {
-            id = "Mode: B",
-            letter = "MODE B",
-            route = "GBXP > XP > NIGHTMARE > INVENTORY",
-            desc = "Suplai GBXP > Tim XP > Dapatkan mutasi skill Nightmare.",
-            stages = { "XP", "Nightmare" },
-            order = 2
-        },
-        {
-            id = "Mode: C",
-            letter = "MODE C",
-            route = "GBXP > XP > MACHINE > INVENTORY",
-            desc = "Suplai GBXP > Tim XP > Mutasikan di Mesin (Auto Confirm & Start + Booster).",
-            stages = { "XP", "Machine" },
-            order = 3
-        },
-        {
-            id = "Mode: D",
-            letter = "MODE D",
-            route = "GBXP > XP > ELEPHANT > 100 AGE > INVENTORY",
-            desc = "Suplai GBXP > XP > Besarkan Base Weight (Elephant) > Push umur 100 Age.",
-            stages = { "XP", "Elephant", "100 Age" },
-            order = 4
-        },
-        {
-            id = "Mode: E",
-            letter = "MODE E",
-            route = "GBXP > XP > ELEPHANT > NIGHTMARE > 100 AGE > INVENTORY",
-            desc = "Sempurna: Base Weight max > Mutasi Nightmare > Push umur hingga 500.",
-            stages = { "XP", "Elephant", "Nightmare", "100 Age" },
-            order = 5
-        },
-        {
-            id = "Mode: F",
-            letter = "MODE F",
-            route = "GBXP > XP > ELEPHANT > MACHINE > 100 AGE > INVENTORY",
-            desc = "Sempurna: Base Weight max > Mutasi Mesin (Auto Start + Booster) > Push umur 500.",
-            stages = { "XP", "Elephant", "Machine", "100 Age" },
-            order = 6
-        }
+        { id = "Mode: A", letter = "MODE A", route = "GBXP > XP > 100 AGE > INVENTORY", stages = { "XP", "100 Age" }, order = 1 },
+        { id = "Mode: B", letter = "MODE B", route = "GBXP > XP > NIGHTMARE > INVENTORY", stages = { "XP", "Nightmare" }, order = 2 },
+        { id = "Mode: C", letter = "MODE C", route = "GBXP > XP > MACHINE > INVENTORY", stages = { "XP", "Machine" }, order = 3 },
+        { id = "Mode: D", letter = "MODE D", route = "GBXP > XP > ELEPHANT > 100 AGE > INVENTORY", stages = { "XP", "Elephant", "100 Age" }, order = 4 },
+        { id = "Mode: E", letter = "MODE E", route = "GBXP > XP > ELEPHANT > NIGHTMARE > 100 AGE > INVENTORY", stages = { "XP", "Elephant", "Nightmare", "100 Age" }, order = 5 },
+        { id = "Mode: F", letter = "MODE F", route = "GBXP > XP > ELEPHANT > MACHINE > 100 AGE > INVENTORY", stages = { "XP", "Elephant", "Machine", "100 Age" }, order = 6 }
     }
 
     local ModeItemElements = {}
-
     local function updateModeSelectionUI()
         ModeBtn.Text = State.MutasiMode .. (ModePopup.Visible and " ▴" or " ▾")
         for mId, elem in pairs(ModeItemElements) do
@@ -1277,7 +1376,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         Instance.new("UICorner", mBtn).CornerRadius = UDim.new(0, 6)
         local mStroke = Instance.new("UIStroke", mBtn)
         mStroke.Color = (State.MutasiMode == m.id) and C.PURPLE or Color3.fromRGB(38, 45, 70)
-        mStroke.Thickness = (State.MutasiMode == m.id) and 1.5 or 1
 
         local mLblTitle = Instance.new("TextLabel", mBtn)
         mLblTitle.Position = UDim2.new(0, 8, 0, 3)
@@ -1294,13 +1392,11 @@ return function(ParentContainer, State, ZyloLib, Main)
         mLblDesc.Position = UDim2.new(0, 8, 0, 18)
         mLblDesc.Size = UDim2.new(1, -40, 0, 20)
         mLblDesc.BackgroundTransparency = 1
-        mLblDesc.Text = m.desc
+        mLblDesc.Text = "Jalur estafet otomatis rombongan pet"
         mLblDesc.TextColor3 = C.TEXT_M
         mLblDesc.Font = Enum.Font.GothamMedium
         mLblDesc.TextSize = 8
-        mLblDesc.TextWrapped = true
         mLblDesc.TextXAlignment = Enum.TextXAlignment.Left
-        mLblDesc.TextYAlignment = Enum.TextYAlignment.Top
         mLblDesc.ZIndex = 43
 
         local mCheck = Instance.new("TextLabel", mBtn)
@@ -1314,18 +1410,12 @@ return function(ParentContainer, State, ZyloLib, Main)
         mCheck.Visible = (State.MutasiMode == m.id)
         mCheck.ZIndex = 43
 
-        ModeItemElements[m.id] = {
-            btn = mBtn,
-            stroke = mStroke,
-            title = mLblTitle,
-            check = mCheck
-        }
+        ModeItemElements[m.id] = { btn = mBtn, stroke = mStroke, title = mLblTitle, check = mCheck }
 
         mBtn.MouseButton1Click:Connect(function()
             State.MutasiMode = m.id
             ModePopup.Visible = false
             updateModeSelectionUI()
-            print("[ZyloHub] Mode dipilih: " .. m.letter)
         end)
     end
 
@@ -1333,14 +1423,13 @@ return function(ParentContainer, State, ZyloLib, Main)
         ModePopup.Visible = not ModePopup.Visible
         updateModeSelectionUI()
     end)
-
     MpClose.MouseButton1Click:Connect(function()
         ModePopup.Visible = false
         updateModeSelectionUI()
     end)
 
     -- =====================================================================
-    -- 12. FUNGSI GAME: FARM, INVENTORY, RECALL & MACHINE INTERACTION
+    -- 12. FUNGSI GAME & MESIN INTERACTION
     -- =====================================================================
     local function GetFarm()
         if not Farms then return nil end
@@ -1419,17 +1508,13 @@ return function(ParentContainer, State, ZyloLib, Main)
                     pcall(function() fireproximityprompt(prompt) end)
                 end
                 local objUUID = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
-                if objUUID then
-                    UnequipPetByUUID(objUUID)
-                end
+                if objUUID then UnequipPetByUUID(objUUID) end
             end
         end
 
         local allPets = GetAllPets()
         for _, p in ipairs(allPets) do
-            if p.InGarden then
-                UnequipPetByUUID(p.UUID)
-            end
+            if p.InGarden then UnequipPetByUUID(p.UUID) end
         end
     end
 
@@ -1466,9 +1551,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     GetMutationMachineInstance = function()
         if CollectionService then
             local tagged = CollectionService:GetTagged("PetMutationMachine")
-            if tagged and #tagged > 0 then
-                return tagged[1]
-            end
+            if tagged and #tagged > 0 then return tagged[1] end
         end
         local npcs = workspace:FindFirstChild("NPCS")
         local mach = npcs and npcs:FindFirstChild("PetMutationMachine")
@@ -1489,14 +1572,10 @@ return function(ParentContainer, State, ZyloLib, Main)
                             pcall(function()
                                 if desc.Visible then
                                     if desc.MouseButton1Click then
-                                        for _, con in pairs(getconnections(desc.MouseButton1Click)) do
-                                            con:Fire()
-                                        end
+                                        for _, con in pairs(getconnections(desc.MouseButton1Click)) do con:Fire() end
                                     end
                                     if desc.Activated then
-                                        for _, con in pairs(getconnections(desc.Activated)) do
-                                            con:Fire()
-                                        end
+                                        for _, con in pairs(getconnections(desc.Activated)) do con:Fire() end
                                     end
                                 end
                             end)
@@ -1516,9 +1595,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                 if data.PetMutationMachineData and data.PetMutationMachineData.PetReady ~= nil then
                     return data.PetMutationMachineData.PetReady == true
                 end
-                if data.PetReady ~= nil then
-                    return data.PetReady == true
-                end
+                if data.PetReady ~= nil then return data.PetReady == true end
             end
         end
 
@@ -1527,15 +1604,11 @@ return function(ParentContainer, State, ZyloLib, Main)
             for _, desc in ipairs(machine:GetDescendants()) do
                 if desc:IsA("TextLabel") and desc.Visible then
                     local txt = desc.Text:lower()
-                    if txt:find("ready") or txt:find("claim") or txt:find("selesai") then
-                        return true
-                    end
+                    if txt:find("ready") or txt:find("claim") or txt:find("selesai") then return true end
                 end
                 if desc:IsA("ProximityPrompt") and desc.Enabled then
                     local act = desc.ActionText:lower()
-                    if act:find("claim") or act:find("take") or act:find("ambil") or act:find("collect") then
-                        return true
-                    end
+                    if act:find("claim") or act:find("take") or act:find("ambil") or act:find("collect") then return true end
                 end
             end
         end
@@ -1543,7 +1616,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 13. AUTOMATION RUNNER ENGINE: ESTAFET + AUTO CONFIRM + AUTO START MUTATION
+    -- 13. AUTOMATION RUNNER ENGINE DENGAN AUTO CLEAN & DISCORD WEBHOOK
     -- =====================================================================
     local runnerThread = nil
 
@@ -1571,9 +1644,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                     break
                 end
             end
-            if not modeConfig then
-                modeConfig = PipelineModes[1]
-            end
+            if not modeConfig then modeConfig = PipelineModes[1] end
 
             updateStatusUI("Memulai " .. modeConfig.letter .. " (" .. modeConfig.route .. ")...", true)
             task.wait(0.5)
@@ -1586,7 +1657,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                     petLookup[tostring(p.UUID):gsub("[{}]", "")] = p
                 end
 
-                -- 1. GBXP SEBAGAI GUDANG SUPLAI (SUPPLIER POOL)
+                -- 1. Gudang Suplai GBXP
                 local minGBAge = State.MutasiTeamThresholds.GBXP.EquipAge or 0
                 local maxGBAge = State.MutasiTeamThresholds.GBXP.UnequipAge or 500
                 local isAutoSelect = (State.GBXPSelectMode == "auto")
@@ -1617,7 +1688,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                     task.wait(3)
                     if not State.MutasiRunning then break end
                 else
-                    -- 2. GBXP MAX EQUIP: AMBIL TEPAT SEJUMLAH KUOTA ROMBONGAN (MISAL 2 PET)
+                    -- 2. Kuota Rombongan
                     local batchQuota = math.max(tonumber(State.GBXPMaxEquip) or 2, 1)
                     local currentBatch = {}
                     for i = 1, math.min(#availableSupply, batchQuota) do
@@ -1631,7 +1702,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                     updateStatusUI(string.format("Rombongan Siap (%d Pet): %s", #currentBatch, table.concat(batchNames, ", ")), true)
                     task.wait(1.5)
 
-                    -- 3. JALUR ESTAFET DENGAN PERGANTIAN BOOSTER & SISTEM MESIN MUTASI LENGKAP
+                    -- 3. Estafet Pipeline Stages
                     local previousStageName = nil
 
                     for stageIdx, stageName in ipairs(modeConfig.stages) do
@@ -1642,7 +1713,6 @@ return function(ParentContainer, State, ZyloLib, Main)
                         local stUnequipAge = stageThresh.UnequipAge or 500
                         if stUnequipAge <= 0 then stUnequipAge = 500 end
 
-                        -- A. PERGANTIAN BOOSTER: Tarik booster lama sebelum masuk tahap baru
                         if previousStageName and previousStageName ~= stageName then
                             updateStatusUI(string.format("Mengganti booster: Menarik booster %s...", previousStageName), true)
                             UnequipSupportPets(previousStageName)
@@ -1650,9 +1720,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                         end
                         previousStageName = stageName
 
-                        -- =================================================================
-                        -- B. PENANGANAN SPESIFIK TAHAP MESIN MUTASI (MODE C & F)
-                        -- =================================================================
+                        -- TAHAP MESIN MUTASI (AUTO START + BOOSTER + TARGET & AUTO CLEAN)
                         if stageName == "Machine" then
                             local character = LocalPlayer.Character
                             local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -1662,7 +1730,7 @@ return function(ParentContainer, State, ZyloLib, Main)
 
                             local machine = GetMutationMachineInstance()
                             if not machine then
-                                updateStatusUI("Error: Mesin Mutasi tidak ditemukan di game!", false)
+                                updateStatusUI("Error: Mesin Mutasi tidak ditemukan!", false)
                                 task.wait(3)
                             else
                                 local promptPart = machine:FindFirstChild("ProxPromptPart", true) or machine:FindFirstChild("Model", true) or machine.PrimaryPart
@@ -1675,129 +1743,169 @@ return function(ParentContainer, State, ZyloLib, Main)
                                     local pName = tPet.Name or "Pet"
                                     local stripped = tostring(pUuid):gsub("[{}]", "")
 
-                                    updateStatusUI(string.format("[Mesin]: Menyiapkan %s...", pName), true)
-                                    UnequipPetByUUID(pUuid)
-                                    task.wait(0.4)
+                                    local targetReached = false
 
-                                    -- 1. Pegang tool pet di tangan
-                                    local petTool = nil
-                                    local function getTool(cont)
-                                        if not cont then return nil end
-                                        for _, it in ipairs(cont:GetChildren()) do
-                                            if it:IsA("Tool") then
-                                                local u = it:GetAttribute("PET_UUID") or it:GetAttribute("UUID") or (it:FindFirstChild("PET_UUID") and it.PET_UUID.Value)
-                                                if u and (tostring(u) == tostring(pUuid) or tostring(u):gsub("[{}]", "") == stripped) then
-                                                    return it
+                                    -- Loop Mesin Mutasi (Otomatis Diulang jika mutasi belum cocok & Auto Clean aktif)
+                                    while State.MutasiRunning and not targetReached do
+                                        updateStatusUI(string.format("[Mesin]: Menyiapkan %s...", pName), true)
+                                        UnequipPetByUUID(pUuid)
+                                        task.wait(0.4)
+
+                                        local petTool = nil
+                                        local function getTool(cont)
+                                            if not cont then return nil end
+                                            for _, it in ipairs(cont:GetChildren()) do
+                                                if it:IsA("Tool") then
+                                                    local u = it:GetAttribute("PET_UUID") or it:GetAttribute("UUID") or (it:FindFirstChild("PET_UUID") and it.PET_UUID.Value)
+                                                    if u and (tostring(u) == tostring(pUuid) or tostring(u):gsub("[{}]", "") == stripped) then
+                                                        return it
+                                                    end
+                                                end
+                                            end
+                                            return nil
+                                        end
+
+                                        petTool = getTool(backpack) or getTool(character)
+                                        if petTool and humanoid and petTool.Parent == backpack then
+                                            humanoid:EquipTool(petTool)
+                                            task.wait(0.3)
+                                        end
+
+                                        -- Teleport ke Mesin & Submit
+                                        if character then character:PivotTo(targetCF) end
+                                        task.wait(0.4)
+
+                                        if prompt then
+                                            prompt.HoldDuration = 0
+                                            prompt.RequiresLineOfSight = false
+                                            pcall(function() fireproximityprompt(prompt) end)
+                                            task.wait(0.3)
+                                        end
+
+                                        -- Auto-Confirm
+                                        updateStatusUI("[Mesin]: Menekan tombol [Confirm]...", true)
+                                        for clickAttempt = 1, 6 do
+                                            local clicked = AutoClickMachineConfirmButton()
+                                            if clicked then break end
+                                            task.wait(0.2)
+                                        end
+                                        task.wait(0.6)
+
+                                        -- Auto-Press E [Start Mutation]
+                                        updateStatusUI("[Mesin]: Menekan prompt [Start Mutation]...", true)
+                                        local startPrompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                        if startPrompt then
+                                            startPrompt.HoldDuration = 0
+                                            startPrompt.RequiresLineOfSight = false
+                                            pcall(function() fireproximityprompt(startPrompt) end)
+                                            task.wait(0.4)
+                                        end
+                                        if PetMutationMachineRemote then
+                                            pcall(function()
+                                                PetMutationMachineRemote:FireServer("StartMachine")
+                                                PetMutationMachineRemote:FireServer("Start")
+                                            end)
+                                        end
+                                        task.wait(0.5)
+
+                                        -- Pasang booster Machine di kebun
+                                        updateStatusUI("[Mesin]: Memasang booster Machine di kebun...", true)
+                                        if character then character:PivotTo(farmPos) end
+                                        task.wait(0.4)
+                                        EquipSupportPets("Machine")
+                                        task.wait(0.5)
+
+                                        -- Tunggu Pet Selesai (PetReady)
+                                        updateStatusUI(string.format("[Mesin]: Menunggu mutasi %s selesai...", pName), true)
+                                        local waitStart = os.time()
+                                        while State.MutasiRunning do
+                                            if IsMachinePetReady() then break end
+                                            if os.time() - waitStart > 300 then break end
+                                            task.wait(2)
+                                        end
+
+                                        -- Claim Pet Selesai
+                                        if State.MutasiRunning then
+                                            if character then character:PivotTo(targetCF) end
+                                            task.wait(0.4)
+                                            local claimPrompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                            if claimPrompt then
+                                                claimPrompt.HoldDuration = 0
+                                                claimPrompt.RequiresLineOfSight = false
+                                                pcall(function() fireproximityprompt(claimPrompt) end)
+                                                task.wait(0.5)
+                                            end
+                                            if character then character:PivotTo(farmPos) end
+                                            task.wait(0.4)
+
+                                            -- Cek Hasil Mutasi Terbaru
+                                            local updatedList = GetAllPets()
+                                            local finalPetData = tPet
+                                            for _, up in ipairs(updatedList) do
+                                                if up.UUID == pUuid or tostring(up.UUID):gsub("[{}]", "") == stripped then
+                                                    finalPetData = up
+                                                    break
+                                                end
+                                            end
+
+                                            local desiredTarget = State.MachineTargetMutation or "Any Mutation"
+                                            local isMatch = false
+
+                                            if desiredTarget == "Any Mutation" then
+                                                isMatch = (finalPetData.Mutation ~= "Normal")
+                                            else
+                                                isMatch = (finalPetData.Mutation:lower() == desiredTarget:lower())
+                                            end
+
+                                            -- PENGIRIMAN WEBHOOK & TINDAKAN CLEAN
+                                            local whService = GetWebhookService()
+                                            if isMatch then
+                                                targetReached = true
+                                                updateStatusUI(string.format("✓ %s BERHASIL MENCAPAI TARGET MUTASI: %s!", pName, finalPetData.Mutation), true)
+                                                if whService and State.MutasiWebhookURL ~= "" then
+                                                    whService:SendSuccess(State.MutasiWebhookURL, finalPetData, desiredTarget, "Mesin Mutasi")
+                                                end
+                                            else
+                                                updateStatusUI(string.format("Mutasi: %s (Belum sesuai target: %s)", finalPetData.Mutation, desiredTarget), true)
+
+                                                if State.AutoCleanIfNotTarget then
+                                                    if whService and State.MutasiWebhookURL ~= "" then
+                                                        whService:SendCleanLog(State.MutasiWebhookURL, finalPetData, finalPetData.Mutation, desiredTarget)
+                                                    end
+
+                                                    updateStatusUI("[Clean Shard]: Menggunakan Clean Pet Shard untuk mencuci pet...", true)
+                                                    local cleanService = GetCleanMutasiService()
+                                                    if cleanService then
+                                                        local okClean, cMsg = cleanService:CleanPet(pUuid, pName)
+                                                        if okClean then
+                                                            updateStatusUI("✓ Pet berhasil dicuci! Memasukkan ulang ke mesin...", true)
+                                                            task.wait(1.5)
+                                                        else
+                                                            updateStatusUI("Clean Shard Gagal: " .. tostring(cMsg) .. ". Melanjutkan pet.", false)
+                                                            targetReached = true
+                                                        end
+                                                    else
+                                                        updateStatusUI("Error: CleanMutasi.lua belum ada di GitHub!", false)
+                                                        targetReached = true
+                                                    end
+                                                else
+                                                    targetReached = true
                                                 end
                                             end
                                         end
-                                        return nil
-                                    end
-
-                                    petTool = getTool(backpack) or getTool(character)
-                                    if petTool and humanoid and petTool.Parent == backpack then
-                                        humanoid:EquipTool(petTool)
-                                        task.wait(0.3)
-                                    end
-
-                                    -- 2. Teleport ke Mesin
-                                    updateStatusUI(string.format("[Mesin]: Teleport untuk Submit %s...", pName), true)
-                                    if character then character:PivotTo(targetCF) end
-                                    task.wait(0.4)
-
-                                    -- 3. Tekan Tombol E pada Mesin (Submit Prompt)
-                                    if prompt then
-                                        prompt.HoldDuration = 0
-                                        prompt.RequiresLineOfSight = false
-                                        pcall(function() fireproximityprompt(prompt) end)
-                                        task.wait(0.3)
-                                    end
-
-                                    -- 4. AUTO-CLICK TOMBOL [CONFIRM] DI LAYAR
-                                    updateStatusUI("[Mesin]: Menekan tombol [Confirm]...", true)
-                                    for clickAttempt = 1, 6 do
-                                        local clicked = AutoClickMachineConfirmButton()
-                                        if clicked then break end
-                                        task.wait(0.2)
-                                    end
-                                    task.wait(0.6)
-
-                                    -- 5. BARU: AUTO-PRESS E UNTUK [START MUTATION]
-                                    updateStatusUI("[Mesin]: Menekan prompt [Start Mutation]...", true)
-                                    local startPrompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
-                                    if startPrompt then
-                                        startPrompt.HoldDuration = 0
-                                        startPrompt.RequiresLineOfSight = false
-                                        pcall(function() fireproximityprompt(startPrompt) end)
-                                        task.wait(0.4)
-                                    end
-
-                                    -- Backup remote jika server game menggunakan remote Start
-                                    if PetMutationMachineRemote then
-                                        pcall(function()
-                                            PetMutationMachineRemote:FireServer("StartMachine")
-                                            PetMutationMachineRemote:FireServer("Start")
-                                        end)
-                                    end
-                                    task.wait(0.5)
-
-                                    -- 6. KEMBALI KE KEBUN & DEPLOY BOOSTER MACHINE DI KEBUN
-                                    updateStatusUI("[Mesin]: Kembali ke kebun & Memasang booster tim Machine...", true)
-                                    if character then character:PivotTo(farmPos) end
-                                    task.wait(0.4)
-                                    EquipSupportPets("Machine")
-                                    task.wait(0.5)
-
-                                    -- 7. TUNGGU SAMPAI MUTASI SELESAI (PETREADY)
-                                    updateStatusUI(string.format("[Mesin]: Menunggu mutasi %s selesai (Booster aktif)...", pName), true)
-                                    local waitStart = os.time()
-                                    while State.MutasiRunning do
-                                        local ready = IsMachinePetReady()
-                                        if ready then
-                                            updateStatusUI(string.format("[Mesin]: %s SELESAI MUTASI! Mengambil dari mesin...", pName), true)
-                                            break
-                                        end
-
-                                        -- Fallback darurat
-                                        if os.time() - waitStart > 300 then
-                                            updateStatusUI("[Mesin]: Memeriksa klaim mesin mutasi...", true)
-                                            break
-                                        end
-                                        task.wait(2)
-                                    end
-
-                                    -- 8. TELEPORT KEMBALI UNTUK CLAIM PET DENGAN TOMBOL E
-                                    if State.MutasiRunning then
-                                        if character then character:PivotTo(targetCF) end
-                                        task.wait(0.4)
-                                        local claimPrompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
-                                        if claimPrompt then
-                                            claimPrompt.HoldDuration = 0
-                                            claimPrompt.RequiresLineOfSight = false
-                                            pcall(function() fireproximityprompt(claimPrompt) end)
-                                            task.wait(0.5)
-                                        end
-                                        updateStatusUI(string.format("[Mesin]: %s berhasil diambil!", pName), true)
-                                        task.wait(0.5)
-                                        if character then character:PivotTo(farmPos) end
-                                        task.wait(0.3)
                                     end
                                 end
 
-                                -- Tarik kembali booster Machine setelah seluruh proses mesin selesai
                                 UnequipSupportPets("Machine")
                                 task.wait(0.3)
                             end
 
-                        -- =================================================================
-                        -- C. PENANGANAN FITUR LAPANGAN (XP, Elephant, 100 Age, Nightmare)
-                        -- =================================================================
+                        -- TAHAP LAPANGAN (XP, Elephant, 100 Age, Nightmare)
                         else
                             updateStatusUI(string.format("[Tahap %s]: Memasang booster tim %s...", stageName, stageName), true)
                             EquipSupportPets(stageName)
                             task.wait(0.2)
 
-                            -- Pasang pet rombongan ke kebun
                             for _, tPet in ipairs(currentBatch) do
                                 if not tPet.InGarden then
                                     EquipPetByUUID(tPet.UUID)
@@ -1805,9 +1913,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                                 end
                             end
 
-                            -- Sinkronisasi Rombongan: Tahan slot kosong sampai semua pet rombongan tuntas
                             local stageFinishedMap = {}
-
                             while State.MutasiRunning do
                                 local allDone = true
                                 local freshPets = GetAllPets()
@@ -1825,8 +1931,22 @@ return function(ParentContainer, State, ZyloLib, Main)
                                         local isTargetMet = false
 
                                         if stageName == "Nightmare" then
-                                            if pData.RawMutation == "A" or pData.Mutation == "Nightmare" or pData.Age >= stUnequipAge then
-                                                isTargetMet = true
+                                            local desiredNight = State.NightmareTargetMutation or "Any Mutation"
+                                            if desiredNight == "Any Mutation" then
+                                                if pData.Mutation == "Nightmare" or pData.RawMutation == "A" or pData.Mutation ~= "Normal" or pData.Age >= stUnequipAge then
+                                                    isTargetMet = true
+                                                end
+                                            else
+                                                if pData.Mutation:lower() == desiredNight:lower() or pData.Age >= stUnequipAge then
+                                                    isTargetMet = true
+                                                end
+                                            end
+
+                                            if isTargetMet then
+                                                local whService = GetWebhookService()
+                                                if whService and State.MutasiWebhookURL ~= "" then
+                                                    whService:SendSuccess(State.MutasiWebhookURL, pData, desiredNight, "Nightmare Field")
+                                                end
                                             end
                                         else
                                             if pData.Age >= stUnequipAge then
@@ -1835,7 +1955,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                                         end
 
                                         if isTargetMet then
-                                            updateStatusUI(string.format("[%s]: %s Capai Target (Age %d)! Slot ditahan kosong.", stageName, pData.Name, pData.Age), true)
+                                            updateStatusUI(string.format("[%s]: %s Capai Target! Slot ditahan kosong.", stageName, pData.Name), true)
                                             UnequipPetByUUID(u)
                                             stageFinishedMap[u] = true
                                             task.wait(0.3)
@@ -1847,11 +1967,10 @@ return function(ParentContainer, State, ZyloLib, Main)
                                 end
 
                                 if allDone then
-                                    updateStatusUI(string.format("[Tahap %s Selesai]: Seluruh rombongan lulus!", stageName), true)
+                                    updateStatusUI(string.format("[Tahap %s Selesai]: Rombongan lulus!", stageName), true)
                                     task.wait(1)
                                     break
                                 end
-
                                 task.wait(1.5)
                             end
                         end
@@ -1859,13 +1978,12 @@ return function(ParentContainer, State, ZyloLib, Main)
                         if not State.MutasiRunning then break end
                     end
 
-                    -- E. BERSIHKAN BOOSTER TAHAP TERAKHIR SETELAH ROMBONGAN SELESAI
                     if previousStageName then
                         UnequipSupportPets(previousStageName)
                         task.wait(0.2)
                     end
 
-                    -- 4. PENGUNCIAN SUPLAI: HANYA SETELAH ROMBONGAN TUNTAS, DITANDAI SELESAI
+                    -- Tandai Rombongan Selesai
                     if State.MutasiRunning then
                         for _, tPet in ipairs(currentBatch) do
                             State.CompletedPets[tPet.UUID] = true
