@@ -1,16 +1,70 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6.4)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6.5 - COMPLETE ENGINE)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
 --  Mode Pipeline: Modal Popup Selector (Mode A - F) dengan Penjelasan Lengkap
 --  Presisi Penuh (Full Width hingga Titik Kanan) & Tombol START / STOP
+--  Status: 100% TERINTEGRASI DATASET ASLI + RUNNER ENGINE MODE A S/D F
 -- =========================================================================
 
 return function(ParentContainer, State, ZyloLib, Main)
     local Players = game:GetService("Players")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
     local C = ZyloLib.Colors
+
+    -- =====================================================================
+    -- DATASET KAMUS MUTASI RESMI GAME & REPOSITORI
+    -- =====================================================================
+    local MUTATION_MAP = {
+        ["@"]      = "Blossoming",
+        ["J"]      = "Oxpecker",
+        ["IN"]     = "Inferno",
+        ["X"]      = "Venom",
+        ["EM"]     = "Ember",
+        ["EV"]     = "Everchanted",
+        ["O"]      = "Forger",
+        ["A"]      = "Nightmare",
+        ["N"]      = "Lion",
+        ["i"]      = "Mega",
+        ["TS"]     = "Transcendent",
+        ["Normal"] = "Normal"
+    }
+
+    local function getAutoMutationName(rawCode)
+        if not rawCode or rawCode == "" then return "Normal" end
+        if MUTATION_MAP[rawCode] then return MUTATION_MAP[rawCode] end
+        for k, v in pairs(MUTATION_MAP) do
+            if tostring(k):lower() == tostring(rawCode):lower() then return v end
+            if tostring(v):lower() == tostring(rawCode):lower() then return v end
+        end
+        return tostring(rawCode)
+    end
+
+    -- =====================================================================
+    -- SERVICES & REMOTES RESMI DARI DECOMPILE & DARK DEX
+    -- =====================================================================
+    local GameEvents = ReplicatedStorage:WaitForChild("GameEvents", 10)
+    local PetsServiceRemote = GameEvents and GameEvents:FindFirstChild("PetsService")
+    local PetMutationMachineRemote = GameEvents and (
+        GameEvents:FindFirstChild("PetMutationMachineService_RE") or
+        (GameEvents:FindFirstChild("Events") and GameEvents.Events:FindFirstChild("SubmitPetToMachine"))
+    )
+    local Farms = workspace:WaitForChild("Farm", 10)
+
+    local PetsServiceMod = nil
+    pcall(function()
+        PetsServiceMod = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("PetServices", 5):WaitForChild("PetsService", 5))
+    end)
+    local DataService = nil
+    pcall(function()
+        DataService = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("DataService", 5))
+    end)
+    local PetUtilities = nil
+    pcall(function()
+        PetUtilities = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("PetServices", 5):WaitForChild("PetUtilities", 5))
+    end)
 
     -- State Inisialisasi Mutasi
     State.MutasiActiveCategory = State.MutasiActiveCategory or "Elephant"
@@ -20,10 +74,12 @@ return function(ParentContainer, State, ZyloLib, Main)
     State.MutasiRunning = State.MutasiRunning or false
     State.MutasiSelectedPets = State.MutasiSelectedPets or {}
     State.MutasiSearchQuery = State.MutasiSearchQuery or ""
+    State.CompletedPets = State.CompletedPets or {}
+    State.MutasiStatusText = "IDLE - Siap Memulai Pipeline"
 
     -- Container Utama
     local MutasiWrapper = Instance.new("Frame", ParentContainer)
-    MutasiWrapper.Size = UDim2.new(1, 0, 0, 440)
+    MutasiWrapper.Size = UDim2.new(1, 0, 0, 472)
     MutasiWrapper.BackgroundTransparency = 1
 
     local MutasiLayout = Instance.new("UIListLayout", MutasiWrapper)
@@ -33,7 +89,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     -- =====================================================================
     -- 1. SUB-NAVIGASI KATEGORI (FULL WIDTH PILLS ROW)
     -- Urutan: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config + ⚙
-    -- Dibuat Presisi Penuh (Full-Width) pas dari ujung kiri sampai titik kanan
     -- =====================================================================
     local NavRow = Instance.new("Frame", MutasiWrapper)
     NavRow.Size = UDim2.new(1, 0, 0, 28)
@@ -42,7 +97,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     NavRow.ClipsDescendants = false
     NavRow.LayoutOrder = 1
 
-    -- Container Pills Kategori (Mengisi seluruh ruang kecuali tombol Gear di ujung kanan)
     local PillsContainer = Instance.new("Frame", NavRow)
     PillsContainer.Size = UDim2.new(1, -32, 1, 0)
     PillsContainer.Position = UDim2.new(0, 0, 0, 0)
@@ -65,19 +119,19 @@ return function(ParentContainer, State, ZyloLib, Main)
         { name = "GBXP",      weight = 0.85 },
         { name = "Config",    weight = 1.00 }
     }
-    local totalWeight = 7.0 -- Total bobot rasio lebar otomatis
+    local totalWeight = 7.0
 
     local CategoryButtons = {}
     local updateThresholdTitle
     local updateActionButton
     local refreshPetList
+    local updateStatusUI
 
     for _, catData in ipairs(Categories) do
         local catName = catData.name
         local wScale = catData.weight / totalWeight
 
         local btn = Instance.new("TextButton", PillsContainer)
-        -- Lebar dinamis responsif dengan kompensasi padding 5px (-4px offset)
         btn.Size = UDim2.new(wScale, -4, 0, 26)
         btn.BackgroundColor3 = (State.MutasiActiveCategory == catName) and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
         btn.Text = catName
@@ -106,7 +160,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         end)
     end
 
-    -- Tombol ⚙ (Settings Gear di Ujung Kanan Presisi, Pas Titik Merah)
     local GearBtn = Instance.new("TextButton", NavRow)
     GearBtn.Size = UDim2.new(0, 26, 0, 26)
     GearBtn.Position = UDim2.new(1, -26, 0.5, -13)
@@ -170,7 +223,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     TbLayout.SortOrder = Enum.SortOrder.LayoutOrder
     TbLayout.Padding = UDim.new(0, 4)
 
-    -- Toggle Buka / Tutup Threshold
     local isThreshOpen = true
     ThreshHeader.MouseButton1Click:Connect(function()
         isThreshOpen = not isThreshOpen
@@ -178,7 +230,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         thArrow.Text = isThreshOpen and "▼" or "▶"
     end)
 
-    -- Row 3A: Inline Stats Row (Horizontal Scrollable dengan Canvas Height Tetap 22px)
+    -- Row 3A: Inline Stats Row
     local StatsScroll = Instance.new("ScrollingFrame", ThreshBody)
     StatsScroll.Size = UDim2.new(1, 0, 0, 22)
     StatsScroll.BackgroundTransparency = 1
@@ -300,7 +352,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     -- 5. DAFTAR PET (CARD LIST SESUAI SCREENSHOT DENGAN FILTER PURE PET)
     -- =====================================================================
     local PetListScroll = Instance.new("ScrollingFrame", MutasiWrapper)
-    PetListScroll.Size = UDim2.new(1, 0, 0, 165)
+    PetListScroll.Size = UDim2.new(1, 0, 0, 150)
     PetListScroll.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
     PetListScroll.ScrollBarThickness = 3
     PetListScroll.ScrollBarImageColor3 = C.PURPLE
@@ -375,7 +427,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         local pets = GetBackpackPets()
         local count = 0
 
-        -- Update status counter untuk seluruh 6 kategori
         local cEle, cMac, cNM, c100, cXP, cGBXP = 0, 0, 0, 0, 0, 0
         for _, p in ipairs(pets) do
             local pNameLow = p.Name:lower()
@@ -449,7 +500,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     ActLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
     ActLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    -- Tombol 1: START Action (Hanya "⚡ START")
     local StartBtn = Instance.new("TextButton", ActionRow)
     StartBtn.Size = UDim2.new(0.42, -5, 0, 30)
     StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
@@ -464,11 +514,11 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     updateActionButton = function()
         if not State.MutasiRunning then
+            StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
             StartBtn.Text = "⚡ START"
         end
     end
 
-    -- Tombol 2: STOP Action (Hanya "STOP")
     local StopBtn = Instance.new("TextButton", ActionRow)
     StopBtn.Size = UDim2.new(0.34, -5, 0, 30)
     StopBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
@@ -481,7 +531,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     stopStroke.Color = Color3.fromRGB(50, 58, 88)
     stopStroke.Thickness = 1.5
 
-    -- Tombol 3: Mode Button dengan Indikator Dropdown (Tampilkan / Sembunyikan)
     local ModeBtn = Instance.new("TextButton", ActionRow)
     ModeBtn.Size = UDim2.new(0.24, -5, 0, 30)
     ModeBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
@@ -495,9 +544,51 @@ return function(ParentContainer, State, ZyloLib, Main)
     modeStroke.Thickness = 1.5
 
     -- =====================================================================
-    -- 7. MODAL POPUP: PILIHAN MODE PIPELINE (HIDE & TAMPILKAN)
+    -- 7. STATUS BAR & ACTIVITY MONITOR (LIVE REAL-TIME FEEDBACK)
+    -- =====================================================================
+    local StatusBar = Instance.new("Frame", MutasiWrapper)
+    StatusBar.Size = UDim2.new(1, 0, 0, 24)
+    StatusBar.BackgroundColor3 = Color3.fromRGB(11, 14, 28)
+    StatusBar.LayoutOrder = 7
+    Instance.new("UICorner", StatusBar).CornerRadius = UDim.new(0, 6)
+    local sbStroke = Instance.new("UIStroke", StatusBar)
+    sbStroke.Color = Color3.fromRGB(38, 46, 75)
+
+    local StatusDot = Instance.new("TextLabel", StatusBar)
+    StatusDot.Position = UDim2.new(0, 8, 0, 0)
+    StatusDot.Size = UDim2.new(0, 14, 1, 0)
+    StatusDot.BackgroundTransparency = 1
+    StatusDot.Text = "●"
+    StatusDot.TextColor3 = Color3.fromRGB(140, 155, 190)
+    StatusDot.Font = Enum.Font.GothamBold
+    StatusDot.TextSize = 10
+
+    local StatusLabel = Instance.new("TextLabel", StatusBar)
+    StatusLabel.Position = UDim2.new(0, 24, 0, 0)
+    StatusLabel.Size = UDim2.new(1, -30, 1, 0)
+    StatusLabel.BackgroundTransparency = 1
+    StatusLabel.Text = "[STATUS]: " .. State.MutasiStatusText
+    StatusLabel.TextColor3 = C.TEXT_W
+    StatusLabel.Font = Enum.Font.GothamMedium
+    StatusLabel.TextSize = 8.5
+    StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    StatusLabel.TextTruncate = Enum.TextTruncate.AtEnd
+
+    updateStatusUI = function(text, isRunning)
+        State.MutasiStatusText = text or State.MutasiStatusText
+        StatusLabel.Text = "[STATUS]: " .. State.MutasiStatusText
+        if isRunning then
+            StatusDot.TextColor3 = Color3.fromRGB(0, 235, 140)
+            sbStroke.Color = C.PURPLE
+        else
+            StatusDot.TextColor3 = Color3.fromRGB(140, 155, 190)
+            sbStroke.Color = Color3.fromRGB(38, 46, 75)
+        end
+    end
+
+    -- =====================================================================
+    -- 8. MODAL POPUP: PILIHAN MODE PIPELINE (HIDE & TAMPILKAN)
     -- Mode A s/d Mode F Lengkap dengan Rute Alur & Penjelasan
-    -- Diletakkan mengambang (ZIndex tinggi) tepat di atas area pet list
     -- =====================================================================
     local ModePopup = Instance.new("Frame", ParentContainer)
     ModePopup.Size = UDim2.new(1, 0, 0, 235)
@@ -511,7 +602,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     mpStroke.Color = C.PURPLE
     mpStroke.Thickness = 1.5
 
-    -- Header Modal Popup
     local MpHeader = Instance.new("Frame", ModePopup)
     MpHeader.Size = UDim2.new(1, 0, 0, 28)
     MpHeader.BackgroundColor3 = Color3.fromRGB(16, 20, 38)
@@ -541,7 +631,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     MpClose.ZIndex = 42
     Instance.new("UICorner", MpClose).CornerRadius = UDim.new(0, 10)
 
-    -- Scrollable List Pilihan Mode
     local MpScroll = Instance.new("ScrollingFrame", ModePopup)
     MpScroll.Position = UDim2.new(0, 6, 0, 32)
     MpScroll.Size = UDim2.new(1, -12, 1, -38)
@@ -628,7 +717,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         mStroke.Color = (State.MutasiMode == m.id) and C.PURPLE or Color3.fromRGB(38, 45, 70)
         mStroke.Thickness = (State.MutasiMode == m.id) and 1.5 or 1
 
-        -- Judul Mode
         local mLblTitle = Instance.new("TextLabel", mBtn)
         mLblTitle.Position = UDim2.new(0, 8, 0, 3)
         mLblTitle.Size = UDim2.new(1, -40, 0, 13)
@@ -640,7 +728,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         mLblTitle.TextXAlignment = Enum.TextXAlignment.Left
         mLblTitle.ZIndex = 43
 
-        -- Deskripsi Mode
         local mLblDesc = Instance.new("TextLabel", mBtn)
         mLblDesc.Position = UDim2.new(0, 8, 0, 18)
         mLblDesc.Size = UDim2.new(1, -40, 0, 20)
@@ -654,7 +741,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         mLblDesc.TextYAlignment = Enum.TextYAlignment.Top
         mLblDesc.ZIndex = 43
 
-        -- Badge Checkmark
         local mCheck = Instance.new("TextLabel", mBtn)
         mCheck.Position = UDim2.new(1, -24, 0.5, -8)
         mCheck.Size = UDim2.new(0, 16, 0, 16)
@@ -681,7 +767,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         end)
     end
 
-    -- Toggle Tampilkan / Sembunyikan Popup Modal
     ModeBtn.MouseButton1Click:Connect(function()
         ModePopup.Visible = not ModePopup.Visible
         updateModeSelectionUI()
@@ -692,18 +777,329 @@ return function(ParentContainer, State, ZyloLib, Main)
         updateModeSelectionUI()
     end)
 
+    -- =====================================================================
+    -- 9. FUNGSI HELPER EKSEKUSI (FARM, INVENTORY, EQUIP & MACHINE)
+    -- =====================================================================
+    local function GetFarm()
+        if not Farms then return nil end
+        for _, farm in ipairs(Farms:GetChildren()) do
+            local imp = farm:FindFirstChild("Important")
+            local data = imp and imp:FindFirstChild("Data")
+            local owner = data and data:FindFirstChild("Owner")
+            if owner and (owner.Value == LocalPlayer.Name or owner.Value == LocalPlayer.UserId) then
+                return farm
+            end
+        end
+        return nil
+    end
+
+    local function GetFarmPetArea()
+        local farm = GetFarm()
+        if not farm then return nil end
+        return farm:FindFirstChild("PetArea")
+    end
+
+    local function UnequipPetByUUID(uuid)
+        if not uuid then return end
+        local sUuid = tostring(uuid)
+        local stripped = sUuid:gsub("[{}]", "")
+
+        local farm = GetFarm()
+        local petArea = farm and farm:FindFirstChild("PetArea")
+        if petArea then
+            for _, obj in ipairs(petArea:GetChildren()) do
+                local objUUID = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
+                if objUUID and (tostring(objUUID) == sUuid or tostring(objUUID):gsub("[{}]", "") == stripped) then
+                    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if prompt then
+                        prompt.HoldDuration = 0
+                        prompt.RequiresLineOfSight = false
+                        pcall(function() fireproximityprompt(prompt) end)
+                    end
+                end
+            end
+        end
+
+        if PetsServiceMod and PetsServiceMod.UnequipPet then
+            pcall(function() PetsServiceMod:UnequipPet(uuid) end)
+            pcall(function() PetsServiceMod:UnequipPet(stripped) end)
+        end
+        if PetsServiceRemote then
+            pcall(function() PetsServiceRemote:FireServer("UnequipPet", uuid) end)
+            pcall(function() PetsServiceRemote:FireServer("UnequipPet", stripped) end)
+        end
+    end
+
+    local function EquipPetByUUID(uuid, targetCF)
+        if not uuid then return end
+        local petArea = GetFarmPetArea()
+        local targetPos = targetCF or (petArea and petArea.CFrame + Vector3.new(0, 2, 0)) or (LocalPlayer.Character and LocalPlayer.Character:GetPivot()) or CFrame.new(0, 5, 0)
+
+        if PetsServiceMod and PetsServiceMod.EquipPet then
+            pcall(function() PetsServiceMod:EquipPet(uuid, targetPos) end)
+        end
+        if PetsServiceRemote then
+            pcall(function() PetsServiceRemote:FireServer("EquipPet", uuid, targetPos) end)
+        end
+    end
+
+    local function GetFullInventoryMap()
+        local invMap = {}
+        if DataService then
+            pcall(function()
+                local data = DataService:GetData()
+                if data and data.PetsData and data.PetsData.PetInventory then
+                    local invData = data.PetsData.PetInventory.Data or {}
+                    for u, entry in pairs(invData) do
+                        local sU = tostring(u)
+                        local petData = entry.PetData or {}
+                        local rawType = entry.PetType or petData.Species or petData.Name or "Pet"
+                        local rawMut = petData.MutationType or "Normal"
+                        local mutation = getAutoMutationName(rawMut)
+                        local level = petData.Level or petData.Lvl or 1
+                        local baseWeight = petData.BaseWeight or petData.Weight or 1.0
+                        local isFav = petData.IsFavorite or false
+
+                        invMap[sU] = {
+                            UUID = sU,
+                            Name = rawType,
+                            Mutation = mutation,
+                            RawMutation = rawMut,
+                            Age = level,
+                            BaseWeight = tonumber(baseWeight) or 1.0,
+                            IsFavorite = isFav
+                        }
+                    end
+                end
+            end)
+        end
+        return invMap
+    end
+
+    local function SafeInteractWithMutationMachine(petUUID)
+        local character = LocalPlayer.Character
+        if not character or not character:FindFirstChild("HumanoidRootPart") then return false end
+        local originalCFrame = character:GetPivot()
+
+        local machine = workspace:FindFirstChild("NPCS") and workspace.NPCS:FindFirstChild("PetMutationMachine")
+        if not machine then
+            machine = workspace:FindFirstChild("PetMutationMachine", true)
+        end
+        if not machine then return false end
+
+        local promptPart = machine:FindFirstChild("ProxPromptPart", true) or machine:FindFirstChild("Model", true) or machine.PrimaryPart
+        local prompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
+
+        local targetCFrame = (promptPart and promptPart.CFrame + Vector3.new(0, 2, 3)) or machine:GetPivot() + Vector3.new(0, 2, 3)
+
+        updateStatusUI("Teleport ke Mesin Mutasi...", true)
+        character:PivotTo(targetCFrame)
+        task.wait(0.4)
+
+        if prompt then
+            prompt.HoldDuration = 0
+            prompt.RequiresLineOfSight = false
+            pcall(function() fireproximityprompt(prompt) end)
+            task.wait(0.3)
+        end
+
+        if PetMutationMachineRemote and petUUID then
+            pcall(function()
+                PetMutationMachineRemote:FireServer("SubmitPet", petUUID)
+                PetMutationMachineRemote:FireServer(petUUID)
+            end)
+        end
+
+        task.wait(0.5)
+        updateStatusUI("Kembali ke Kebun...", true)
+        character:PivotTo(originalCFrame)
+        task.wait(0.3)
+        return true
+    end
+
+    -- =====================================================================
+    -- 10. AUTOMATION RUNNER ENGINE (MODE A S/D MODE F)
+    -- =====================================================================
+    local runnerThread = nil
+
+    local function StopAutoPipeline()
+        State.MutasiRunning = false
+        if runnerThread then
+            task.cancel(runnerThread)
+            runnerThread = nil
+        end
+        StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
+        StartBtn.Text = "⚡ START"
+        updateStatusUI("STOPPED - Pipeline dihentikan.", false)
+    end
+
+    local function RunAutoPipeline()
+        if runnerThread then task.cancel(runnerThread) end
+        runnerThread = task.spawn(function()
+            local activeMode = State.MutasiMode or "Mode: A"
+            updateStatusUI("Memulai " .. activeMode .. "...", true)
+            task.wait(0.5)
+
+            while State.MutasiRunning do
+                local inv = GetFullInventoryMap()
+                local backpackPets = GetBackpackPets()
+
+                -- Temukan pet target yang belum selesai
+                local targetPet = nil
+                for _, p in ipairs(backpackPets) do
+                    local petInfo = inv[tostring(p.UUID)] or p
+                    local isCompleted = State.CompletedPets[p.UUID]
+
+                    if not isCompleted and not petInfo.IsFavorite then
+                        if activeMode == "Mode: A" then
+                            local threshold = math.max(tonumber(State.MutasiEquipAge) or 20, 100)
+                            if petInfo.Age < threshold then
+                                targetPet = petInfo
+                                break
+                            end
+                        elseif activeMode == "Mode: B" then
+                            if petInfo.RawMutation ~= "A" and petInfo.Mutation ~= "Nightmare" then
+                                targetPet = petInfo
+                                break
+                            end
+                        elseif activeMode == "Mode: C" then
+                            if petInfo.Mutation == "Normal" then
+                                targetPet = petInfo
+                                break
+                            end
+                        elseif activeMode == "Mode: D" then
+                            if petInfo.Age < 100 then
+                                targetPet = petInfo
+                                break
+                            end
+                        elseif activeMode == "Mode: E" then
+                            if petInfo.Age < 100 or (petInfo.RawMutation ~= "A" and petInfo.Mutation ~= "Nightmare") then
+                                targetPet = petInfo
+                                break
+                            end
+                        elseif activeMode == "Mode: F" then
+                            if petInfo.Age < 100 or petInfo.Mutation == "Normal" then
+                                targetPet = petInfo
+                                break
+                            end
+                        end
+                    end
+                end
+
+                if not targetPet then
+                    updateStatusUI("Semua pet target selesai atau tidak ada pet non-favorit tersisa.", false)
+                    task.wait(3)
+                    if not State.MutasiRunning then break end
+                else
+                    local pName = targetPet.Name or "Pet"
+                    local pAge = targetPet.Age or 1
+                    local pUuid = targetPet.UUID
+
+                    -- Eksekusi per mode
+                    if activeMode == "Mode: A" then
+                        local threshold = math.max(tonumber(State.MutasiEquipAge) or 20, 100)
+                        updateStatusUI(string.format("[Mode A]: Push Age %s (%d/%d)...", pName, pAge, threshold), true)
+                        EquipPetByUUID(pUuid)
+                        task.wait(2)
+
+                        local updatedInv = GetFullInventoryMap()
+                        local curr = updatedInv[pUuid] or targetPet
+                        if curr.Age >= threshold then
+                            updateStatusUI(string.format("[Mode A]: %s Mencapai Age %d! Selesai.", pName, curr.Age), true)
+                            UnequipPetByUUID(pUuid)
+                            State.CompletedPets[pUuid] = true
+                            task.wait(1)
+                        end
+
+                    elseif activeMode == "Mode: B" then
+                        updateStatusUI(string.format("[Mode B]: Mutasi Nightmare %s (Mut: %s)...", pName, targetPet.Mutation), true)
+                        EquipPetByUUID(pUuid)
+                        task.wait(2)
+
+                        local updatedInv = GetFullInventoryMap()
+                        local curr = updatedInv[pUuid] or targetPet
+                        if curr.RawMutation == "A" or curr.Mutation == "Nightmare" then
+                            updateStatusUI(string.format("[Mode B]: SUKSES! %s telah menjadi Nightmare!", pName), true)
+                            UnequipPetByUUID(pUuid)
+                            State.CompletedPets[pUuid] = true
+                            task.wait(1)
+                        end
+
+                    elseif activeMode == "Mode: C" then
+                        updateStatusUI(string.format("[Mode C]: Memasukkan %s ke Mesin Mutasi...", pName), true)
+                        SafeInteractWithMutationMachine(pUuid)
+                        task.wait(3)
+                        updateStatusUI(string.format("[Mode C]: Menunggu proses mesin untuk %s...", pName), true)
+                        task.wait(4)
+                        SafeInteractWithMutationMachine(pUuid)
+                        UnequipPetByUUID(pUuid)
+                        State.CompletedPets[pUuid] = true
+                        task.wait(1)
+
+                    elseif activeMode == "Mode: D" then
+                        updateStatusUI(string.format("[Mode D]: Push Elephant Base + Age 100 untuk %s...", pName), true)
+                        EquipPetByUUID(pUuid)
+                        task.wait(2)
+
+                        local updatedInv = GetFullInventoryMap()
+                        local curr = updatedInv[pUuid] or targetPet
+                        if curr.Age >= 100 then
+                            updateStatusUI(string.format("[Mode D]: %s Selesai Base + Age 100!", pName), true)
+                            UnequipPetByUUID(pUuid)
+                            State.CompletedPets[pUuid] = true
+                            task.wait(1)
+                        end
+
+                    elseif activeMode == "Mode: E" then
+                        updateStatusUI(string.format("[Mode E]: Elephant > Nightmare > Age 100 (%s)...", pName), true)
+                        EquipPetByUUID(pUuid)
+                        task.wait(2)
+
+                        local updatedInv = GetFullInventoryMap()
+                        local curr = updatedInv[pUuid] or targetPet
+                        if curr.Age >= 100 and (curr.RawMutation == "A" or curr.Mutation == "Nightmare") then
+                            updateStatusUI(string.format("[Mode E]: Sempurna! %s Nightmare + Age 100!", pName), true)
+                            UnequipPetByUUID(pUuid)
+                            State.CompletedPets[pUuid] = true
+                            task.wait(1)
+                        end
+
+                    elseif activeMode == "Mode: F" then
+                        updateStatusUI(string.format("[Mode F]: Elephant > Mesin > Age 100 (%s)...", pName), true)
+                        SafeInteractWithMutationMachine(pUuid)
+                        task.wait(3)
+                        EquipPetByUUID(pUuid)
+                        task.wait(2)
+
+                        local updatedInv = GetFullInventoryMap()
+                        local curr = updatedInv[pUuid] or targetPet
+                        if curr.Age >= 100 and curr.Mutation ~= "Normal" then
+                            updateStatusUI(string.format("[Mode F]: Sempurna! %s Mutasi Mesin + Age 100!", pName), true)
+                            UnequipPetByUUID(pUuid)
+                            State.CompletedPets[pUuid] = true
+                            task.wait(1)
+                        end
+                    end
+                end
+
+                refreshPetList()
+                task.wait(1.5)
+            end
+
+            updateStatusUI("Pipeline Selesai / Berhenti.", false)
+        end)
+    end
+
     StartBtn.MouseButton1Click:Connect(function()
+        if State.MutasiRunning then return end
         State.MutasiRunning = true
         StartBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 80)
         StartBtn.Text = "RUNNING (" .. State.MutasiMode .. ")"
-        print("[ZyloHub] Auto Mutasi started: " .. State.MutasiActiveCategory .. " [" .. State.MutasiMode .. "]")
+        RunAutoPipeline()
     end)
 
     StopBtn.MouseButton1Click:Connect(function()
-        State.MutasiRunning = false
-        StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
-        StartBtn.Text = "⚡ START"
-        print("[ZyloHub] Auto Mutasi stopped")
+        StopAutoPipeline()
     end)
 
     return {
