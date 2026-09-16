@@ -1,27 +1,26 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v4.3.0 - FIX WEBHOOK)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v4.2.0 - REFINED)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Sub-Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
 --  Mode Pipeline: Modal Popup Selector (Mode A - F)
---  Perbaikan:
---    1. Webhook Engine Bawaan Langsung (Bypass loadstring failure)
---    2. Multi-Executor HTTP Request (Delta, Codex, Arceus X, Fluxus, Synapse)
---    3. Auto-Trim Link Webhook & Auto-Detect Link dari ZyloHub Global
---    4. Tombol TEST Responsif & Indikator Status Lengkap
---    5. Realtime Event Notifikasi (GBXP, XP, Elephant, 100 Age, Mesin, Nightmare, Clean Shard, Lulus)
+--  Pembaruan:
+--    1. Tab Config: Ada Toggle [Webhook Notifications: ON/OFF]
+--    2. Real-time Event Webhook: Mengirim semua kegiatan perkembangan pet
+--       (GBXP Supply, Perkembangan Tahap XP/Elephant/100 Age, Mesin, Nightmare, Clean Shard, Lulus)
+--    3. List Pet & Tombol Start/Stop disembunyikan di tab Config (Murni & Bersih)
+--    4. Seluruh fitur mutasi Machine & Nightmare tetap paten & terkunci 100%
 -- =========================================================================
 
 return function(ParentContainer, State, ZyloLib, Main)
     local Players = game:GetService("Players")
-    local HttpService = game:GetService("HttpService")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local CollectionService = game:GetService("CollectionService")
     local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
     local C = ZyloLib.Colors
 
     -- =====================================================================
-    -- DATASET KAMUS MUTASI RESMI GAME
+    -- DATASET KAMUS MUTASI RESMI GAME & REPOSITORI
     -- =====================================================================
     local MUTATION_MAP = {
         ["@"]      = "Blossoming",
@@ -73,7 +72,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- STATE INISIALISASI & AUTO-SYNC LINK WEBHOOK
+    -- STATE INISIALISASI
     -- =====================================================================
     State.MutasiActiveCategory = State.MutasiActiveCategory or "Elephant"
     State.MutasiMode = State.MutasiMode or "Mode: A"
@@ -82,14 +81,36 @@ return function(ParentContainer, State, ZyloLib, Main)
     State.CompletedPets = State.CompletedPets or {}
     State.MutasiStatusText = "IDLE - Siap Memulai Pipeline"
 
-    -- Deteksi link webhook otomatis jika sudah diinput di ZyloHub
-    local detectedUrl = State.MutasiWebhookURL or State.WebhookUrl or State.EggWebhookUrl or (getgenv and getgenv().WebhookUrl) or ""
-    State.MutasiWebhookURL = tostring(detectedUrl):gsub("%s+", "")
-    State.MutasiWebhookEnabled = (State.MutasiWebhookEnabled ~= nil) and State.MutasiWebhookEnabled or false
-    State.AutoCleanIfNotTarget = State.AutoCleanIfNotTarget or false
+    -- Target Mutasi & Pengaturan Eksternal
     State.MachineTargetMutation = State.MachineTargetMutation or "Any Mutation"
     State.NightmareTargetMutation = State.NightmareTargetMutation or "Any Mutation"
+    State.MutasiWebhookURL = State.MutasiWebhookURL or ""
+    State.MutasiWebhookEnabled = (State.MutasiWebhookEnabled ~= nil) and State.MutasiWebhookEnabled or false
+    State.AutoCleanIfNotTarget = State.AutoCleanIfNotTarget or false
 
+    -- Helper Services (Lazy Loader dari GitHub)
+    local WebhookService = nil
+    local CleanMutasiService = nil
+
+    local function GetWebhookService()
+        if not WebhookService then
+            pcall(function()
+                WebhookService = loadstring(game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/MutasiWebhook.lua"))()
+            end)
+        end
+        return WebhookService
+    end
+
+    local function GetCleanMutasiService()
+        if not CleanMutasiService then
+            pcall(function()
+                CleanMutasiService = loadstring(game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/CleanMutasi.lua"))()
+            end)
+        end
+        return CleanMutasiService
+    end
+
+    -- Konfigurasi GBXP & Threshold
     State.GBXPMaxEquip = State.GBXPMaxEquip or 2
     State.GBXPSelectMode = State.GBXPSelectMode or "auto"
 
@@ -128,226 +149,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     local EquipSupportPets
     local UnequipSupportPets
     local GetMutationMachineInstance
-
-    -- =====================================================================
-    -- UNIVERSAL MULTI-EXECUTOR WEBHOOK SENDER ENGINE (INTERNAL & 100% PASTI)
-    -- =====================================================================
-    local function SendDiscordWebhookPayload(payloadTable)
-        local rawUrl = tostring(State.MutasiWebhookURL or ""):gsub("%s+", "")
-        if rawUrl == "" then
-            return false, "URL Webhook masih kosong!"
-        end
-        if not (rawUrl:find("discord.com/api/webhooks") or rawUrl:find("discordapp.com/api/webhooks")) then
-            return false, "URL tidak valid! Harus link discord.com/api/webhooks"
-        end
-
-        local jsonBody = ""
-        local okJson, errJson = pcall(function()
-            jsonBody = HttpService:JSONEncode(payloadTable)
-        end)
-        if not okJson then return false, "JSON Encode Error: " .. tostring(errJson) end
-
-        local requestFunc = (syn and syn.request) or (http and http.request) or http_request or request or (fluxus and fluxus.request)
-        if not requestFunc then
-            return false, "Executor tidak mendukung fungsi HTTP Request"
-        end
-
-        local response = nil
-        local okReq, reqErr = pcall(function()
-            response = requestFunc({
-                Url = rawUrl,
-                url = rawUrl,
-                Method = "POST",
-                method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json",
-                    ["content-type"] = "application/json"
-                },
-                headers = {
-                    ["Content-Type"] = "application/json",
-                    ["content-type"] = "application/json"
-                },
-                Body = jsonBody,
-                body = jsonBody
-            })
-        end)
-
-        if not okReq then
-            return false, "HTTP Request Error: " .. tostring(reqErr)
-        end
-
-        local statusCode = response and (response.StatusCode or response.status_code or response.Status)
-        if statusCode and (statusCode == 204 or statusCode == 200) then
-            return true, "Success (HTTP " .. tostring(statusCode) .. ")"
-        elseif statusCode then
-            return false, "Discord menolak: HTTP " .. tostring(statusCode)
-        end
-
-        return true, "Success"
-    end
-
-    local function TriggerEventWebhook(eventType, data1, data2, data3)
-        if not State.MutasiWebhookEnabled or not State.MutasiWebhookURL or State.MutasiWebhookURL == "" then
-            return
-        end
-
-        task.spawn(function()
-            local payload = nil
-
-            if eventType == "TEST" then
-                payload = {
-                    username = "ZyloHub Mutasi Bot",
-                    avatar_url = "https://i.imgur.com/8Qf9GkF.png",
-                    embeds = {{
-                        title = "🔔 Tes Koneksi Discord Webhook Berhasil!",
-                        description = "ZyloHub Auto Mutasi telah terhubung aktif dengan Discord Anda dalam mode **Event-Based Realtime**.",
-                        color = 9055202,
-                        fields = {
-                            { name = "👤 Akun Roblox", value = string.format("`%s` (@%s)", LocalPlayer.DisplayName, LocalPlayer.Name), inline = true },
-                            { name = "⚡ Status", value = "`CONNECTED & ACTIVE`", inline = true }
-                        },
-                        footer = { text = "ZyloHub • Auto Mutasi System" },
-                        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                    }}
-                }
-
-            elseif eventType == "BATCH_START" then
-                local modeName, petsList = data1, data2
-                local petDesc = {}
-                for i, p in ipairs(petsList or {}) do
-                    table.insert(petDesc, string.format("%d. **%s** | Age: `%s` | `%s KG` | Mutasi: `%s`", i, p.Name, tostring(p.Age), tostring(p.Weight), p.Mutation or "Normal"))
-                end
-                payload = {
-                    username = "ZyloHub Mutasi Bot",
-                    embeds = {{
-                        title = "📦 [EVENT]: Rombongan Pet Baru Diambil dari GBXP",
-                        description = string.format("Memulai estafet pet di **%s**.", tostring(modeName)),
-                        color = 3447003,
-                        fields = {
-                            { name = "👤 Player", value = string.format("`%s`", LocalPlayer.Name), inline = true },
-                            { name = "🎯 Mode", value = string.format("`%s`", tostring(modeName)), inline = true },
-                            { name = string.format("🐾 Daftar Pet (%d)", #(petsList or {})), value = (#petDesc > 0 and table.concat(petDesc, "\n") or "Tidak ada pet") }
-                        },
-                        footer = { text = "ZyloHub • GBXP Supply" },
-                        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                    }}
-                }
-
-            elseif eventType == "STAGE_CHANGE" then
-                local stageName, targetAge, petsList = data1, data2, data3
-                local petDesc = {}
-                for i, p in ipairs(petsList or {}) do
-                    table.insert(petDesc, string.format("• **%s** — Age `%s` (Target: Age `%d`)", p.Name, tostring(p.Age), tonumber(targetAge) or 500))
-                end
-                payload = {
-                    username = "ZyloHub Mutasi Bot",
-                    embeds = {{
-                        title = string.format("🚀 [PERKEMBANGAN]: Masuk ke Tahap %s", tostring(stageName):upper()),
-                        description = string.format("Booster tim **%s** dipasang di kebun. Rombongan mulai menaikkan level.", tostring(stageName)),
-                        color = 10181046,
-                        fields = {
-                            { name = "📌 Tahap Aktif", value = string.format("`%s`", tostring(stageName)), inline = true },
-                            { name = "🎯 Target Unequip", value = string.format("`Age %s`", tostring(targetAge)), inline = true },
-                            { name = "🐾 Pet yang Diproses", value = (#petDesc > 0 and table.concat(petDesc, "\n") or "Proses") }
-                        },
-                        footer = { text = "ZyloHub • Stage Progress" },
-                        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                    }}
-                }
-
-            elseif eventType == "MACHINE_START" then
-                local pet, desiredTarget = data1, data2
-                payload = {
-                    username = "ZyloHub Mutasi Bot",
-                    embeds = {{
-                        title = "⚙️ [MESIN MUTASI]: Pet Masuk ke Mesin",
-                        description = string.format("Pet **%s** telah dimasukkan ke Mesin Mutasi dan proses dimulai!", pet.Name),
-                        color = 15105570,
-                        fields = {
-                            { name = "🐾 Nama Pet", value = string.format("`%s`", pet.Name), inline = true },
-                            { name = "⚖️ Berat", value = string.format("`%s KG`", tostring(pet.Weight)), inline = true },
-                            { name = "🎯 Target Mutasi", value = string.format("`%s`", tostring(desiredTarget)), inline = true },
-                            { name = "🧬 Mutasi Saat Ini", value = string.format("`%s`", pet.Mutation or "Normal"), inline = true }
-                        },
-                        footer = { text = "ZyloHub • Mutation Machine" },
-                        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                    }}
-                }
-
-            elseif eventType == "SUCCESS" then
-                local pet, targetName, location = data1, data2, data3
-                payload = {
-                    username = "ZyloHub Mutasi Bot",
-                    embeds = {{
-                        title = "🎉 [TARGET TERCAPAI]: Mutasi Berhasil Diperoleh!",
-                        description = string.format("Selamat! Pet **%s** berhasil mendapatkan mutasi sesuai target!", pet.Name),
-                        color = 3066993,
-                        fields = {
-                            { name = "🐾 Nama Pet", value = string.format("`%s`", pet.Name), inline = true },
-                            { name = "🧬 Mutasi Didapat", value = string.format("**%s**", tostring(pet.Mutation)), inline = true },
-                            { name = "🎯 Target Pilihan", value = string.format("`%s`", tostring(targetName)), inline = true },
-                            { name = "📍 Lokasi", value = string.format("`%s`", tostring(location or "Mesin Mutasi")), inline = true }
-                        },
-                        footer = { text = "ZyloHub • Success Mutation" },
-                        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                    }}
-                }
-
-            elseif eventType == "CLEAN_LOG" then
-                local pet, gotMutation, desiredTarget = data1, data2, data3
-                payload = {
-                    username = "ZyloHub Mutasi Bot",
-                    embeds = {{
-                        title = "🧪 [CLEAN SHARD]: Mutasi Belum Cocok, Mencuci Pet...",
-                        description = string.format("Pet **%s** mendapat mutasi **%s** (Belum cocok target **%s**).\nClean Pet Shard otomatis digunakan untuk mereset mutasi pet!", pet.Name, tostring(gotMutation), tostring(desiredTarget)),
-                        color = 15158332,
-                        fields = {
-                            { name = "🐾 Nama Pet", value = string.format("`%s`", pet.Name), inline = true },
-                            { name = "❌ Mutasi Keluar", value = string.format("`%s`", tostring(gotMutation)), inline = true },
-                            { name = "🎯 Target Diinginkan", value = string.format("`%s`", tostring(desiredTarget)), inline = true }
-                        },
-                        footer = { text = "ZyloHub • Auto Clean Shard" },
-                        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                    }}
-                }
-
-            elseif eventType == "BATCH_COMPLETED" then
-                local petsList = data1
-                local petDesc = {}
-                for i, p in ipairs(petsList or {}) do
-                    table.insert(petDesc, string.format("✓ **%s** | Final Age: `%s` | Mutasi: `%s`", p.Name, tostring(p.Age), p.Mutation or "Normal"))
-                end
-                payload = {
-                    username = "ZyloHub Mutasi Bot",
-                    embeds = {{
-                        title = "🏆 [ROMBONGAN TUNTAS]: Semua Tahapan Selesai!",
-                        description = "Seluruh pet dalam rombongan ini telah lulus dari semua tahapan dan ditarik aman ke dalam tas.",
-                        color = 15844367,
-                        fields = {
-                            { name = "🐾 Pet yang Diselesaikan", value = (#petDesc > 0 and table.concat(petDesc, "\n") or "Selesai") }
-                        },
-                        footer = { text = "ZyloHub • Batch Completed" },
-                        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                    }}
-                }
-            end
-
-            if payload then
-                SendDiscordWebhookPayload(payload)
-            end
-        end)
-    end
-
-    -- Clean Mutasi Shard Helper Service
-    local CleanMutasiService = nil
-    local function GetCleanMutasiService()
-        if not CleanMutasiService then
-            pcall(function()
-                CleanMutasiService = loadstring(game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/CleanMutasi.lua"))()
-            end)
-        end
-        return CleanMutasiService
-    end
 
     local function GetTeamSelectedCount(catName)
         if catName == "Config" then return 0 end
@@ -466,7 +267,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 2. DROPDOWN HEADER (TIM MUTASI)
+    -- 2. DROPDOWN HEADER (HANYA MUNCUL DI TIM MUTASI)
     -- =====================================================================
     local ThreshHeader = Instance.new("TextButton", MutasiWrapper)
     ThreshHeader.Size = UDim2.new(1, 0, 0, 28)
@@ -668,7 +469,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end)
 
-    -- Row Target Mutasi (Machine & Nightmare)
+    -- Row Target Mutasi (Tampil di Tab Machine & Nightmare)
     local RowTargetMut = Instance.new("Frame", ThreshBody)
     RowTargetMut.Size = UDim2.new(1, 0, 0, 25)
     RowTargetMut.BackgroundTransparency = 1
@@ -908,7 +709,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 4. SECTION HEADER: Select Pet (HANYA TIM PET)
+    -- 4. SECTION HEADER: Select Pet (HANYA UNTUK TIM PET)
     -- =====================================================================
     local PetListHeader = Instance.new("Frame", MutasiWrapper)
     PetListHeader.Size = UDim2.new(1, 0, 0, 20)
@@ -927,7 +728,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     ListTitle.TextXAlignment = Enum.TextXAlignment.Left
 
     -- =====================================================================
-    -- 5. SEARCH BAR (HANYA TIM PET)
+    -- 5. SEARCH BAR (HANYA UNTUK TIM PET)
     -- =====================================================================
     local SearchBarRow = Instance.new("Frame", MutasiWrapper)
     SearchBarRow.Size = UDim2.new(1, 0, 0, 28)
@@ -1153,7 +954,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 7. DAFTAR PET SCROLL (TIM PET)
+    -- 7. DAFTAR PET SCROLL (HANYA UNTUK TIM PET)
     -- =====================================================================
     local PetListScroll = Instance.new("ScrollingFrame", MutasiWrapper)
     PetListScroll.Size = UDim2.new(1, 0, 0, 145)
@@ -1176,7 +977,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     PlsPadding.PaddingRight = UDim.new(0, 8)
 
     -- =====================================================================
-    -- 8. WADAH KHUSUS TAB CONFIG (MURNI WEBHOOK + CLEAN MUTASI)
+    -- 8. WADAH KHUSUS TAB CONFIG (MURNI WEBHOOK DENGAN TOGGLE + CLEAN MUTASI)
     -- =====================================================================
     local ConfigContainer = Instance.new("ScrollingFrame", MutasiWrapper)
     ConfigContainer.Size = UDim2.new(1, 0, 0, 245)
@@ -1245,9 +1046,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     WhBox.ClearTextOnFocus = false
 
     WhBox:GetPropertyChangedSignal("Text"):Connect(function()
-        local cleaned = tostring(WhBox.Text):gsub("%s+", "")
-        State.MutasiWebhookURL = cleaned
-        if getgenv then getgenv().WebhookUrl = cleaned end
+        State.MutasiWebhookURL = WhBox.Text
     end)
 
     local TestWhBtn = Instance.new("TextButton", WhRow)
@@ -1261,45 +1060,21 @@ return function(ParentContainer, State, ZyloLib, Main)
     Instance.new("UICorner", TestWhBtn).CornerRadius = UDim.new(0, 5)
 
     TestWhBtn.MouseButton1Click:Connect(function()
-        TestWhBtn.Text = "KIRIM..."
-        TestWhBtn.BackgroundColor3 = Color3.fromRGB(90, 45, 130)
-        updateStatusUI("Mengirim pesan tes ke Discord Webhook...", true)
-
-        task.spawn(function()
-            local payload = {
-                username = "ZyloHub Mutasi Bot",
-                avatar_url = "https://i.imgur.com/8Qf9GkF.png",
-                embeds = {{
-                    title = "🔔 Tes Koneksi Discord Webhook Berhasil!",
-                    description = "ZyloHub Auto Mutasi telah terhubung aktif dengan Discord Anda dalam mode **Event-Based Realtime**.",
-                    color = 9055202,
-                    fields = {
-                        { name = "👤 Akun Roblox", value = string.format("`%s` (@%s)", LocalPlayer.DisplayName, LocalPlayer.Name), inline = true },
-                        { name = "⚡ Status", value = "`CONNECTED & ACTIVE`", inline = true }
-                    },
-                    footer = { text = "ZyloHub • Auto Mutasi System" },
-                    timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                }}
-            }
-
-            local ok, res = SendDiscordWebhookPayload(payload)
+        local service = GetWebhookService()
+        if service then
+            updateStatusUI("Mengirim pesan tes ke Discord Webhook...", true)
+            local ok, err = service:SendTest(State.MutasiWebhookURL)
             if ok then
-                TestWhBtn.Text = "✓ OKE"
-                TestWhBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 80)
                 updateStatusUI("✓ Pesan tes Discord Webhook berhasil terkirim!", false)
             else
-                TestWhBtn.Text = "GAGAL"
-                TestWhBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
-                updateStatusUI("Gagal kirim Webhook: " .. tostring(res), false)
+                updateStatusUI("Gagal kirim Webhook: " .. tostring(err), false)
             end
-
-            task.wait(3)
-            TestWhBtn.Text = "TEST"
-            TestWhBtn.BackgroundColor3 = Color3.fromRGB(48, 24, 80)
-        end)
+        else
+            updateStatusUI("Error: File MutasiWebhook.lua belum terpasang di GitHub!", false)
+        end
     end)
 
-    -- 2. TOGGLE NOTIFIKASI WEBHOOK ON/OFF
+    -- 2. TOGGLE ON/OFF WEBHOOK NOTIFICATION (BARU)
     local WhToggleRow = Instance.new("Frame", ConfigContainer)
     WhToggleRow.Size = UDim2.new(1, 0, 0, 38)
     WhToggleRow.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
@@ -1334,7 +1109,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         updateStatusUI("Notifikasi Webhook Discord: " .. (State.MutasiWebhookEnabled and "AKTIF" or "NONAKTIF"), false)
     end)
 
-    -- 3. TOGGLE AUTO CLEAN SHARD ON/OFF
+    -- 3. Auto Clean Shard Section
     local CleanRow = Instance.new("Frame", ConfigContainer)
     CleanRow.Size = UDim2.new(1, 0, 0, 38)
     CleanRow.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
@@ -1392,7 +1167,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     ConfigContainer.CanvasSize = UDim2.new(0, 0, 0, 230)
 
     -- =====================================================================
-    -- 9. REFRESH DAFTAR PET (TIM PET)
+    -- 9. REFRESH DAFTAR PET (HANYA BERJALAN DI TAB TIM PET)
     -- =====================================================================
     refreshPetList = function()
         local activeCat = State.MutasiActiveCategory or "Elephant"
@@ -1542,7 +1317,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 10. TOMBOL AKSI BAWAH (START, STOP, MODE)
+    -- 10. TOMBOL AKSI BAWAH (START, STOP, MODE) - DISEMBUNYIKAN DI TAB CONFIG
     -- =====================================================================
     local ActionRow = Instance.new("Frame", MutasiWrapper)
     ActionRow.Size = UDim2.new(1, 0, 0, 32)
@@ -2031,9 +1806,23 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 15. AUTOMATION RUNNER ENGINE
+    -- 15. AUTOMATION RUNNER ENGINE DENGAN EVENT-BASED REALTIME WEBHOOK
     -- =====================================================================
     local runnerThread = nil
+
+    local function TriggerWebhook(actionName, ...)
+        if not State.MutasiWebhookEnabled or not State.MutasiWebhookURL or State.MutasiWebhookURL == "" then
+            return
+        end
+        local whService = GetWebhookService()
+        if whService and whService[actionName] then
+            task.spawn(function(...)
+                pcall(function(...)
+                    whService[actionName](whService, State.MutasiWebhookURL, ...)
+                end, ...)
+            end, ...)
+        end
+    end
 
     local function StopAutoPipeline()
         State.MutasiRunning = false
@@ -2041,4 +1830,404 @@ return function(ParentContainer, State, ZyloLib, Main)
             task.cancel(runnerThread)
             runnerThread = nil
         end
-        StartBtn.BackgroundColor3 = Color3.fromRGB(
+        StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
+        StartBtn.Text = "⚡ START"
+        updateStatusUI("STOPPED - Menarik seluruh pet dari kebun ke tas...", false)
+        RecallAllPetsFromFarm()
+        updateStatusUI("STOPPED - Seluruh pet berhasil ditarik ke tas.", false)
+    end
+
+    local function RunAutoPipeline()
+        if runnerThread then task.cancel(runnerThread) end
+        runnerThread = task.spawn(function()
+            local activeMode = State.MutasiMode or "Mode: A"
+            local modeConfig = nil
+            for _, m in ipairs(PipelineModes) do
+                if m.id == activeMode then
+                    modeConfig = m
+                    break
+                end
+            end
+            if not modeConfig then modeConfig = PipelineModes[1] end
+
+            updateStatusUI("Memulai " .. modeConfig.letter .. " (" .. modeConfig.route .. ")...", true)
+            task.wait(0.5)
+
+            while State.MutasiRunning do
+                local allPets = GetAllPets()
+                local petLookup = {}
+                for _, p in ipairs(allPets) do
+                    petLookup[p.UUID] = p
+                    petLookup[tostring(p.UUID):gsub("[{}]", "")] = p
+                end
+
+                -- 1. Gudang Suplai GBXP
+                local minGBAge = State.MutasiTeamThresholds.GBXP.EquipAge or 0
+                local maxGBAge = State.MutasiTeamThresholds.GBXP.UnequipAge or 500
+                local isAutoSelect = (State.GBXPSelectMode == "auto")
+                local availableSupply = {}
+
+                if isAutoSelect then
+                    for _, p in ipairs(allPets) do
+                        if not p.IsFavorite and not State.CompletedPets[p.UUID] then
+                            if p.Age >= minGBAge and p.Age <= maxGBAge then
+                                table.insert(availableSupply, p)
+                            end
+                        end
+                    end
+                else
+                    local manualMap = State.MutasiSelectedTeams["GBXP"] or {}
+                    for u, isSel in pairs(manualMap) do
+                        if isSel == true and not State.CompletedPets[u] then
+                            local p = petLookup[u] or petLookup[tostring(u):gsub("[{}]", "")]
+                            if p and (p.Age >= minGBAge and p.Age <= maxGBAge) then
+                                table.insert(availableSupply, p)
+                            end
+                        end
+                    end
+                end
+
+                if #availableSupply == 0 then
+                    updateStatusUI(string.format("Gudang GBXP kosong / tidak ada pet non-fav umur %d-%d.", minGBAge, maxGBAge), false)
+                    task.wait(3)
+                    if not State.MutasiRunning then break end
+                else
+                    -- 2. Kuota Rombongan
+                    local batchQuota = math.max(tonumber(State.GBXPMaxEquip) or 2, 1)
+                    local currentBatch = {}
+                    for i = 1, math.min(#availableSupply, batchQuota) do
+                        table.insert(currentBatch, availableSupply[i])
+                    end
+
+                    local batchNames = {}
+                    for _, bp in ipairs(currentBatch) do
+                        table.insert(batchNames, bp.Name .. " (" .. bp.Age .. ")")
+                    end
+                    updateStatusUI(string.format("Rombongan Siap (%d Pet): %s", #currentBatch, table.concat(batchNames, ", ")), true)
+
+                    -- WEBHOOK EVENT 1: Rombongan Baru Diambil dari GBXP
+                    TriggerWebhook("SendBatchStart", modeConfig.letter, currentBatch)
+                    task.wait(1.5)
+
+                    -- 3. Estafet Pipeline Stages
+                    local previousStageName = nil
+
+                    for stageIdx, stageName in ipairs(modeConfig.stages) do
+                        if not State.MutasiRunning then break end
+
+                        local stageThresh = State.MutasiTeamThresholds[stageName] or { EquipAge = 0, UnequipAge = 500 }
+                        local stEquipAge = stageThresh.EquipAge or 0
+                        local stUnequipAge = stageThresh.UnequipAge or 500
+                        if stUnequipAge <= 0 then stUnequipAge = 500 end
+
+                        if previousStageName and previousStageName ~= stageName then
+                            updateStatusUI(string.format("Mengganti booster: Menarik booster %s...", previousStageName), true)
+                            UnequipSupportPets(previousStageName)
+                            task.wait(0.3)
+                        end
+                        previousStageName = stageName
+
+                        -- WEBHOOK EVENT 2: Masuk Tahapan Baru (XP, Elephant, 100 Age, dll)
+                        if stageName ~= "Machine" then
+                            TriggerWebhook("SendStageChange", stageName, stUnequipAge, currentBatch)
+                        end
+
+                        -- TAHAP MESIN MUTASI
+                        if stageName == "Machine" then
+                            local character = LocalPlayer.Character
+                            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                            local backpack = LocalPlayer:FindFirstChild("Backpack")
+                            local farmArea = GetFarmPetArea()
+                            local farmPos = (farmArea and farmArea.CFrame + Vector3.new(0, 3, 0)) or (character and character:GetPivot())
+
+                            local machine = GetMutationMachineInstance()
+                            if not machine then
+                                updateStatusUI("Error: Mesin Mutasi tidak ditemukan!", false)
+                                task.wait(3)
+                            else
+                                local promptPart = machine:FindFirstChild("ProxPromptPart", true) or machine:FindFirstChild("Model", true) or machine.PrimaryPart
+                                local prompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                local targetCF = (promptPart and promptPart.CFrame + Vector3.new(0, 2, 3)) or machine:GetPivot() + Vector3.new(0, 2, 3)
+
+                                for _, tPet in ipairs(currentBatch) do
+                                    if not State.MutasiRunning then break end
+                                    local pUuid = tPet.UUID
+                                    local pName = tPet.Name or "Pet"
+                                    local stripped = tostring(pUuid):gsub("[{}]", "")
+
+                                    local targetReached = false
+
+                                    while State.MutasiRunning and not targetReached do
+                                        updateStatusUI(string.format("[Mesin]: Menyiapkan %s...", pName), true)
+                                        UnequipPetByUUID(pUuid)
+                                        task.wait(0.4)
+
+                                        local petTool = nil
+                                        local function getTool(cont)
+                                            if not cont then return nil end
+                                            for _, it in ipairs(cont:GetChildren()) do
+                                                if it:IsA("Tool") then
+                                                    local u = it:GetAttribute("PET_UUID") or it:GetAttribute("UUID") or (it:FindFirstChild("PET_UUID") and it.PET_UUID.Value)
+                                                    if u and (tostring(u) == tostring(pUuid) or tostring(u):gsub("[{}]", "") == stripped) then
+                                                        return it
+                                                    end
+                                                end
+                                            end
+                                            return nil
+                                        end
+
+                                        petTool = getTool(backpack) or getTool(character)
+                                        if petTool and humanoid and petTool.Parent == backpack then
+                                            humanoid:EquipTool(petTool)
+                                            task.wait(0.3)
+                                        end
+
+                                        -- Teleport ke Mesin & Submit
+                                        if character then character:PivotTo(targetCF) end
+                                        task.wait(0.4)
+
+                                        if prompt then
+                                            prompt.HoldDuration = 0
+                                            prompt.RequiresLineOfSight = false
+                                            pcall(function() fireproximityprompt(prompt) end)
+                                            task.wait(0.3)
+                                        end
+
+                                        -- Auto-Confirm
+                                        updateStatusUI("[Mesin]: Menekan tombol [Confirm]...", true)
+                                        for clickAttempt = 1, 6 do
+                                            local clicked = AutoClickMachineConfirmButton()
+                                            if clicked then break end
+                                            task.wait(0.2)
+                                        end
+                                        task.wait(0.6)
+
+                                        -- Auto-Press E [Start Mutation]
+                                        updateStatusUI("[Mesin]: Menekan prompt [Start Mutation]...", true)
+                                        local startPrompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                        if startPrompt then
+                                            startPrompt.HoldDuration = 0
+                                            startPrompt.RequiresLineOfSight = false
+                                            pcall(function() fireproximityprompt(startPrompt) end)
+                                            task.wait(0.4)
+                                        end
+                                        if PetMutationMachineRemote then
+                                            pcall(function()
+                                                PetMutationMachineRemote:FireServer("StartMachine")
+                                                PetMutationMachineRemote:FireServer("Start")
+                                            end)
+                                        end
+                                        task.wait(0.5)
+
+                                        local desiredTarget = State.MachineTargetMutation or "Any Mutation"
+                                        -- WEBHOOK EVENT 3: Pet Mulai Dimutasi di Mesin
+                                        TriggerWebhook("SendMachineStart", tPet, desiredTarget)
+
+                                        -- Pasang booster Machine di kebun
+                                        updateStatusUI("[Mesin]: Memasang booster Machine di kebun...", true)
+                                        if character then character:PivotTo(farmPos) end
+                                        task.wait(0.4)
+                                        EquipSupportPets("Machine")
+                                        task.wait(0.5)
+
+                                        -- Tunggu Pet Selesai (PetReady)
+                                        updateStatusUI(string.format("[Mesin]: Menunggu mutasi %s selesai...", pName), true)
+                                        local waitStart = os.time()
+                                        while State.MutasiRunning do
+                                            if IsMachinePetReady() then break end
+                                            if os.time() - waitStart > 300 then break end
+                                            task.wait(2)
+                                        end
+
+                                        -- Claim Pet Selesai
+                                        if State.MutasiRunning then
+                                            if character then character:PivotTo(targetCF) end
+                                            task.wait(0.4)
+                                            local claimPrompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                            if claimPrompt then
+                                                claimPrompt.HoldDuration = 0
+                                                claimPrompt.RequiresLineOfSight = false
+                                                pcall(function() fireproximityprompt(claimPrompt) end)
+                                                task.wait(0.5)
+                                            end
+                                            if character then character:PivotTo(farmPos) end
+                                            task.wait(0.4)
+
+                                            -- Cek Hasil Mutasi Terbaru
+                                            local updatedList = GetAllPets()
+                                            local finalPetData = tPet
+                                            for _, up in ipairs(updatedList) do
+                                                if up.UUID == pUuid or tostring(up.UUID):gsub("[{}]", "") == stripped then
+                                                    finalPetData = up
+                                                    break
+                                                end
+                                            end
+
+                                            local isMatch = false
+                                            if desiredTarget == "Any Mutation" then
+                                                isMatch = (finalPetData.Mutation ~= "Normal")
+                                            else
+                                                isMatch = (finalPetData.Mutation:lower() == desiredTarget:lower())
+                                            end
+
+                                            if isMatch then
+                                                targetReached = true
+                                                updateStatusUI(string.format("✓ %s BERHASIL MENCAPAI TARGET MUTASI: %s!", pName, finalPetData.Mutation), true)
+                                                -- WEBHOOK EVENT 4: Target Mutasi Sukses
+                                                TriggerWebhook("SendSuccess", finalPetData, desiredTarget, "Mesin Mutasi")
+                                            else
+                                                updateStatusUI(string.format("Mutasi: %s (Belum sesuai target: %s)", finalPetData.Mutation, desiredTarget), true)
+
+                                                if State.AutoCleanIfNotTarget then
+                                                    -- WEBHOOK EVENT 5: Clean Shard Dipakai
+                                                    TriggerWebhook("SendCleanLog", finalPetData, finalPetData.Mutation, desiredTarget)
+
+                                                    updateStatusUI("[Clean Shard]: Menggunakan Clean Pet Shard untuk mencuci pet...", true)
+                                                    local cleanService = GetCleanMutasiService()
+                                                    if cleanService then
+                                                        local okClean, cMsg = cleanService:CleanPet(pUuid, pName)
+                                                        if okClean then
+                                                            updateStatusUI("✓ Pet berhasil dicuci! Memasukkan ulang ke mesin...", true)
+                                                            task.wait(1.5)
+                                                        else
+                                                            updateStatusUI("Clean Shard Gagal: " .. tostring(cMsg) .. ". Melanjutkan pet.", false)
+                                                            targetReached = true
+                                                        end
+                                                    else
+                                                        updateStatusUI("Error: CleanMutasi.lua belum ada di GitHub!", false)
+                                                        targetReached = true
+                                                    end
+                                                else
+                                                    targetReached = true
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+
+                                UnequipSupportPets("Machine")
+                                task.wait(0.3)
+                            end
+
+                        -- TAHAP LAPANGAN (XP, Elephant, 100 Age, Nightmare)
+                        else
+                            updateStatusUI(string.format("[Tahap %s]: Memasang booster tim %s...", stageName, stageName), true)
+                            EquipSupportPets(stageName)
+                            task.wait(0.2)
+
+                            for _, tPet in ipairs(currentBatch) do
+                                if not tPet.InGarden then
+                                    EquipPetByUUID(tPet.UUID)
+                                    task.wait(0.2)
+                                end
+                            end
+
+                            local stageFinishedMap = {}
+                            while State.MutasiRunning do
+                                local allDone = true
+                                local freshPets = GetAllPets()
+                                local freshMap = {}
+                                for _, fp in ipairs(freshPets) do
+                                    freshMap[fp.UUID] = fp
+                                    freshMap[tostring(fp.UUID):gsub("[{}]", "")] = fp
+                                end
+
+                                for _, tPet in ipairs(currentBatch) do
+                                    local u = tPet.UUID
+                                    local pData = freshMap[u] or tPet
+
+                                    if not stageFinishedMap[u] then
+                                        local isTargetMet = false
+
+                                        if stageName == "Nightmare" then
+                                            local desiredNight = State.NightmareTargetMutation or "Any Mutation"
+                                            if desiredNight == "Any Mutation" then
+                                                if pData.Mutation == "Nightmare" or pData.RawMutation == "A" or pData.Mutation ~= "Normal" or pData.Age >= stUnequipAge then
+                                                    isTargetMet = true
+                                                end
+                                            else
+                                                if pData.Mutation:lower() == desiredNight:lower() or pData.Age >= stUnequipAge then
+                                                    isTargetMet = true
+                                                end
+                                            end
+
+                                            if isTargetMet then
+                                                -- WEBHOOK EVENT 4 (Nightmare Sukses)
+                                                TriggerWebhook("SendSuccess", pData, desiredNight, "Nightmare Field")
+                                            end
+                                        else
+                                            if pData.Age >= stUnequipAge then
+                                                isTargetMet = true
+                                            end
+                                        end
+
+                                        if isTargetMet then
+                                            updateStatusUI(string.format("[%s]: %s Capai Target! Slot ditahan kosong.", stageName, pData.Name), true)
+                                            UnequipPetByUUID(u)
+                                            stageFinishedMap[u] = true
+                                            task.wait(0.3)
+                                        else
+                                            allDone = false
+                                            updateStatusUI(string.format("[%s]: Memproses %s (Age %d/%d)...", stageName, pData.Name, pData.Age, stUnequipAge), true)
+                                        end
+                                    end
+                                end
+
+                                if allDone then
+                                    updateStatusUI(string.format("[Tahap %s Selesai]: Rombongan lulus!", stageName), true)
+                                    task.wait(1)
+                                    break
+                                end
+                                task.wait(1.5)
+                            end
+                        end
+
+                        if not State.MutasiRunning then break end
+                    end
+
+                    if previousStageName then
+                        UnequipSupportPets(previousStageName)
+                        task.wait(0.2)
+                    end
+
+                    if State.MutasiRunning then
+                        for _, tPet in ipairs(currentBatch) do
+                            State.CompletedPets[tPet.UUID] = true
+                            State.CompletedPets[tostring(tPet.UUID):gsub("[{}]", "")] = true
+                            UnequipPetByUUID(tPet.UUID)
+                        end
+
+                        -- WEBHOOK EVENT 6: Rombongan Lulus Tuntas 100%
+                        TriggerWebhook("SendBatchCompleted", currentBatch)
+
+                        updateStatusUI("✓ Rombongan TUNTAS sampai tahap akhir! Menyuplai rombongan baru dari GBXP...", true)
+                        task.wait(1.5)
+                    end
+                end
+
+                if updateTeamBadgesUI then updateTeamBadgesUI() end
+                refreshPetList()
+                task.wait(1.5)
+            end
+
+            updateStatusUI("Pipeline Selesai / Berhenti.", false)
+        end)
+    end
+
+    StartBtn.MouseButton1Click:Connect(function()
+        if State.MutasiRunning then return end
+        State.MutasiRunning = true
+        StartBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 80)
+        StartBtn.Text = "RUNNING (" .. State.MutasiMode .. ")"
+        RunAutoPipeline()
+    end)
+
+    StopBtn.MouseButton1Click:Connect(function()
+        StopAutoPipeline()
+    end)
+
+    return {
+        Refresh = refreshPetList,
+        Wrapper = MutasiWrapper
+    }
+end
