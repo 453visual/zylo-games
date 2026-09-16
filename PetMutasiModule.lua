@@ -1,15 +1,20 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.7.0 - ULTIMATE ENGINE)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.7.5 - ULTIMATE ENGINE)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Sub-Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
 --  Mode Pipeline: Modal Popup Selector (Mode A - F)
---  Specialized Filters:
---    - Elephant, Machine, Nightmare, 100 Age, XP: HANYA PET FAVORIT
---    - GBXP: HANYA PET NON-FAVORIT (Feeder / Leveling Pet)
---    - Pinned Selected Pets di Bagian Atas dengan UI Pembeda Jelas
---    - Search Bar ("Select Optional") untuk Mencari Pet Tanpa Perlu Scroll
---  Status: 100% TERINTEGRASI ENGINE OTOMASI RESMI DENGAN REMOTE ASLI GAME
+--  Specialized Features:
+--    1. Team Status Row Interaktif (Elephant, Machine, Nightmare, 100 Age, XP, GBXP)
+--       - Menampilkan JUMLAH PET YANG SUDAH DIPILIH di setiap tim secara real-time
+--       - Tombol interaktif: Klik badge tim mana pun untuk langsung berpindah kategori
+--       - Indikator visual aktif & bercahaya untuk tim yang memiliki pet terpilih
+--    2. Dynamic Thresholds per Team (Equip Age & Unequip Age tersimpan per tim)
+--    3. Elephant, Machine, Nightmare, 100 Age, XP: HANYA PET FAVORIT
+--    4. GBXP: HANYA PET NON-FAVORIT (Feeder / Leveling Pet)
+--    5. Pinned Selected Pets di Urutan Paling Atas dengan UI Pembeda Jelas
+--    6. "Select Optional" Search Bar untuk Mencari Pet Cepat Tanpa Scroll Manual
+--    7. Runner Engine Resmi Terintegrasi Remote Asli Game & Machine Teleport
 -- =========================================================================
 
 return function(ParentContainer, State, ZyloLib, Main)
@@ -74,16 +79,27 @@ return function(ParentContainer, State, ZyloLib, Main)
     -- STATE INISIALISASI
     -- =====================================================================
     State.MutasiActiveCategory = State.MutasiActiveCategory or "Elephant"
-    State.MutasiEquipAge = State.MutasiEquipAge or 20
-    State.MutasiUnequipAge = State.MutasiUnequipAge or 0
     State.MutasiMode = State.MutasiMode or "Mode: A"
     State.MutasiRunning = State.MutasiRunning or false
     State.MutasiSearchQuery = State.MutasiSearchQuery or ""
     State.CompletedPets = State.CompletedPets or {}
     State.MutasiStatusText = "IDLE - Siap Memulai Pipeline"
 
-    -- Tabel Seleksi Pet per Tim Kategori:
-    -- Elephant, Machine, Nightmare, 100 Age, XP, GBXP
+    -- Threshold Age per Tim (Dapat disesuaikan secara independen)
+    State.MutasiTeamThresholds = State.MutasiTeamThresholds or {
+        Elephant = { EquipAge = 20, UnequipAge = 0 },
+        Machine = { EquipAge = 20, UnequipAge = 0 },
+        Nightmare = { EquipAge = 20, UnequipAge = 0 },
+        ["100 Age"] = { EquipAge = 100, UnequipAge = 0 },
+        XP = { EquipAge = 20, UnequipAge = 0 },
+        GBXP = { EquipAge = 20, UnequipAge = 0 },
+        Config = { EquipAge = 20, UnequipAge = 0 }
+    }
+
+    State.MutasiEquipAge = State.MutasiTeamThresholds[State.MutasiActiveCategory] and State.MutasiTeamThresholds[State.MutasiActiveCategory].EquipAge or 20
+    State.MutasiUnequipAge = State.MutasiTeamThresholds[State.MutasiActiveCategory] and State.MutasiTeamThresholds[State.MutasiActiveCategory].UnequipAge or 0
+
+    -- Tabel Seleksi Pet per Tim Kategori
     State.MutasiSelectedTeams = State.MutasiSelectedTeams or {
         Elephant = {},
         Machine = {},
@@ -94,6 +110,24 @@ return function(ParentContainer, State, ZyloLib, Main)
     }
     for _, cat in ipairs({"Elephant", "Machine", "Nightmare", "100 Age", "XP", "GBXP"}) do
         State.MutasiSelectedTeams[cat] = State.MutasiSelectedTeams[cat] or {}
+    end
+
+    -- Hitung jumlah pet yang sudah dipilih di dalam tim
+    local function GetTeamSelectedCount(catName)
+        local teamMap = State.MutasiSelectedTeams[catName]
+        if not teamMap then return 0 end
+        local count = 0
+        local seen = {}
+        for uuid, isSel in pairs(teamMap) do
+            if isSel == true then
+                local clean = tostring(uuid):gsub("[{}]", "")
+                if not seen[clean] then
+                    seen[clean] = true
+                    count = count + 1
+                end
+            end
+        end
+        return count
     end
 
     -- =====================================================================
@@ -108,9 +142,11 @@ return function(ParentContainer, State, ZyloLib, Main)
     MutasiLayout.Padding = UDim.new(0, 6)
 
     -- Forward declarations
+    local SwitchCategory
     local updateThresholdTitle
     local updateActionButton
     local refreshPetList
+    local updateTeamBadgesUI
     local updateStatusUI
 
     -- =====================================================================
@@ -168,17 +204,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         CategoryButtons[catName] = { btn = btn, stroke = stroke }
 
         btn.MouseButton1Click:Connect(function()
-            State.MutasiActiveCategory = catName
-            for cName, data in pairs(CategoryButtons) do
-                local isActive = (cName == catName)
-                data.btn.BackgroundColor3 = isActive and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
-                data.btn.TextColor3 = isActive and Color3.fromRGB(255, 255, 255) or C.TEXT_M
-                data.stroke.Color = isActive and C.PURPLE or Color3.fromRGB(38, 45, 70)
-                data.stroke.Thickness = isActive and 1.5 or 1
-            end
-            if updateThresholdTitle then updateThresholdTitle() end
-            if updateActionButton then updateActionButton() end
-            if refreshPetList then refreshPetList() end
+            SwitchCategory(catName)
         end)
     end
 
@@ -195,16 +221,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     gearStroke.Color = Color3.fromRGB(38, 45, 70)
 
     GearBtn.MouseButton1Click:Connect(function()
-        State.MutasiActiveCategory = "Config"
-        for cName, data in pairs(CategoryButtons) do
-            local isActive = (cName == "Config")
-            data.btn.BackgroundColor3 = isActive and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
-            data.btn.TextColor3 = isActive and Color3.fromRGB(255, 255, 255) or C.TEXT_M
-            data.stroke.Color = isActive and C.PURPLE or Color3.fromRGB(38, 45, 70)
-            data.stroke.Thickness = isActive and 1.5 or 1
-        end
-        if updateThresholdTitle then updateThresholdTitle() end
-        if refreshPetList then refreshPetList() end
+        SwitchCategory("Config")
     end)
 
     -- =====================================================================
@@ -243,16 +260,16 @@ return function(ParentContainer, State, ZyloLib, Main)
     thArrow.TextSize = 9
 
     -- =====================================================================
-    -- 3. BODY COLLAPSIBLE: STATS ROW + EQUIP/UNEQUIP AGE INPUTS
+    -- 3. BODY COLLAPSIBLE: TIM BADGES (INTERAKTIF) + THRESHOLD INPUTS
     -- =====================================================================
     local ThreshBody = Instance.new("Frame", MutasiWrapper)
-    ThreshBody.Size = UDim2.new(1, 0, 0, 84)
+    ThreshBody.Size = UDim2.new(1, 0, 0, 88)
     ThreshBody.BackgroundTransparency = 1
     ThreshBody.LayoutOrder = 3
 
     local TbLayout = Instance.new("UIListLayout", ThreshBody)
     TbLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    TbLayout.Padding = UDim.new(0, 4)
+    TbLayout.Padding = UDim.new(0, 5)
 
     local isThreshOpen = true
     ThreshHeader.MouseButton1Click:Connect(function()
@@ -261,39 +278,62 @@ return function(ParentContainer, State, ZyloLib, Main)
         thArrow.Text = isThreshOpen and "▼" or "▶"
     end)
 
-    -- Row 3A: Inline Stats Row
+    -- Row 3A: TIM STATUS ROW DENGAN COUNTER PET TERPILIH & QUICK SWITCH (PERMINTAAN USER)
     local StatsScroll = Instance.new("ScrollingFrame", ThreshBody)
-    StatsScroll.Size = UDim2.new(1, 0, 0, 20)
-    StatsScroll.BackgroundTransparency = 1
-    StatsScroll.BorderSizePixel = 0
+    StatsScroll.Size = UDim2.new(1, 0, 0, 24)
+    StatsScroll.BackgroundColor3 = Color3.fromRGB(11, 14, 26)
     StatsScroll.ScrollBarThickness = 0
     StatsScroll.ScrollingDirection = Enum.ScrollingDirection.X
-    StatsScroll.CanvasSize = UDim2.new(0, 480, 0, 20)
+    StatsScroll.CanvasSize = UDim2.new(0, 540, 0, 24)
     StatsScroll.LayoutOrder = 1
+    Instance.new("UICorner", StatsScroll).CornerRadius = UDim.new(0, 6)
+    local stStroke = Instance.new("UIStroke", StatsScroll)
+    stStroke.Color = Color3.fromRGB(28, 34, 56)
 
     local StatsLayout = Instance.new("UIListLayout", StatsScroll)
     StatsLayout.FillDirection = Enum.FillDirection.Horizontal
-    StatsLayout.Padding = UDim.new(0, 10)
+    StatsLayout.Padding = UDim.new(0, 6)
     StatsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    local function CreateStatItem(parent, icon, name, initialVal, accentColor, itemWidth)
-        local item = Instance.new("TextLabel", parent)
-        item.Size = UDim2.new(0, itemWidth or 78, 1, 0)
-        item.BackgroundTransparency = 1
-        item.Text = icon .. " " .. name .. " (" .. tostring(initialVal) .. ")"
-        item.TextColor3 = accentColor or C.TEXT_M
-        item.Font = Enum.Font.GothamMedium
-        item.TextSize = 8.5
-        item.TextXAlignment = Enum.TextXAlignment.Left
-        return item
+    local StatPad = Instance.new("UIPadding", StatsScroll)
+    StatPad.PaddingLeft = UDim.new(0, 6)
+    StatPad.PaddingRight = UDim.new(0, 6)
+
+    local TeamBadges = {}
+
+    local function CreateTeamBadge(parent, icon, name, catKey, baseColor, itemWidth)
+        local btn = Instance.new("TextButton", parent)
+        btn.Size = UDim2.new(0, itemWidth or 86, 0, 20)
+        btn.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
+        btn.Text = icon .. " " .. name .. " (0)"
+        btn.TextColor3 = baseColor or C.TEXT_M
+        btn.Font = Enum.Font.GothamMedium
+        btn.TextSize = 8.5
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
+        local bStroke = Instance.new("UIStroke", btn)
+        bStroke.Color = Color3.fromRGB(36, 44, 70)
+        bStroke.Thickness = 1
+
+        btn.MouseButton1Click:Connect(function()
+            SwitchCategory(catKey)
+        end)
+
+        TeamBadges[catKey] = {
+            btn = btn,
+            stroke = bStroke,
+            icon = icon,
+            name = name,
+            baseColor = baseColor
+        }
+        return btn
     end
 
-    local statEle  = CreateStatItem(StatsScroll, "🐘", "Elephant", 0, Color3.fromRGB(150, 210, 255), 78)
-    local statMac  = CreateStatItem(StatsScroll, "⚙️", "Machine", 0, Color3.fromRGB(255, 185, 100), 76)
-    local statNM   = CreateStatItem(StatsScroll, "🌙", "Nightmare", 0, C.PURPLE_L, 82)
-    local stat100  = CreateStatItem(StatsScroll, "💯", "100 Age", 0, C.CYAN, 74)
-    local statXP   = CreateStatItem(StatsScroll, "📘", "XP", 0, Color3.fromRGB(130, 200, 255), 62)
-    local statGBXP = CreateStatItem(StatsScroll, "🧪", "GBXP", 0, Color3.fromRGB(180, 140, 255), 72)
+    CreateTeamBadge(StatsScroll, "🐘", "Elephant", "Elephant", Color3.fromRGB(150, 210, 255), 88)
+    CreateTeamBadge(StatsScroll, "⚙️", "Machine", "Machine", Color3.fromRGB(255, 185, 100), 84)
+    CreateTeamBadge(StatsScroll, "🌙", "Nightmare", "Nightmare", C.PURPLE_L, 94)
+    CreateTeamBadge(StatsScroll, "💯", "100 Age", "100 Age", C.CYAN, 86)
+    CreateTeamBadge(StatsScroll, "📘", "XP", "XP", Color3.fromRGB(130, 200, 255), 72)
+    CreateTeamBadge(StatsScroll, "🧪", "GBXP", "GBXP", Color3.fromRGB(180, 140, 255), 84)
 
     -- Row 3B: Equip Age
     local RowEq = Instance.new("Frame", ThreshBody)
@@ -305,7 +345,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     EqLabel.Position = UDim2.new(0, 4, 0, 0)
     EqLabel.Size = UDim2.new(0.6, 0, 1, 0)
     EqLabel.BackgroundTransparency = 1
-    EqLabel.Text = "Equip Age"
+    EqLabel.Text = "Equip Age (" .. State.MutasiActiveCategory .. ")"
     EqLabel.TextColor3 = C.TEXT_W
     EqLabel.Font = Enum.Font.GothamMedium
     EqLabel.TextSize = 9.5
@@ -325,7 +365,12 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     EqBox:GetPropertyChangedSignal("Text"):Connect(function()
         local num = tonumber(EqBox.Text)
-        if num then State.MutasiEquipAge = num end
+        if num then
+            State.MutasiEquipAge = num
+            if State.MutasiTeamThresholds[State.MutasiActiveCategory] then
+                State.MutasiTeamThresholds[State.MutasiActiveCategory].EquipAge = num
+            end
+        end
     end)
 
     -- Row 3C: Unequip Age
@@ -338,7 +383,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     UneqLabel.Position = UDim2.new(0, 4, 0, 0)
     UneqLabel.Size = UDim2.new(0.6, 0, 1, 0)
     UneqLabel.BackgroundTransparency = 1
-    UneqLabel.Text = "Unequip Age"
+    UneqLabel.Text = "Unequip Age (" .. State.MutasiActiveCategory .. ")"
     UneqLabel.TextColor3 = C.TEXT_W
     UneqLabel.Font = Enum.Font.GothamMedium
     UneqLabel.TextSize = 9.5
@@ -358,8 +403,44 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     UneqBox:GetPropertyChangedSignal("Text"):Connect(function()
         local num = tonumber(UneqBox.Text)
-        if num then State.MutasiUnequipAge = num end
+        if num then
+            State.MutasiUnequipAge = num
+            if State.MutasiTeamThresholds[State.MutasiActiveCategory] then
+                State.MutasiTeamThresholds[State.MutasiActiveCategory].UnequipAge = num
+            end
+        end
     end)
+
+    -- Update visual badges untuk tim yang dipilih (highlight aktif & selected count)
+    updateTeamBadgesUI = function()
+        local activeCat = State.MutasiActiveCategory
+        for catKey, data in pairs(TeamBadges) do
+            local selCount = GetTeamSelectedCount(catKey)
+            local isActive = (catKey == activeCat)
+
+            data.btn.Text = string.format("%s %s (%d)", data.icon, data.name, selCount)
+
+            if isActive then
+                data.btn.BackgroundColor3 = Color3.fromRGB(45, 22, 75)
+                data.btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                data.btn.Font = Enum.Font.GothamBold
+                data.stroke.Color = C.PURPLE
+                data.stroke.Thickness = 1.5
+            elseif selCount > 0 then
+                data.btn.BackgroundColor3 = Color3.fromRGB(20, 26, 48)
+                data.btn.TextColor3 = data.baseColor or Color3.fromRGB(210, 225, 255)
+                data.btn.Font = Enum.Font.GothamBold
+                data.stroke.Color = Color3.fromRGB(90, 110, 180)
+                data.stroke.Thickness = 1
+            else
+                data.btn.BackgroundColor3 = Color3.fromRGB(14, 18, 32)
+                data.btn.TextColor3 = Color3.fromRGB(130, 142, 175)
+                data.btn.Font = Enum.Font.GothamMedium
+                data.stroke.Color = Color3.fromRGB(30, 36, 56)
+                data.stroke.Thickness = 1
+            end
+        end
+    end
 
     -- =====================================================================
     -- 4. SECTION HEADER: Select Pet [Category] Team
@@ -380,8 +461,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     ListTitle.TextXAlignment = Enum.TextXAlignment.Left
 
     -- =====================================================================
-    -- 5. "SELECT OPTIONAL" QUICK SEARCH BAR (PERMINTAAN #2)
-    -- Memungkinkan user mencari / mengetik pet langsung tanpa scroll manual
+    -- 5. "SELECT OPTIONAL" QUICK SEARCH BAR
     -- =====================================================================
     local SearchBarRow = Instance.new("Frame", MutasiWrapper)
     SearchBarRow.Size = UDim2.new(1, 0, 0, 28)
@@ -613,9 +693,40 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 7. DAFTAR PET DENGAN SORTING SELECTED DI ATAS & FILTER SPESIFIK
-    --  - Elephant, Machine, Nightmare, 100 Age, XP: HANYA PET FAVORIT (PERBAIKAN #1)
-    --  - GBXP: HANYA PET NON-FAVORIT (PERBAIKAN #3)
+    -- 7. FUNGSI GANTI KATEGORI (SWITCH CATEGORY)
+    -- =====================================================================
+    SwitchCategory = function(catName)
+        State.MutasiActiveCategory = catName
+
+        -- Update tombol pill sub-nav
+        for cName, data in pairs(CategoryButtons) do
+            local isActive = (cName == catName)
+            data.btn.BackgroundColor3 = isActive and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
+            data.btn.TextColor3 = isActive and Color3.fromRGB(255, 255, 255) or C.TEXT_M
+            data.stroke.Color = isActive and C.PURPLE or Color3.fromRGB(38, 45, 70)
+            data.stroke.Thickness = isActive and 1.5 or 1
+        end
+
+        -- Update threshold values untuk tim ini
+        if State.MutasiTeamThresholds[catName] then
+            State.MutasiEquipAge = State.MutasiTeamThresholds[catName].EquipAge
+            State.MutasiUnequipAge = State.MutasiTeamThresholds[catName].UnequipAge
+        end
+        EqBox.Text = tostring(State.MutasiEquipAge)
+        UneqBox.Text = tostring(State.MutasiUnequipAge)
+        EqLabel.Text = "Equip Age (" .. catName .. ")"
+        UneqLabel.Text = "Unequip Age (" .. catName .. ")"
+
+        if updateThresholdTitle then updateThresholdTitle() end
+        if updateTeamBadgesUI then updateTeamBadgesUI() end
+        if updateActionButton then updateActionButton() end
+        if refreshPetList then refreshPetList() end
+    end
+
+    -- =====================================================================
+    -- 8. DAFTAR PET DENGAN SORTING SELECTED DI ATAS & FILTER SPESIFIK
+    --  - Elephant, Machine, Nightmare, 100 Age, XP: HANYA PET FAVORIT
+    --  - GBXP: HANYA PET NON-FAVORIT
     --  - Selected Pets ditaruh paling atas dengan UI pembeda jelas
     -- =====================================================================
     local PetListScroll = Instance.new("ScrollingFrame", MutasiWrapper)
@@ -656,42 +767,22 @@ return function(ParentContainer, State, ZyloLib, Main)
             end
         end
 
-        local allPets = GetAllPets()
-
-        -- Update counter stat badges
-        local cEle, cMac, cNM, c100, cXP, cGBXP = 0, 0, 0, 0, 0, 0
-        for _, p in ipairs(allPets) do
-            local pNameLow = p.Name:lower()
-            local mLow = p.Mutation:lower()
-            if p.IsFavorite then
-                if pNameLow:find("elephant") or mLow:find("elephant") then cEle = cEle + 1 end
-                if pNameLow:find("machine") or mLow:find("machine") or mLow:find("mechanic") then cMac = cMac + 1 end
-                if mLow:find("nightmare") or p.RawMutation == "A" then cNM = cNM + 1 end
-                if p.Age >= 100 then c100 = c100 + 1 end
-                if mLow:find("xp") and not mLow:find("gbxp") then cXP = cXP + 1 end
-            else
-                -- GBXP khusus pet non-favorit
-                cGBXP = cGBXP + 1
-            end
-        end
-        statEle.Text  = "🐘 Elephant (" .. cEle .. ")"
-        statMac.Text  = "⚙️ Machine (" .. cMac .. ")"
-        statNM.Text   = "🌙 Nightmare (" .. cNM .. ")"
-        stat100.Text  = "💯 100 Age (" .. c100 .. ")"
-        statXP.Text   = "📘 XP (" .. cXP .. ")"
-        statGBXP.Text = "🧪 GBXP (" .. cGBXP .. ")"
+        -- Update status counter pada tim badges di row atas
+        if updateTeamBadgesUI then updateTeamBadgesUI() end
 
         if activeCat == "Config" then
             local cfgInfo = Instance.new("TextLabel", PetListScroll)
             cfgInfo.Size = UDim2.new(1, 0, 1, 0)
             cfgInfo.BackgroundTransparency = 1
-            cfgInfo.Text = "Pengaturan Otomasi: Gunakan slider delay dan target Age di atas.\nTekan tab kategori lain untuk memilih pet tim."
+            cfgInfo.Text = "Pengaturan Otomasi: Gunakan input Equip Age & Unequip Age di atas.\nTekan tab kategori tim untuk memilih daftar pet."
             cfgInfo.TextColor3 = C.TEXT_M
             cfgInfo.Font = Enum.Font.GothamMedium
             cfgInfo.TextSize = 9
             PetListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
             return
         end
+
+        local allPets = GetAllPets()
 
         -- Filter list sesuai tab yang aktif:
         -- Elephant, Nightmare, Machine, 100 Age, XP -> HANYA PET FAVORIT
@@ -706,7 +797,6 @@ return function(ParentContainer, State, ZyloLib, Main)
             end
 
             if matchesFavoriteRule then
-                -- Filter pencarian teks ("Select Optional")
                 local matchesSearch = true
                 if State.MutasiSearchQuery and State.MutasiSearchQuery ~= "" then
                     local q = State.MutasiSearchQuery
@@ -727,12 +817,12 @@ return function(ParentContainer, State, ZyloLib, Main)
 
         local teamMap = State.MutasiSelectedTeams[activeCat] or {}
 
-        -- SORTING: Pet yang SUDAH DIPILIH ditempatkan di PALING ATAS! (PERBAIKAN #1)
+        -- SORTING: Pet yang SUDAH DIPILIH ditempatkan di PALING ATAS!
         table.sort(filtered, function(a, b)
             local aSel = (teamMap[a.UUID] == true) or (teamMap[tostring(a.UUID):gsub("[{}]", "")] == true)
             local bSel = (teamMap[b.UUID] == true) or (teamMap[tostring(b.UUID):gsub("[{}]", "")] == true)
             if aSel ~= bSel then
-                return aSel == true -- Selected placed first!
+                return aSel == true
             end
             if a.Age ~= b.Age then
                 return a.Age > b.Age
@@ -753,7 +843,6 @@ return function(ParentContainer, State, ZyloLib, Main)
 
             local iStroke = Instance.new("UIStroke", itemBtn)
 
-            -- UI Pembeda Jelas Antara Selected vs Unselected (PERBAIKAN #1)
             if isSelected then
                 itemBtn.BackgroundColor3 = Color3.fromRGB(56, 22, 98) -- Cosmic Glowing Purple
                 itemBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -781,6 +870,9 @@ return function(ParentContainer, State, ZyloLib, Main)
                 teamMap[cleanUUID] = newSel
                 teamMap[tostring(cleanUUID):gsub("[{}]", "")] = newSel
                 State.MutasiSelectedTeams[activeCat] = teamMap
+
+                -- Update counter pada badge tim di atas secara langsung
+                if updateTeamBadgesUI then updateTeamBadgesUI() end
                 refreshPetList()
             end)
         end
@@ -804,10 +896,13 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end
 
-    task.defer(refreshPetList)
+    task.defer(function()
+        if updateTeamBadgesUI then updateTeamBadgesUI() end
+        refreshPetList()
+    end)
 
     -- =====================================================================
-    -- 8. BOTTOM ACTION BUTTONS: [ ⚡ START ] [ STOP ] [ Mode: A ▾ ]
+    -- 9. BOTTOM ACTION BUTTONS: [ ⚡ START ] [ STOP ] [ Mode: A ▾ ]
     -- =====================================================================
     local ActionRow = Instance.new("Frame", MutasiWrapper)
     ActionRow.Size = UDim2.new(1, 0, 0, 32)
@@ -864,7 +959,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     modeStroke.Thickness = 1.5
 
     -- =====================================================================
-    -- 9. STATUS BAR & ACTIVITY MONITOR
+    -- 10. STATUS BAR & ACTIVITY MONITOR
     -- =====================================================================
     local StatusBar = Instance.new("Frame", MutasiWrapper)
     StatusBar.Size = UDim2.new(1, 0, 0, 24)
@@ -907,7 +1002,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 10. MODAL POPUP: MODE PIPELINE SELECTOR
+    -- 11. MODAL POPUP: MODE PIPELINE SELECTOR
     -- =====================================================================
     local ModePopup = Instance.new("Frame", ParentContainer)
     ModePopup.Size = UDim2.new(1, 0, 0, 235)
@@ -1097,7 +1192,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 11. FUNGSI GAME: FARM, INVENTORY & EQUIP / UNEQUIP
+    -- 12. FUNGSI GAME: FARM, INVENTORY & EQUIP / UNEQUIP
     -- =====================================================================
     local function GetFarm()
         if not Farms then return nil end
@@ -1206,7 +1301,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 12. AUTOMATION RUNNER ENGINE (SESUAI PILIHAN TIM & MODE)
+    -- 13. AUTOMATION RUNNER ENGINE
     -- =====================================================================
     local runnerThread = nil
 
@@ -1221,6 +1316,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         updateStatusUI("STOPPED - Pipeline dihentikan.", false)
     end
 
+    -- Equip seluruh pet yang DIPILIH oleh user di tim tertentu
     local function EquipTeamPets(teamName)
         local teamMap = State.MutasiSelectedTeams[teamName] or {}
         local allPets = GetAllPets()
@@ -1231,7 +1327,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
 
         for u, isSel in pairs(teamMap) do
-            if isSel then
+            if isSel == true then
                 local p = petLookup[u] or petLookup[tostring(u):gsub("[{}]", "")]
                 if p and not p.InGarden then
                     EquipPetByUUID(p.UUID)
@@ -1257,12 +1353,12 @@ return function(ParentContainer, State, ZyloLib, Main)
                 end
 
                 -- Ambil pet target:
-                -- Prioritas 1: Pet yang dipilih di tab GBXP (atau tim aktif)
+                -- Prioritas 1: Pet yang DIPILIH user di tab GBXP
                 -- Prioritas 2: Pet non-favorit yang belum selesai
                 local targetPet = nil
                 local gbxpSelected = State.MutasiSelectedTeams["GBXP"] or {}
                 for u, isSel in pairs(gbxpSelected) do
-                    if isSel and not State.CompletedPets[u] then
+                    if isSel == true and not State.CompletedPets[u] then
                         local p = petLookup[u] or petLookup[tostring(u):gsub("[{}]", "")]
                         if p then
                             targetPet = p
@@ -1271,11 +1367,11 @@ return function(ParentContainer, State, ZyloLib, Main)
                     end
                 end
 
-                -- Jika tidak ada yang dicentang di GBXP, cari pet non-favorit otomatis
+                -- Fallback: Jika tidak ada centang di GBXP, proses pet non-favorit otomatis
                 if not targetPet then
                     for _, p in ipairs(allPets) do
                         if not p.IsFavorite and not State.CompletedPets[p.UUID] then
-                            local threshold = math.max(tonumber(State.MutasiEquipAge) or 20, 100)
+                            local threshold = math.max(tonumber(State.MutasiTeamThresholds["GBXP"] and State.MutasiTeamThresholds["GBXP"].EquipAge) or 20, 100)
                             if activeMode == "Mode: A" and p.Age < threshold then
                                 targetPet = p
                                 break
@@ -1302,16 +1398,18 @@ return function(ParentContainer, State, ZyloLib, Main)
                     local pAge = targetPet.Age or 1
                     local pUuid = targetPet.UUID
 
-                    -- Pastikan Tim XP / Pendukung Terpasang
+                    -- Pasang Pet Team yang Sudah Dipilih oleh User
                     if activeMode == "Mode: A" or activeMode == "Mode: B" or activeMode == "Mode: C" then
                         EquipTeamPets("XP")
                     elseif activeMode == "Mode: D" or activeMode == "Mode: E" or activeMode == "Mode: F" then
                         EquipTeamPets("Elephant")
+                        task.wait(0.2)
+                        EquipTeamPets("XP")
                     end
 
-                    -- Eksekusi Sesuai Mode
+                    -- Eksekusi Sesuai Mode Pipeline
                     if activeMode == "Mode: A" then
-                        local threshold = math.max(tonumber(State.MutasiEquipAge) or 20, 100)
+                        local threshold = math.max(tonumber(State.MutasiTeamThresholds["100 Age"] and State.MutasiTeamThresholds["100 Age"].EquipAge) or 100, 100)
                         updateStatusUI(string.format("[Mode A]: Push Age %s (%d/%d)...", pName, pAge, threshold), true)
                         EquipPetByUUID(pUuid)
                         task.wait(2.5)
@@ -1416,6 +1514,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                     end
                 end
 
+                if updateTeamBadgesUI then updateTeamBadgesUI() end
                 refreshPetList()
                 task.wait(1.5)
             end
