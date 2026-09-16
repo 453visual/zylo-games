@@ -1,16 +1,14 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.9.0 - COMPLETE ENGINE)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v4.0.0 - REFINED)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Sub-Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
 --  Mode Pipeline: Modal Popup Selector (Mode A - F)
---  Fitur Unggulan Terpadu:
---    1. Auto-Confirm & Auto-Start Mesin Mutasi (LOCKED & PATEN)
---    2. Machine Booster Deployment ke Kebun & Auto-Claim via PetReady (LOCKED & PATEN)
---    3. Strict Single Batch Lock & Recall saat Stop (LOCKED & PATEN)
---    4. BARU: Target Mutasi Mesin & Nightmare
---    5. BARU: Discord Webhook Integration (Embed Ungu ZyloHub)
---    6. BARU: Auto Clean Pet Shard jika Target Mutasi Belum Tercapai (Looping Otomatis)
+--  Pembaruan Sesuai Instruksi:
+--    1. Dropdown Target Mutasi: Menu Popup Show/Hide (Bukan sistem tap/cycle)
+--    2. Tab Config Murni: Fitur Team Config & Search Bar dihilangkan total
+--       dari Config, murni hanya Webhook & Clean Shard
+--    3. Seluruh fitur Auto-Confirm, Auto-Start, Booster, & Recall TETAP DIPATENKAN
 -- =========================================================================
 
 return function(ParentContainer, State, ZyloLib, Main)
@@ -110,7 +108,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         return CleanMutasiService
     end
 
-    -- Konfigurasi GBXP & Threshold
+    -- Konfigurasi GBXP & Threshold (Config TIDAK dimasukkan sebagai Team)
     State.GBXPMaxEquip = State.GBXPMaxEquip or 2
     State.GBXPSelectMode = State.GBXPSelectMode or "auto"
 
@@ -120,8 +118,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         Nightmare   = { EquipAge = 20, UnequipAge = 0 },
         ["100 Age"] = { EquipAge = 50, UnequipAge = 500 },
         XP          = { EquipAge = 0,  UnequipAge = 50 },
-        GBXP        = { EquipAge = 0,  UnequipAge = 100 },
-        Config      = { EquipAge = 20, UnequipAge = 0 }
+        GBXP        = { EquipAge = 0,  UnequipAge = 100 }
     }
 
     State.MutasiEquipAge = State.MutasiTeamThresholds[State.MutasiActiveCategory] and State.MutasiTeamThresholds[State.MutasiActiveCategory].EquipAge or 20
@@ -152,6 +149,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     local GetMutationMachineInstance
 
     local function GetTeamSelectedCount(catName)
+        if catName == "Config" then return 0 end
         if catName == "GBXP" and State.GBXPSelectMode == "auto" then
             if GetAllPets then
                 local allPets = GetAllPets()
@@ -267,13 +265,14 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 2. DROPDOWN HEADER
+    -- 2. DROPDOWN HEADER (HANYA MUNCUL DI TIM MUTASI, DISEMBUNYIKAN DI CONFIG)
     -- =====================================================================
     local ThreshHeader = Instance.new("TextButton", MutasiWrapper)
     ThreshHeader.Size = UDim2.new(1, 0, 0, 28)
     ThreshHeader.BackgroundColor3 = Color3.fromRGB(13, 16, 32)
     ThreshHeader.Text = ""
     ThreshHeader.LayoutOrder = 2
+    ThreshHeader.Visible = (State.MutasiActiveCategory ~= "Config")
     Instance.new("UICorner", ThreshHeader).CornerRadius = UDim.new(0, 8)
     local thStroke = Instance.new("UIStroke", ThreshHeader)
     thStroke.Color = Color3.fromRGB(38, 45, 72)
@@ -316,6 +315,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     ThreshBody.Size = UDim2.new(1, 0, 0, initialHeight)
     ThreshBody.BackgroundTransparency = 1
     ThreshBody.LayoutOrder = 3
+    ThreshBody.Visible = (State.MutasiActiveCategory ~= "Config")
 
     local TbLayout = Instance.new("UIListLayout", ThreshBody)
     TbLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -467,7 +467,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end)
 
-    -- BARU: Row Target Mutasi (Tampil di Tab Machine & Nightmare)
+    -- Row Target Mutasi (Tampil di Tab Machine & Nightmare)
     local RowTargetMut = Instance.new("Frame", ThreshBody)
     RowTargetMut.Size = UDim2.new(1, 0, 0, 25)
     RowTargetMut.BackgroundTransparency = 1
@@ -496,30 +496,114 @@ return function(ParentContainer, State, ZyloLib, Main)
     local tmStroke = Instance.new("UIStroke", TargetMutBtn)
     tmStroke.Color = Color3.fromRGB(42, 50, 78)
 
+    -- =====================================================================
+    -- TABEL POPUP DROPDOWN TARGET MUTASI (SHOW / HIDE DENGAN PILIHAN LANGSUNG)
+    -- =====================================================================
+    local TargetDropdownPopup = Instance.new("Frame", ParentContainer)
+    TargetDropdownPopup.Size = UDim2.new(0, 200, 0, 210)
+    TargetDropdownPopup.Position = UDim2.new(0.5, -100, 0.5, -105)
+    TargetDropdownPopup.BackgroundColor3 = Color3.fromRGB(11, 14, 28)
+    TargetDropdownPopup.ZIndex = 50
+    TargetDropdownPopup.Visible = false
+    Instance.new("UICorner", TargetDropdownPopup).CornerRadius = UDim.new(0, 8)
+    local tdpStroke = Instance.new("UIStroke", TargetDropdownPopup)
+    tdpStroke.Color = C.PURPLE
+    tdpStroke.Thickness = 1.5
+
+    local TdpHeader = Instance.new("Frame", TargetDropdownPopup)
+    TdpHeader.Size = UDim2.new(1, 0, 0, 28)
+    TdpHeader.BackgroundColor3 = Color3.fromRGB(18, 22, 42)
+    TdpHeader.ZIndex = 51
+    Instance.new("UICorner", TdpHeader).CornerRadius = UDim.new(0, 8)
+
+    local TdpTitle = Instance.new("TextLabel", TdpHeader)
+    TdpTitle.Position = UDim2.new(0, 10, 0, 0)
+    TdpTitle.Size = UDim2.new(1, -38, 1, 0)
+    TdpTitle.BackgroundTransparency = 1
+    TdpTitle.Text = "PILIH TARGET MUTASI"
+    TdpTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TdpTitle.Font = Enum.Font.GothamBold
+    TdpTitle.TextSize = 9
+    TdpTitle.TextXAlignment = Enum.TextXAlignment.Left
+    TdpTitle.ZIndex = 52
+
+    local TdpClose = Instance.new("TextButton", TdpHeader)
+    TdpClose.Position = UDim2.new(1, -24, 0.5, -9)
+    TdpClose.Size = UDim2.new(0, 18, 0, 18)
+    TdpClose.BackgroundColor3 = Color3.fromRGB(30, 24, 42)
+    TdpClose.Text = "✕"
+    TdpClose.TextColor3 = Color3.fromRGB(220, 180, 255)
+    TdpClose.Font = Enum.Font.GothamBold
+    TdpClose.TextSize = 9
+    TdpClose.ZIndex = 52
+    Instance.new("UICorner", TdpClose).CornerRadius = UDim.new(0, 9)
+
+    local TdpScroll = Instance.new("ScrollingFrame", TargetDropdownPopup)
+    TdpScroll.Position = UDim2.new(0, 6, 0, 32)
+    TdpScroll.Size = UDim2.new(1, -12, 1, -38)
+    TdpScroll.BackgroundTransparency = 1
+    TdpScroll.ScrollBarThickness = 3
+    TdpScroll.ScrollBarImageColor3 = C.PURPLE
+    TdpScroll.ZIndex = 51
+
+    local TdpList = Instance.new("UIListLayout", TdpScroll)
+    TdpList.SortOrder = Enum.SortOrder.LayoutOrder
+    TdpList.Padding = UDim.new(0, 4)
+
     local MachineTargetOptions = { "Any Mutation", "Mega", "Transcendent", "Inferno", "Forger", "Oxpecker", "Lion" }
     local NightmareTargetOptions = { "Any Mutation", "Blossoming", "Venom", "Everchanted", "Ember", "Nightmare" }
 
-    TargetMutBtn.MouseButton1Click:Connect(function()
+    local function OpenTargetDropdown()
+        for _, c in ipairs(TdpScroll:GetChildren()) do
+            if c:IsA("TextButton") then c:Destroy() end
+        end
+
         local isMach = (State.MutasiActiveCategory == "Machine")
         local list = isMach and MachineTargetOptions or NightmareTargetOptions
         local current = isMach and State.MachineTargetMutation or State.NightmareTargetMutation
-        local nextIdx = 1
+        TdpTitle.Text = "TARGET MUTASI (" .. State.MutasiActiveCategory:upper() .. ")"
 
-        for i, val in ipairs(list) do
-            if val == current then
-                nextIdx = (i % #list) + 1
-                break
-            end
+        for idx, optionName in ipairs(list) do
+            local isSel = (optionName == current)
+            local itemBtn = Instance.new("TextButton", TdpScroll)
+            itemBtn.Size = UDim2.new(1, -4, 0, 26)
+            itemBtn.BackgroundColor3 = isSel and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 36)
+            itemBtn.Text = (isSel and "✓  " or "   ") .. optionName
+            itemBtn.TextColor3 = isSel and C.PURPLE_L or Color3.fromRGB(220, 230, 255)
+            itemBtn.Font = isSel and Enum.Font.GothamBold or Enum.Font.GothamMedium
+            itemBtn.TextSize = 8.5
+            itemBtn.TextXAlignment = Enum.TextXAlignment.Left
+            itemBtn.ZIndex = 53
+            Instance.new("UICorner", itemBtn).CornerRadius = UDim.new(0, 5)
+            local ibStroke = Instance.new("UIStroke", itemBtn)
+            ibStroke.Color = isSel and C.PURPLE or Color3.fromRGB(36, 44, 70)
+
+            itemBtn.MouseButton1Click:Connect(function()
+                if isMach then
+                    State.MachineTargetMutation = optionName
+                else
+                    State.NightmareTargetMutation = optionName
+                end
+                TargetMutBtn.Text = optionName .. " ▾"
+                TargetDropdownPopup.Visible = false
+                updateStatusUI("Target Mutasi " .. State.MutasiActiveCategory .. " diatur ke: " .. optionName, false)
+            end)
         end
 
-        local selected = list[nextIdx]
-        if isMach then
-            State.MachineTargetMutation = selected
+        TdpScroll.CanvasSize = UDim2.new(0, 0, 0, #list * 30 + 10)
+        TargetDropdownPopup.Visible = true
+    end
+
+    TargetMutBtn.MouseButton1Click:Connect(function()
+        if TargetDropdownPopup.Visible then
+            TargetDropdownPopup.Visible = false
         else
-            State.NightmareTargetMutation = selected
+            OpenTargetDropdown()
         end
-        TargetMutBtn.Text = selected .. " ▾"
-        updateStatusUI("Target Mutasi " .. State.MutasiActiveCategory .. " diubah ke: " .. selected, false)
+    end)
+
+    TdpClose.MouseButton1Click:Connect(function()
+        TargetDropdownPopup.Visible = false
     end)
 
     -- GBXP Controls
@@ -625,12 +709,13 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 4. SECTION HEADER: Select Pet
+    -- 4. SECTION HEADER: Select Pet (DISEMBUNYIKAN SAAT CONFIG)
     -- =====================================================================
     local PetListHeader = Instance.new("Frame", MutasiWrapper)
     PetListHeader.Size = UDim2.new(1, 0, 0, 20)
     PetListHeader.BackgroundTransparency = 1
     PetListHeader.LayoutOrder = 4
+    PetListHeader.Visible = (State.MutasiActiveCategory ~= "Config")
 
     local ListTitle = Instance.new("TextLabel", PetListHeader)
     ListTitle.Position = UDim2.new(0, 4, 0, 0)
@@ -643,12 +728,13 @@ return function(ParentContainer, State, ZyloLib, Main)
     ListTitle.TextXAlignment = Enum.TextXAlignment.Left
 
     -- =====================================================================
-    -- 5. SEARCH BAR
+    -- 5. SEARCH BAR (DISEMBUNYIKAN TOTAL SAAT CONFIG)
     -- =====================================================================
     local SearchBarRow = Instance.new("Frame", MutasiWrapper)
     SearchBarRow.Size = UDim2.new(1, 0, 0, 28)
     SearchBarRow.BackgroundColor3 = Color3.fromRGB(13, 16, 32)
     SearchBarRow.LayoutOrder = 5
+    SearchBarRow.Visible = (State.MutasiActiveCategory ~= "Config")
     Instance.new("UICorner", SearchBarRow).CornerRadius = UDim.new(0, 6)
     local sbBoxStroke = Instance.new("UIStroke", SearchBarRow)
     sbBoxStroke.Color = Color3.fromRGB(40, 48, 76)
@@ -875,6 +961,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         local isGB = (catName == "GBXP")
         local isMach = (catName == "Machine")
         local isNight = (catName == "Nightmare")
+        local isConfig = (catName == "Config")
 
         for cName, data in pairs(CategoryButtons) do
             local isActive = (cName == catName)
@@ -883,6 +970,12 @@ return function(ParentContainer, State, ZyloLib, Main)
             data.stroke.Color = isActive and C.PURPLE or Color3.fromRGB(38, 45, 70)
             data.stroke.Thickness = isActive and 1.5 or 1
         end
+
+        -- HIDE FITUR TEAM JIKA DI CONFIG
+        ThreshHeader.Visible = not isConfig
+        ThreshBody.Visible = not isConfig and isThreshOpen
+        PetListHeader.Visible = not isConfig
+        SearchBarRow.Visible = not isConfig
 
         RowGBXPMax.Visible = isGB
         RowGBXPMode.Visible = isGB
@@ -898,14 +991,21 @@ return function(ParentContainer, State, ZyloLib, Main)
         elseif isMach or isNight then h = 118 end
         ThreshBody.Size = UDim2.new(1, 0, 0, h)
 
-        if State.MutasiTeamThresholds[catName] then
+        if not isConfig and State.MutasiTeamThresholds[catName] then
             State.MutasiEquipAge = State.MutasiTeamThresholds[catName].EquipAge
             State.MutasiUnequipAge = State.MutasiTeamThresholds[catName].UnequipAge
+            EqBox.Text = tostring(State.MutasiEquipAge)
+            UneqBox.Text = tostring(State.MutasiUnequipAge)
+            EqLabel.Text = "Equip Age (" .. catName .. ")"
+            UneqLabel.Text = "Unequip Age (" .. catName .. ")"
         end
-        EqBox.Text = tostring(State.MutasiEquipAge)
-        UneqBox.Text = tostring(State.MutasiUnequipAge)
-        EqLabel.Text = "Equip Age (" .. catName .. ")"
-        UneqLabel.Text = "Unequip Age (" .. catName .. ")"
+
+        -- Atur ukuran scroll area pet/config
+        if isConfig then
+            PetListScroll.Size = UDim2.new(1, 0, 0, 240)
+        else
+            PetListScroll.Size = UDim2.new(1, 0, 0, 145)
+        end
 
         if updateThresholdTitle then updateThresholdTitle() end
         if updateTeamBadgesUI then updateTeamBadgesUI() end
@@ -914,7 +1014,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 8. DAFTAR PET & HALAMAN CONFIG LENGKAP
+    -- 8. DAFTAR PET & HALAMAN CONFIG MURNI (WEBHOOK + CLEAN MUTASI)
     -- =====================================================================
     local PetListScroll = Instance.new("ScrollingFrame", MutasiWrapper)
     PetListScroll.Size = UDim2.new(1, 0, 0, 145)
@@ -928,22 +1028,21 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     local PlsLayout = Instance.new("UIListLayout", PetListScroll)
     PlsLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    PlsLayout.Padding = UDim.new(0, 4)
+    PlsLayout.Padding = UDim.new(0, 6)
     local PlsPadding = Instance.new("UIPadding", PetListScroll)
-    PlsPadding.PaddingTop = UDim.new(0, 6)
-    PlsPadding.PaddingBottom = UDim.new(0, 6)
-    PlsPadding.PaddingLeft = UDim.new(0, 6)
-    PlsPadding.PaddingRight = UDim.new(0, 6)
+    PlsPadding.PaddingTop = UDim.new(0, 8)
+    PlsPadding.PaddingBottom = UDim.new(0, 8)
+    PlsPadding.PaddingLeft = UDim.new(0, 8)
+    PlsPadding.PaddingRight = UDim.new(0, 8)
 
     refreshPetList = function()
         local activeCat = State.MutasiActiveCategory or "Elephant"
         local isGBXP = (activeCat == "GBXP")
+        local isConfig = (activeCat == "Config")
 
         if isGBXP then
             ListTitle.Text = string.format("Gudang Suplai GBXP (Non-Fav, Age %d-%d)", State.MutasiTeamThresholds.GBXP.EquipAge or 0, State.MutasiTeamThresholds.GBXP.UnequipAge or 100)
-        elseif activeCat == "Config" then
-            ListTitle.Text = "Pengaturan Webhook Discord & Clean Pet Shard"
-        else
+        elseif not isConfig then
             ListTitle.Text = "Select Pet " .. activeCat .. " Team (Favorite List)"
         end
 
@@ -955,9 +1054,25 @@ return function(ParentContainer, State, ZyloLib, Main)
 
         if updateTeamBadgesUI then updateTeamBadgesUI() end
 
-        -- HALAMAN CONFIG: WEBHOOK & AUTO CLEAN SHARD
-        if activeCat == "Config" then
-            -- 1. Webhook Input Row
+        -- =================================================================
+        -- HALAMAN CONFIG MURNI: HANYA BERISI WEBHOOK & CLEAN PET SHARD
+        -- =================================================================
+        if isConfig then
+            -- Banner Judul Config
+            local CfgHeaderBanner = Instance.new("Frame", PetListScroll)
+            CfgHeaderBanner.Size = UDim2.new(1, 0, 0, 24)
+            CfgHeaderBanner.BackgroundTransparency = 1
+
+            local CfgHeaderTitle = Instance.new("TextLabel", CfgHeaderBanner)
+            CfgHeaderTitle.Size = UDim2.new(1, 0, 1, 0)
+            CfgHeaderTitle.BackgroundTransparency = 1
+            CfgHeaderTitle.Text = "⚙️ PENGATURAN DISCORD WEBHOOK & CLEAN PET SHARD"
+            CfgHeaderTitle.TextColor3 = C.PURPLE_L
+            CfgHeaderTitle.Font = Enum.Font.GothamBold
+            CfgHeaderTitle.TextSize = 9.5
+            CfgHeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+            -- 1. Webhook URL Section
             local WhLabel = Instance.new("TextLabel", PetListScroll)
             WhLabel.Size = UDim2.new(1, 0, 0, 16)
             WhLabel.BackgroundTransparency = 1
@@ -968,7 +1083,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             WhLabel.TextXAlignment = Enum.TextXAlignment.Left
 
             local WhRow = Instance.new("Frame", PetListScroll)
-            WhRow.Size = UDim2.new(1, 0, 0, 28)
+            WhRow.Size = UDim2.new(1, 0, 0, 32)
             WhRow.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
             Instance.new("UICorner", WhRow).CornerRadius = UDim.new(0, 6)
             local wrStroke = Instance.new("UIStroke", WhRow)
@@ -992,8 +1107,8 @@ return function(ParentContainer, State, ZyloLib, Main)
             end)
 
             local TestWhBtn = Instance.new("TextButton", WhRow)
-            TestWhBtn.Position = UDim2.new(1, -65, 0.5, -11)
-            TestWhBtn.Size = UDim2.new(0, 60, 0, 22)
+            TestWhBtn.Position = UDim2.new(1, -65, 0.5, -12)
+            TestWhBtn.Size = UDim2.new(0, 60, 0, 24)
             TestWhBtn.BackgroundColor3 = Color3.fromRGB(48, 24, 80)
             TestWhBtn.Text = "TEST"
             TestWhBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1016,27 +1131,27 @@ return function(ParentContainer, State, ZyloLib, Main)
                 end
             end)
 
-            -- 2. Toggle Auto Clean Shard Row
+            -- 2. Auto Clean Shard Section
             local CleanRow = Instance.new("Frame", PetListScroll)
-            CleanRow.Size = UDim2.new(1, 0, 0, 32)
+            CleanRow.Size = UDim2.new(1, 0, 0, 36)
             CleanRow.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
             Instance.new("UICorner", CleanRow).CornerRadius = UDim.new(0, 6)
             local clStroke = Instance.new("UIStroke", CleanRow)
             clStroke.Color = Color3.fromRGB(40, 48, 76)
 
             local CleanLabel = Instance.new("TextLabel", CleanRow)
-            CleanLabel.Position = UDim2.new(0, 8, 0, 0)
-            CleanLabel.Size = UDim2.new(0.7, 0, 1, 0)
+            CleanLabel.Position = UDim2.new(0, 10, 0, 0)
+            CleanLabel.Size = UDim2.new(0.72, 0, 1, 0)
             CleanLabel.BackgroundTransparency = 1
-            CleanLabel.Text = "Auto Clean Shard jika Target Belum Tercapai"
+            CleanLabel.Text = "Auto Clean Shard jika Target Mutasi Belum Tercapai"
             CleanLabel.TextColor3 = C.TEXT_W
             CleanLabel.Font = Enum.Font.GothamMedium
             CleanLabel.TextSize = 8.5
             CleanLabel.TextXAlignment = Enum.TextXAlignment.Left
 
             local CleanToggleBtn = Instance.new("TextButton", CleanRow)
-            CleanToggleBtn.Position = UDim2.new(1, -65, 0.5, -11)
-            CleanToggleBtn.Size = UDim2.new(0, 60, 0, 22)
+            CleanToggleBtn.Position = UDim2.new(1, -65, 0.5, -12)
+            CleanToggleBtn.Size = UDim2.new(0, 60, 0, 24)
             CleanToggleBtn.BackgroundColor3 = State.AutoCleanIfNotTarget and Color3.fromRGB(40, 150, 80) or Color3.fromRGB(30, 34, 52)
             CleanToggleBtn.Text = State.AutoCleanIfNotTarget and "ON" or "OFF"
             CleanToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1051,10 +1166,31 @@ return function(ParentContainer, State, ZyloLib, Main)
                 updateStatusUI("Auto Clean Shard: " .. (State.AutoCleanIfNotTarget and "AKTIF" or "NONAKTIF"), false)
             end)
 
-            PetListScroll.CanvasSize = UDim2.new(0, 0, 0, 120)
+            -- Petunjuk Info Singkat
+            local InfoCard = Instance.new("Frame", PetListScroll)
+            InfoCard.Size = UDim2.new(1, 0, 0, 50)
+            InfoCard.BackgroundColor3 = Color3.fromRGB(12, 15, 28)
+            Instance.new("UICorner", InfoCard).CornerRadius = UDim.new(0, 6)
+            local icStroke = Instance.new("UIStroke", InfoCard)
+            icStroke.Color = Color3.fromRGB(30, 38, 62)
+
+            local InfoText = Instance.new("TextLabel", InfoCard)
+            InfoText.Position = UDim2.new(0, 8, 0, 4)
+            InfoText.Size = UDim2.new(1, -16, 1, -8)
+            InfoText.BackgroundTransparency = 1
+            InfoText.Text = "💡 Informasi: Jika Auto Clean aktif dan pet dari mesin/nightmare tidak sesuai dengan target pilihan Anda, bot otomatis menggunakan Clean Pet Shard lalu memproses ulang pet tersebut hingga target tercapai."
+            InfoText.TextColor3 = C.TEXT_M
+            InfoText.Font = Enum.Font.GothamMedium
+            InfoText.TextSize = 8
+            InfoText.TextWrapped = true
+            InfoText.TextXAlignment = Enum.TextXAlignment.Left
+            InfoText.TextYAlignment = Enum.TextYAlignment.Top
+
+            PetListScroll.CanvasSize = UDim2.new(0, 0, 0, 180)
             return
         end
 
+        -- JIKA BERADA DI TAB TIM PET (ELEPHANT, MACHINE, NIGHTMARE, DLL)
         local allPets = GetAllPets()
         local filtered = {}
         local minGBAge = State.MutasiTeamThresholds.GBXP.EquipAge or 0
