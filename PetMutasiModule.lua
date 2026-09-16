@@ -1,14 +1,13 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v4.2.0 - REFINED)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v4.3.0 - PRO TRACKER)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Sub-Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
 --  Mode Pipeline: Modal Popup Selector (Mode A - F)
 --  Pembaruan:
---    1. Tab Config: Ada Toggle [Webhook Notifications: ON/OFF]
---    2. Real-time Event Webhook: Mengirim semua kegiatan perkembangan pet
---       (GBXP Supply, Perkembangan Tahap XP/Elephant/100 Age, Mesin, Nightmare, Clean Shard, Lulus)
---    3. List Pet & Tombol Start/Stop disembunyikan di tab Config (Murni & Bersih)
+--    1. Realtime Time Tracker: Durasi Mode Keseluruhan & Durasi Tiap Tahap (XP, 100 Age, dll)
+--    2. Realtime Pets Inventory: Presisi kapasitas tas & stok pet siap salur GBXP
+--    3. Rekap Kumulatif: Total Pet Lulus per Mode & Total Pet Berhasil Mutasi
 --    4. Seluruh fitur mutasi Machine & Nightmare tetap paten & terkunci 100%
 -- =========================================================================
 
@@ -72,7 +71,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- STATE INISIALISASI
+    -- STATE INISIALISASI & TRACKER
     -- =====================================================================
     State.MutasiActiveCategory = State.MutasiActiveCategory or "Elephant"
     State.MutasiMode = State.MutasiMode or "Mode: A"
@@ -81,6 +80,10 @@ return function(ParentContainer, State, ZyloLib, Main)
     State.CompletedPets = State.CompletedPets or {}
     State.MutasiStatusText = "IDLE - Siap Memulai Pipeline"
 
+    -- Tracker Rekap Sederhana (Kumulatif)
+    State.ModeCompletedCounters = State.ModeCompletedCounters or {}
+    State.TotalMutationSuccessCount = State.TotalMutationSuccessCount or 0
+
     -- Target Mutasi & Pengaturan Eksternal
     State.MachineTargetMutation = State.MachineTargetMutation or "Any Mutation"
     State.NightmareTargetMutation = State.NightmareTargetMutation or "Any Mutation"
@@ -88,24 +91,44 @@ return function(ParentContainer, State, ZyloLib, Main)
     State.MutasiWebhookEnabled = (State.MutasiWebhookEnabled ~= nil) and State.MutasiWebhookEnabled or false
     State.AutoCleanIfNotTarget = State.AutoCleanIfNotTarget or false
 
-    -- Helper Services (Lazy Loader dari GitHub)
+    -- Helper Services (Smart Lazy Loader dari GitHub)
     local WebhookService = nil
     local CleanMutasiService = nil
 
     local function GetWebhookService()
         if not WebhookService then
-            pcall(function()
-                WebhookService = loadstring(game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/MutasiWebhook.lua"))()
+            local ok, res = pcall(function()
+                return game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/MutasiWebhook.lua")
             end)
+            if not ok or not res or res:find("404") then
+                pcall(function()
+                    res = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/Mutasiwebhook.lua")
+                end)
+            end
+            if res and not res:find("404") then
+                pcall(function()
+                    WebhookService = loadstring(res)()
+                end)
+            end
         end
         return WebhookService
     end
 
     local function GetCleanMutasiService()
         if not CleanMutasiService then
-            pcall(function()
-                CleanMutasiService = loadstring(game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/CleanMutasi.lua"))()
+            local ok, res = pcall(function()
+                return game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/CleanMutasi.lua")
             end)
+            if not ok or not res or res:find("404") then
+                pcall(function()
+                    res = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/Cleanmutasi.lua")
+                end)
+            end
+            if res and not res:find("404") then
+                pcall(function()
+                    CleanMutasiService = loadstring(res)()
+                end)
+            end
         end
         return CleanMutasiService
     end
@@ -137,6 +160,7 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     -- Forward declarations
     local GetAllPets
+    local GetPetsInventoryInfo
     local SwitchCategory
     local updateThresholdTitle
     local updateActionButton
@@ -786,7 +810,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 6. SCANNER SISTEM
+    -- 6. SCANNER SISTEM & INVENTORY STATS
     -- =====================================================================
     local function IsPetFavorited(uuid, item)
         if not uuid and item then
@@ -953,6 +977,59 @@ return function(ParentContainer, State, ZyloLib, Main)
         return pets
     end
 
+    -- Scanner Khusus Pets Inventory & Stok Siap Salur GBXP
+    GetPetsInventoryInfo = function()
+        local allPets = GetAllPets()
+        local currentCount = #allPets
+        local maxSlots = 285
+
+        if DataService then
+            local ok, data = pcall(function() return DataService:GetData() end)
+            if ok and data and data.PetsData then
+                if data.PetsData.MaxInventorySlots then
+                    maxSlots = tonumber(data.PetsData.MaxInventorySlots) or maxSlots
+                elseif data.PetsData.PetInventory and data.PetsData.PetInventory.MaxSlots then
+                    maxSlots = tonumber(data.PetsData.PetInventory.MaxSlots) or maxSlots
+                end
+            end
+        end
+
+        local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if pGui then
+            for _, g in ipairs(pGui:GetDescendants()) do
+                if g:IsA("TextLabel") and g.Visible and g.Text:find("/") then
+                    local cur, mx = g.Text:match("(%d+)%s*/%s*(%d+)")
+                    if cur and mx and tonumber(mx) and tonumber(mx) > 50 then
+                        currentCount = tonumber(cur) or currentCount
+                        maxSlots = tonumber(mx) or maxSlots
+                        break
+                    end
+                end
+            end
+        end
+
+        local freeSlots = math.max(0, maxSlots - currentCount)
+        local totalStr = string.format("%d/%d", currentCount, maxSlots)
+
+        -- Hitung Stok GBXP Siap Salur
+        local minGBAge = State.MutasiTeamThresholds.GBXP.EquipAge or 0
+        local maxGBAge = State.MutasiTeamThresholds.GBXP.UnequipAge or 500
+        local gbxpStock = 0
+        for _, p in ipairs(allPets) do
+            if not p.IsFavorite and not State.CompletedPets[p.UUID] then
+                if p.Age >= minGBAge and p.Age <= maxGBAge then
+                    gbxpStock = gbxpStock + 1
+                end
+            end
+        end
+
+        return {
+            TotalText = totalStr,
+            FreeText = tostring(freeSlots),
+            SupplyCount = gbxpStock
+        }
+    end
+
     -- =====================================================================
     -- 7. DAFTAR PET SCROLL (HANYA UNTUK TIM PET)
     -- =====================================================================
@@ -1074,7 +1151,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end)
 
-    -- 2. TOGGLE ON/OFF WEBHOOK NOTIFICATION (BARU)
+    -- 2. TOGGLE ON/OFF WEBHOOK NOTIFICATION
     local WhToggleRow = Instance.new("Frame", ConfigContainer)
     WhToggleRow.Size = UDim2.new(1, 0, 0, 38)
     WhToggleRow.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
@@ -1806,7 +1883,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 15. AUTOMATION RUNNER ENGINE DENGAN EVENT-BASED REALTIME WEBHOOK
+    -- 15. AUTOMATION RUNNER ENGINE DENGAN TIME & INVENTORY TRACKER
     -- =====================================================================
     local runnerThread = nil
 
@@ -1816,11 +1893,12 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
         local whService = GetWebhookService()
         if whService and whService[actionName] then
-            task.spawn(function(...)
-                pcall(function(...)
-                    whService[actionName](whService, State.MutasiWebhookURL, ...)
-                end, ...)
-            end, ...)
+            local args = { ... }
+            task.spawn(function()
+                pcall(function()
+                    whService[actionName](whService, State.MutasiWebhookURL, unpack(args))
+                end)
+            end)
         end
     end
 
@@ -1892,12 +1970,15 @@ return function(ParentContainer, State, ZyloLib, Main)
                     task.wait(3)
                     if not State.MutasiRunning then break end
                 else
-                    -- 2. Kuota Rombongan
+                    -- 2. Kuota Rombongan & Mulai Stopwatch Waktu
                     local batchQuota = math.max(tonumber(State.GBXPMaxEquip) or 2, 1)
                     local currentBatch = {}
                     for i = 1, math.min(#availableSupply, batchQuota) do
                         table.insert(currentBatch, availableSupply[i])
                     end
+
+                    local batchStartTime = os.time()
+                    local stageDurations = {}
 
                     local batchNames = {}
                     for _, bp in ipairs(currentBatch) do
@@ -1905,8 +1986,18 @@ return function(ParentContainer, State, ZyloLib, Main)
                     end
                     updateStatusUI(string.format("Rombongan Siap (%d Pet): %s", #currentBatch, table.concat(batchNames, ", ")), true)
 
+                    -- Ambil status tas dan statistik rekap terkini
+                    local currentInv = GetPetsInventoryInfo()
+                    local currentModePassed = State.ModeCompletedCounters[modeConfig.letter] or 0
+                    local currentMutPassed = State.TotalMutationSuccessCount or 0
+
+                    local timePayload = {
+                        TotalMode = 0,
+                        Stages = stageDurations
+                    }
+
                     -- WEBHOOK EVENT 1: Rombongan Baru Diambil dari GBXP
-                    TriggerWebhook("SendBatchStart", modeConfig.letter, currentBatch)
+                    TriggerWebhook("SendBatchStart", modeConfig.letter, currentBatch, currentInv, timePayload, currentModePassed, currentMutPassed)
                     task.wait(1.5)
 
                     -- 3. Estafet Pipeline Stages
@@ -1915,6 +2006,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                     for stageIdx, stageName in ipairs(modeConfig.stages) do
                         if not State.MutasiRunning then break end
 
+                        local stageStartTime = os.time()
                         local stageThresh = State.MutasiTeamThresholds[stageName] or { EquipAge = 0, UnequipAge = 500 }
                         local stEquipAge = stageThresh.EquipAge or 0
                         local stUnequipAge = stageThresh.UnequipAge or 500
@@ -1927,9 +2019,17 @@ return function(ParentContainer, State, ZyloLib, Main)
                         end
                         previousStageName = stageName
 
+                        -- Perbarui data inventaris & waktu
+                        local freshInv = GetPetsInventoryInfo()
+                        local liveTotalModeTime = os.time() - batchStartTime
+                        local liveTimeData = {
+                            TotalMode = liveTotalModeTime,
+                            Stages = stageDurations
+                        }
+
                         -- WEBHOOK EVENT 2: Masuk Tahapan Baru (XP, Elephant, 100 Age, dll)
                         if stageName ~= "Machine" then
-                            TriggerWebhook("SendStageChange", stageName, stUnequipAge, currentBatch)
+                            TriggerWebhook("SendStageChange", stageName, stUnequipAge, currentBatch, freshInv, liveTimeData, State.ModeCompletedCounters[modeConfig.letter] or 0, State.TotalMutationSuccessCount or 0, modeConfig.letter)
                         end
 
                         -- TAHAP MESIN MUTASI
@@ -2072,9 +2172,12 @@ return function(ParentContainer, State, ZyloLib, Main)
 
                                             if isMatch then
                                                 targetReached = true
+                                                -- Tambah counter sukses mutasi
+                                                State.TotalMutationSuccessCount = (State.TotalMutationSuccessCount or 0) + 1
+
                                                 updateStatusUI(string.format("✓ %s BERHASIL MENCAPAI TARGET MUTASI: %s!", pName, finalPetData.Mutation), true)
                                                 -- WEBHOOK EVENT 4: Target Mutasi Sukses
-                                                TriggerWebhook("SendSuccess", finalPetData, desiredTarget, "Mesin Mutasi")
+                                                TriggerWebhook("SendSuccess", finalPetData, desiredTarget, "Mesin Mutasi", State.TotalMutationSuccessCount)
                                             else
                                                 updateStatusUI(string.format("Mutasi: %s (Belum sesuai target: %s)", finalPetData.Mutation, desiredTarget), true)
 
@@ -2152,8 +2255,10 @@ return function(ParentContainer, State, ZyloLib, Main)
                                             end
 
                                             if isTargetMet then
+                                                -- Tambah counter sukses mutasi
+                                                State.TotalMutationSuccessCount = (State.TotalMutationSuccessCount or 0) + 1
                                                 -- WEBHOOK EVENT 4 (Nightmare Sukses)
-                                                TriggerWebhook("SendSuccess", pData, desiredNight, "Nightmare Field")
+                                                TriggerWebhook("SendSuccess", pData, desiredNight, "Nightmare Field", State.TotalMutationSuccessCount)
                                             end
                                         else
                                             if pData.Age >= stUnequipAge then
@@ -2182,6 +2287,9 @@ return function(ParentContainer, State, ZyloLib, Main)
                             end
                         end
 
+                        -- Catat waktu pengerjaan tahapan ini
+                        stageDurations[stageName] = os.time() - stageStartTime
+
                         if not State.MutasiRunning then break end
                     end
 
@@ -2197,10 +2305,20 @@ return function(ParentContainer, State, ZyloLib, Main)
                             UnequipPetByUUID(tPet.UUID)
                         end
 
-                        -- WEBHOOK EVENT 6: Rombongan Lulus Tuntas 100%
-                        TriggerWebhook("SendBatchCompleted", currentBatch)
+                        -- Tambahkan rombongan ini ke akumulasi rekap mode aktif
+                        State.ModeCompletedCounters[modeConfig.letter] = (State.ModeCompletedCounters[modeConfig.letter] or 0) + #currentBatch
 
-                        updateStatusUI("✓ Rombongan TUNTAS sampai tahap akhir! Menyuplai rombongan baru dari GBXP...", true)
+                        local finalModeTime = os.time() - batchStartTime
+                        local finalTimeData = {
+                            TotalMode = finalModeTime,
+                            Stages = stageDurations
+                        }
+                        local finalInv = GetPetsInventoryInfo()
+
+                        -- WEBHOOK EVENT 6: Rombongan Lulus Tuntas 100%
+                        TriggerWebhook("SendBatchCompleted", modeConfig.letter, currentBatch, finalInv, finalTimeData, State.ModeCompletedCounters[modeConfig.letter], State.TotalMutationSuccessCount)
+
+                        updateStatusUI(string.format("✓ Rombongan TUNTAS! (Total Lulus di %s: %d Pet). Menyuplai rombongan baru dari GBXP...", modeConfig.letter, State.ModeCompletedCounters[modeConfig.letter]), true)
                         task.wait(1.5)
                     end
                 end
