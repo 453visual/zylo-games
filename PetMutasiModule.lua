@@ -1,14 +1,15 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v4.1.0 - REFINED)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v4.2.0 - REFINED)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Sub-Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
 --  Mode Pipeline: Modal Popup Selector (Mode A - F)
---  Pembaruan Sesuai Instruksi User:
---    1. Dropdown Target Mutasi: Popup Show/Hide (TERKUNCI & DIPERTAHANKAN)
---    2. Tab Config: DIHILANGKAN total list pet, tombol START, STOP, dan MODE.
---       Murni hanya berisi Discord Webhook & Auto Clean Shard!
---    3. Tombol START, STOP, MODE hanya muncul di tab tim pet (Elephant - GBXP)
+--  Pembaruan:
+--    1. Tab Config: Ada Toggle [Webhook Notifications: ON/OFF]
+--    2. Real-time Event Webhook: Mengirim semua kegiatan perkembangan pet
+--       (GBXP Supply, Perkembangan Tahap XP/Elephant/100 Age, Mesin, Nightmare, Clean Shard, Lulus)
+--    3. List Pet & Tombol Start/Stop disembunyikan di tab Config (Murni & Bersih)
+--    4. Seluruh fitur mutasi Machine & Nightmare tetap paten & terkunci 100%
 -- =========================================================================
 
 return function(ParentContainer, State, ZyloLib, Main)
@@ -84,6 +85,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     State.MachineTargetMutation = State.MachineTargetMutation or "Any Mutation"
     State.NightmareTargetMutation = State.NightmareTargetMutation or "Any Mutation"
     State.MutasiWebhookURL = State.MutasiWebhookURL or ""
+    State.MutasiWebhookEnabled = (State.MutasiWebhookEnabled ~= nil) and State.MutasiWebhookEnabled or false
     State.AutoCleanIfNotTarget = State.AutoCleanIfNotTarget or false
 
     -- Helper Services (Lazy Loader dari GitHub)
@@ -108,7 +110,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         return CleanMutasiService
     end
 
-    -- Konfigurasi GBXP & Threshold (Config murni konfigurasi, bukan team)
+    -- Konfigurasi GBXP & Threshold
     State.GBXPMaxEquip = State.GBXPMaxEquip or 2
     State.GBXPSelectMode = State.GBXPSelectMode or "auto"
 
@@ -496,9 +498,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     local tmStroke = Instance.new("UIStroke", TargetMutBtn)
     tmStroke.Color = Color3.fromRGB(42, 50, 78)
 
-    -- =====================================================================
-    -- TABEL POPUP DROPDOWN TARGET MUTASI (SHOW/HIDE - PATEN)
-    -- =====================================================================
+    -- Popup Dropdown Target Mutasi
     local TargetDropdownPopup = Instance.new("Frame", ParentContainer)
     TargetDropdownPopup.Size = UDim2.new(0, 200, 0, 210)
     TargetDropdownPopup.Position = UDim2.new(0.5, -100, 0.5, -105)
@@ -977,10 +977,10 @@ return function(ParentContainer, State, ZyloLib, Main)
     PlsPadding.PaddingRight = UDim.new(0, 8)
 
     -- =====================================================================
-    -- 8. WADAH KHUSUS TAB CONFIG (MURNI WEBHOOK + CLEAN MUTASI)
+    -- 8. WADAH KHUSUS TAB CONFIG (MURNI WEBHOOK DENGAN TOGGLE + CLEAN MUTASI)
     -- =====================================================================
     local ConfigContainer = Instance.new("ScrollingFrame", MutasiWrapper)
-    ConfigContainer.Size = UDim2.new(1, 0, 0, 240)
+    ConfigContainer.Size = UDim2.new(1, 0, 0, 245)
     ConfigContainer.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
     ConfigContainer.ScrollBarThickness = 3
     ConfigContainer.ScrollBarImageColor3 = C.PURPLE
@@ -1074,9 +1074,44 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end)
 
-    -- 2. Auto Clean Shard Section
+    -- 2. TOGGLE ON/OFF WEBHOOK NOTIFICATION (BARU)
+    local WhToggleRow = Instance.new("Frame", ConfigContainer)
+    WhToggleRow.Size = UDim2.new(1, 0, 0, 38)
+    WhToggleRow.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
+    Instance.new("UICorner", WhToggleRow).CornerRadius = UDim.new(0, 6)
+    local wtrStroke = Instance.new("UIStroke", WhToggleRow)
+    wtrStroke.Color = Color3.fromRGB(42, 50, 80)
+
+    local WhToggleLabel = Instance.new("TextLabel", WhToggleRow)
+    WhToggleLabel.Position = UDim2.new(0, 10, 0, 0)
+    WhToggleLabel.Size = UDim2.new(0.72, 0, 1, 0)
+    WhToggleLabel.BackgroundTransparency = 1
+    WhToggleLabel.Text = "Kirim Notifikasi Kegiatan Mutasi ke Discord (Realtime)"
+    WhToggleLabel.TextColor3 = C.TEXT_W
+    WhToggleLabel.Font = Enum.Font.GothamMedium
+    WhToggleLabel.TextSize = 8.5
+    WhToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+    local WhToggleBtn = Instance.new("TextButton", WhToggleRow)
+    WhToggleBtn.Position = UDim2.new(1, -70, 0.5, -13)
+    WhToggleBtn.Size = UDim2.new(0, 62, 0, 26)
+    WhToggleBtn.BackgroundColor3 = State.MutasiWebhookEnabled and Color3.fromRGB(40, 150, 80) or Color3.fromRGB(30, 34, 52)
+    WhToggleBtn.Text = State.MutasiWebhookEnabled and "ON" or "OFF"
+    WhToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    WhToggleBtn.Font = Enum.Font.GothamBold
+    WhToggleBtn.TextSize = 9
+    Instance.new("UICorner", WhToggleBtn).CornerRadius = UDim.new(0, 5)
+
+    WhToggleBtn.MouseButton1Click:Connect(function()
+        State.MutasiWebhookEnabled = not State.MutasiWebhookEnabled
+        WhToggleBtn.Text = State.MutasiWebhookEnabled and "ON" or "OFF"
+        WhToggleBtn.BackgroundColor3 = State.MutasiWebhookEnabled and Color3.fromRGB(40, 150, 80) or Color3.fromRGB(30, 34, 52)
+        updateStatusUI("Notifikasi Webhook Discord: " .. (State.MutasiWebhookEnabled and "AKTIF" or "NONAKTIF"), false)
+    end)
+
+    -- 3. Auto Clean Shard Section
     local CleanRow = Instance.new("Frame", ConfigContainer)
-    CleanRow.Size = UDim2.new(1, 0, 0, 40)
+    CleanRow.Size = UDim2.new(1, 0, 0, 38)
     CleanRow.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
     Instance.new("UICorner", CleanRow).CornerRadius = UDim.new(0, 6)
     local clStroke = Instance.new("UIStroke", CleanRow)
@@ -1089,7 +1124,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     CleanLabel.Text = "Auto Clean Shard jika Target Mutasi Belum Tercapai"
     CleanLabel.TextColor3 = C.TEXT_W
     CleanLabel.Font = Enum.Font.GothamMedium
-    CleanLabel.TextSize = 9
+    CleanLabel.TextSize = 8.5
     CleanLabel.TextXAlignment = Enum.TextXAlignment.Left
 
     local CleanToggleBtn = Instance.new("TextButton", CleanRow)
@@ -1111,7 +1146,7 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     -- Info Card
     local InfoCard = Instance.new("Frame", ConfigContainer)
-    InfoCard.Size = UDim2.new(1, 0, 0, 56)
+    InfoCard.Size = UDim2.new(1, 0, 0, 50)
     InfoCard.BackgroundColor3 = Color3.fromRGB(12, 15, 28)
     Instance.new("UICorner", InfoCard).CornerRadius = UDim.new(0, 6)
     local icStroke = Instance.new("UIStroke", InfoCard)
@@ -1121,15 +1156,15 @@ return function(ParentContainer, State, ZyloLib, Main)
     InfoText.Position = UDim2.new(0, 10, 0, 6)
     InfoText.Size = UDim2.new(1, -20, 1, -12)
     InfoText.BackgroundTransparency = 1
-    InfoText.Text = "💡 Informasi: Jika Auto Clean Shard diaktifkan dan mutasi dari Mesin atau Nightmare belum sesuai dengan target pilihan Anda, bot otomatis menggunakan Clean Pet Shard lalu memproses ulang pet tersebut sampai target tercapai."
+    InfoText.Text = "💡 Event Realtime Webhook: Saat tombol Webhook ON, setiap ada pengambilan suplai GBXP, kenaikan tahap umur (XP/Elephant/100 Age), pet masuk mesin, mutasi sukses, atau pencucian shard akan langsung terkirim ke Discord."
     InfoText.TextColor3 = C.TEXT_M
     InfoText.Font = Enum.Font.GothamMedium
-    InfoText.TextSize = 8.5
+    InfoText.TextSize = 8
     InfoText.TextWrapped = true
     InfoText.TextXAlignment = Enum.TextXAlignment.Left
     InfoText.TextYAlignment = Enum.TextYAlignment.Top
 
-    ConfigContainer.CanvasSize = UDim2.new(0, 0, 0, 200)
+    ConfigContainer.CanvasSize = UDim2.new(0, 0, 0, 230)
 
     -- =====================================================================
     -- 9. REFRESH DAFTAR PET (HANYA BERJALAN DI TAB TIM PET)
@@ -1340,7 +1375,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     modeStroke.Thickness = 1.5
 
     -- =====================================================================
-    -- 11. GANTI KATEGORI (MENGATUR VISIBILITY CONFIG VS TIM PET)
+    -- 11. GANTI KATEGORI
     -- =====================================================================
     SwitchCategory = function(catName)
         State.MutasiActiveCategory = catName
@@ -1357,15 +1392,14 @@ return function(ParentContainer, State, ZyloLib, Main)
             data.stroke.Thickness = isActive and 1.5 or 1
         end
 
-        -- KONTROL HIDE/SHOW UNTUK TAB CONFIG:
         ThreshHeader.Visible = not isConfig
         ThreshBody.Visible = not isConfig and isThreshOpen
         PetListHeader.Visible = not isConfig
         SearchBarRow.Visible = not isConfig
         PetListScroll.Visible = not isConfig
-        ActionRow.Visible = not isConfig              -- Sembunyikan START, STOP, MODE di Config!
+        ActionRow.Visible = not isConfig
 
-        ConfigContainer.Visible = isConfig            -- Munculkan HANYA di Config!
+        ConfigContainer.Visible = isConfig
 
         RowGBXPMax.Visible = isGB
         RowGBXPMode.Visible = isGB
@@ -1585,7 +1619,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 14. GAME ACTIONS & MESIN MUTASI PIPELINE (PATEN & TERKUNCI)
+    -- 14. GAME ACTIONS & MESIN MUTASI
     -- =====================================================================
     local function GetFarm()
         if not Farms then return nil end
@@ -1772,9 +1806,23 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 15. AUTOMATION RUNNER ENGINE
+    -- 15. AUTOMATION RUNNER ENGINE DENGAN EVENT-BASED REALTIME WEBHOOK
     -- =====================================================================
     local runnerThread = nil
+
+    local function TriggerWebhook(actionName, ...)
+        if not State.MutasiWebhookEnabled or not State.MutasiWebhookURL or State.MutasiWebhookURL == "" then
+            return
+        end
+        local whService = GetWebhookService()
+        if whService and whService[actionName] then
+            task.spawn(function(...)
+                pcall(function(...)
+                    whService[actionName](whService, State.MutasiWebhookURL, ...)
+                end, ...)
+            end, ...)
+        end
+    end
 
     local function StopAutoPipeline()
         State.MutasiRunning = false
@@ -1856,6 +1904,9 @@ return function(ParentContainer, State, ZyloLib, Main)
                         table.insert(batchNames, bp.Name .. " (" .. bp.Age .. ")")
                     end
                     updateStatusUI(string.format("Rombongan Siap (%d Pet): %s", #currentBatch, table.concat(batchNames, ", ")), true)
+
+                    -- WEBHOOK EVENT 1: Rombongan Baru Diambil dari GBXP
+                    TriggerWebhook("SendBatchStart", modeConfig.letter, currentBatch)
                     task.wait(1.5)
 
                     -- 3. Estafet Pipeline Stages
@@ -1876,7 +1927,12 @@ return function(ParentContainer, State, ZyloLib, Main)
                         end
                         previousStageName = stageName
 
-                        -- TAHAP MESIN MUTASI (AUTO START + BOOSTER + TARGET & AUTO CLEAN)
+                        -- WEBHOOK EVENT 2: Masuk Tahapan Baru (XP, Elephant, 100 Age, dll)
+                        if stageName ~= "Machine" then
+                            TriggerWebhook("SendStageChange", stageName, stUnequipAge, currentBatch)
+                        end
+
+                        -- TAHAP MESIN MUTASI
                         if stageName == "Machine" then
                             local character = LocalPlayer.Character
                             local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -1963,6 +2019,10 @@ return function(ParentContainer, State, ZyloLib, Main)
                                         end
                                         task.wait(0.5)
 
+                                        local desiredTarget = State.MachineTargetMutation or "Any Mutation"
+                                        -- WEBHOOK EVENT 3: Pet Mulai Dimutasi di Mesin
+                                        TriggerWebhook("SendMachineStart", tPet, desiredTarget)
+
                                         -- Pasang booster Machine di kebun
                                         updateStatusUI("[Mesin]: Memasang booster Machine di kebun...", true)
                                         if character then character:PivotTo(farmPos) end
@@ -2003,30 +2063,24 @@ return function(ParentContainer, State, ZyloLib, Main)
                                                 end
                                             end
 
-                                            local desiredTarget = State.MachineTargetMutation or "Any Mutation"
                                             local isMatch = false
-
                                             if desiredTarget == "Any Mutation" then
                                                 isMatch = (finalPetData.Mutation ~= "Normal")
                                             else
                                                 isMatch = (finalPetData.Mutation:lower() == desiredTarget:lower())
                                             end
 
-                                            -- PENGIRIMAN WEBHOOK & TINDAKAN CLEAN
-                                            local whService = GetWebhookService()
                                             if isMatch then
                                                 targetReached = true
                                                 updateStatusUI(string.format("✓ %s BERHASIL MENCAPAI TARGET MUTASI: %s!", pName, finalPetData.Mutation), true)
-                                                if whService and State.MutasiWebhookURL ~= "" then
-                                                    whService:SendSuccess(State.MutasiWebhookURL, finalPetData, desiredTarget, "Mesin Mutasi")
-                                                end
+                                                -- WEBHOOK EVENT 4: Target Mutasi Sukses
+                                                TriggerWebhook("SendSuccess", finalPetData, desiredTarget, "Mesin Mutasi")
                                             else
                                                 updateStatusUI(string.format("Mutasi: %s (Belum sesuai target: %s)", finalPetData.Mutation, desiredTarget), true)
 
                                                 if State.AutoCleanIfNotTarget then
-                                                    if whService and State.MutasiWebhookURL ~= "" then
-                                                        whService:SendCleanLog(State.MutasiWebhookURL, finalPetData, finalPetData.Mutation, desiredTarget)
-                                                    end
+                                                    -- WEBHOOK EVENT 5: Clean Shard Dipakai
+                                                    TriggerWebhook("SendCleanLog", finalPetData, finalPetData.Mutation, desiredTarget)
 
                                                     updateStatusUI("[Clean Shard]: Menggunakan Clean Pet Shard untuk mencuci pet...", true)
                                                     local cleanService = GetCleanMutasiService()
@@ -2098,10 +2152,8 @@ return function(ParentContainer, State, ZyloLib, Main)
                                             end
 
                                             if isTargetMet then
-                                                local whService = GetWebhookService()
-                                                if whService and State.MutasiWebhookURL ~= "" then
-                                                    whService:SendSuccess(State.MutasiWebhookURL, pData, desiredNight, "Nightmare Field")
-                                                end
+                                                -- WEBHOOK EVENT 4 (Nightmare Sukses)
+                                                TriggerWebhook("SendSuccess", pData, desiredNight, "Nightmare Field")
                                             end
                                         else
                                             if pData.Age >= stUnequipAge then
@@ -2144,6 +2196,10 @@ return function(ParentContainer, State, ZyloLib, Main)
                             State.CompletedPets[tostring(tPet.UUID):gsub("[{}]", "")] = true
                             UnequipPetByUUID(tPet.UUID)
                         end
+
+                        -- WEBHOOK EVENT 6: Rombongan Lulus Tuntas 100%
+                        TriggerWebhook("SendBatchCompleted", currentBatch)
+
                         updateStatusUI("✓ Rombongan TUNTAS sampai tahap akhir! Menyuplai rombongan baru dari GBXP...", true)
                         task.wait(1.5)
                     end
