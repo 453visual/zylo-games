@@ -4,19 +4,16 @@
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Sub-Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
 --  Mode Pipeline: Modal Popup Selector (Mode A - F)
---  Pembaruan Spesifik Sesuai Instruksi:
---    1. GBXP Sebagai Gudang Suplai (Supplier Pool):
---       - Menyaring pet Non-Favorit dari inventori sesuai filter batas umur:
---         [Equip Age (GBXP) = Min Age] hingga [Unequip Age (GBXP) = Max Age].
---    2. GBXP Max Equip & Sinkronisasi Rombongan (Batch Sync):
---       - Mengambil pet target sejumlah kuota (misal 2 pet: Pet A & Pet B).
---       - Jika Pet A selesai lebih dulu di suatu tahap, Pet A langsung di-unequip
---         dan SLOT DIBIARKAN KOSONG (menolak diisi pet baru).
---       - Menunggu sampai Pet B juga selesai, lalu rombongan mengalir bersama-sama.
---    3. Multi-Stage Pipeline Estafet Real (Mode A - F):
---       - Pet target mengalir dari Stasiun 1 -> Stasiun 2 -> dst sesuai rute.
---       - Setiap fitur membaca Equip Age & Unequip Age dinamis masing-masing.
---    4. Fleksibilitas Batas Umur: Mendukung penuh rentang hingga 500 Age.
+--  Pembaruan Sesuai Instruksi Khusus:
+--    1. Single Batch Strict Lock: GBXP TIDAK AKAN menyuplai pet baru sebelum
+--       rombongan sebelumnya menyelesaikan tahap akhir mode pipeline.
+--    2. Dynamic Booster Swapping: Me-recall booster tahap sebelumnya dan
+--       memasang booster tahap yang baru secara otomatis (XP -> 100 Age, dll).
+--    3. Clean START & STOP: Saat START pet langsung ke kebun, saat STOP
+--       seluruh pet di kebun langsung ditarik (recall) ke dalam tas.
+--    4. Fixed Mutation Machine: Pet di-unequip dulu dari kebun, dipegang
+--       di tangan karakter (Equip Tool), teleport, lalu tekan E (ProximityPrompt).
+--    5. Fleksibilitas Batas Umur: Mendukung penuh rentang hingga 500 Age.
 -- =========================================================================
 
 return function(ParentContainer, State, ZyloLib, Main)
@@ -89,9 +86,9 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     -- Konfigurasi Spesifik GBXP
     State.GBXPMaxEquip = State.GBXPMaxEquip or 2
-    State.GBXPSelectMode = State.GBXPSelectMode or "auto" -- "auto" atau "manual"
+    State.GBXPSelectMode = State.GBXPSelectMode or "auto"
 
-    -- Threshold Age per Tim (Dapat disesuaikan hingga 500 Age)
+    -- Threshold Age per Tim (Mendukung hingga 500 Age)
     State.MutasiTeamThresholds = State.MutasiTeamThresholds or {
         Elephant    = { EquipAge = 20, UnequipAge = 0 },
         Machine     = { EquipAge = 20, UnequipAge = 0 },
@@ -128,7 +125,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         State.MutasiSelectedTeams[cat] = State.MutasiSelectedTeams[cat] or {}
     end
 
-    -- Forward declarations helper scanner & UI
+    -- Forward declarations
     local GetAllPets
     local SwitchCategory
     local updateThresholdTitle
@@ -136,6 +133,9 @@ return function(ParentContainer, State, ZyloLib, Main)
     local refreshPetList
     local updateTeamBadgesUI
     local updateStatusUI
+    local UnequipPetByUUID
+    local EquipPetByUUID
+    local RecallAllPetsFromFarm
 
     -- Hitung jumlah pet yang sudah dipilih di dalam tim
     local function GetTeamSelectedCount(catName)
@@ -294,7 +294,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     thArrow.TextSize = 9
 
     -- =====================================================================
-    -- 3. BODY COLLAPSIBLE: TIM BADGES + THRESHOLDS (HINGGA 500) + KONTROL GBXP
+    -- 3. BODY COLLAPSIBLE: TIM BADGES + THRESHOLDS + KONTROL GBXP
     -- =====================================================================
     local isGBXPActive = (State.MutasiActiveCategory == "GBXP")
     local ThreshBody = Instance.new("Frame", MutasiWrapper)
@@ -454,7 +454,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end)
 
-    -- Row 3D: GBXP Max Equip (Khusus Tab GBXP)
+    -- Row 3D: GBXP Max Equip
     local RowGBXPMax = Instance.new("Frame", ThreshBody)
     RowGBXPMax.Size = UDim2.new(1, 0, 0, 25)
     RowGBXPMax.BackgroundTransparency = 1
@@ -490,7 +490,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end)
 
-    -- Row 3E: GBXP Select Mode (auto / manual)
+    -- Row 3E: GBXP Select Mode
     local RowGBXPMode = Instance.new("Frame", ThreshBody)
     RowGBXPMode.Size = UDim2.new(1, 0, 0, 25)
     RowGBXPMode.BackgroundTransparency = 1
@@ -531,7 +531,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         if refreshPetList then refreshPetList() end
     end)
 
-    -- Update visual badges untuk tim yang dipilih
     updateTeamBadgesUI = function()
         local activeCat = State.MutasiActiveCategory
         for catKey, data in pairs(TeamBadges) do
@@ -819,7 +818,6 @@ return function(ParentContainer, State, ZyloLib, Main)
         State.MutasiActiveCategory = catName
         local isGB = (catName == "GBXP")
 
-        -- Update tombol pill sub-nav
         for cName, data in pairs(CategoryButtons) do
             local isActive = (cName == catName)
             data.btn.BackgroundColor3 = isActive and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
@@ -828,12 +826,10 @@ return function(ParentContainer, State, ZyloLib, Main)
             data.stroke.Thickness = isActive and 1.5 or 1
         end
 
-        -- Tampilkan kontrol khusus GBXP hanya jika di tab GBXP
         RowGBXPMax.Visible = isGB
         RowGBXPMode.Visible = isGB
         ThreshBody.Size = UDim2.new(1, 0, 0, isGB and 148 or 88)
 
-        -- Update threshold values untuk tim ini
         if State.MutasiTeamThresholds[catName] then
             State.MutasiEquipAge = State.MutasiTeamThresholds[catName].EquipAge
             State.MutasiUnequipAge = State.MutasiTeamThresholds[catName].UnequipAge
@@ -911,14 +907,12 @@ return function(ParentContainer, State, ZyloLib, Main)
         for _, p in ipairs(allPets) do
             local matchesRule = false
             if isGBXP then
-                -- GBXP: Hanya pet non-favorit yang berada di rentang umur gudang
                 if not p.IsFavorite then
                     if p.Age >= minGBAge and p.Age <= maxGBAge then
                         matchesRule = true
                     end
                 end
             else
-                -- Tim Lain: Hanya pet favorit
                 matchesRule = (p.IsFavorite == true)
             end
 
@@ -943,7 +937,6 @@ return function(ParentContainer, State, ZyloLib, Main)
 
         local teamMap = State.MutasiSelectedTeams[activeCat] or {}
 
-        -- Pinned pet yang terpilih di atas
         table.sort(filtered, function(a, b)
             local aSel = (teamMap[a.UUID] == true) or (teamMap[tostring(a.UUID):gsub("[{}]", "")] == true)
             local bSel = (teamMap[b.UUID] == true) or (teamMap[tostring(b.UUID):gsub("[{}]", "")] == true)
@@ -1207,7 +1200,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             id = "Mode: A",
             letter = "MODE A",
             route = "GBXP > XP > 100 AGE > INVENTORY",
-            desc = "Suplai GBXP > Dididik di tim XP > Push level akhir di 100 Age (hingga 500).",
+            desc = "Suplai GBXP > Tim XP > Push umur akhir di 100 Age (hingga 500).",
             stages = { "XP", "100 Age" },
             order = 1
         },
@@ -1215,7 +1208,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             id = "Mode: B",
             letter = "MODE B",
             route = "GBXP > XP > NIGHTMARE > INVENTORY",
-            desc = "Suplai GBXP > Dididik di tim XP > Dapatkan mutasi skill Nightmare.",
+            desc = "Suplai GBXP > Tim XP > Dapatkan mutasi skill Nightmare.",
             stages = { "XP", "Nightmare" },
             order = 2
         },
@@ -1223,7 +1216,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             id = "Mode: C",
             letter = "MODE C",
             route = "GBXP > XP > MACHINE > INVENTORY",
-            desc = "Suplai GBXP > Dididik di tim XP > Mutasikan langsung di Mesin Mutasi.",
+            desc = "Suplai GBXP > Tim XP > Mutasikan langsung di Mesin Mutasi.",
             stages = { "XP", "Machine" },
             order = 3
         },
@@ -1231,7 +1224,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             id = "Mode: D",
             letter = "MODE D",
             route = "GBXP > XP > ELEPHANT > 100 AGE > INVENTORY",
-            desc = "Suplai GBXP > XP > Besarkan Base Weight (Elephant) > Push umur akhir di 100 Age.",
+            desc = "Suplai GBXP > XP > Besarkan Base Weight (Elephant) > Push umur 100 Age.",
             stages = { "XP", "Elephant", "100 Age" },
             order = 4
         },
@@ -1341,7 +1334,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 12. FUNGSI GAME: FARM, INVENTORY & EQUIP / UNEQUIP
+    -- 12. FUNGSI GAME: FARM, INVENTORY & EQUIP / UNEQUIP & RECALL
     -- =====================================================================
     local function GetFarm()
         if not Farms then return nil end
@@ -1362,7 +1355,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         return farm:FindFirstChild("PetArea")
     end
 
-    local function UnequipPetByUUID(uuid)
+    UnequipPetByUUID = function(uuid)
         if not uuid then return end
         local sUuid = tostring(uuid)
         local stripped = sUuid:gsub("[{}]", "")
@@ -1393,7 +1386,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end
 
-    local function EquipPetByUUID(uuid, targetCF)
+    EquipPetByUUID = function(uuid, targetCF)
         if not uuid then return end
         local petArea = GetFarmPetArea()
         local targetPos = targetCF or (petArea and petArea.CFrame + Vector3.new(0, 2, 0)) or (LocalPlayer.Character and LocalPlayer.Character:GetPivot()) or CFrame.new(0, 5, 0)
@@ -1408,63 +1401,34 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end
 
-    local function SafeInteractWithMutationMachine(petUUID)
-        local character = LocalPlayer.Character
-        if not character or not character:FindFirstChild("HumanoidRootPart") then return false end
-        local originalCFrame = character:GetPivot()
-
-        local machine = workspace:FindFirstChild("NPCS") and workspace.NPCS:FindFirstChild("PetMutationMachine")
-        if not machine then
-            machine = workspace:FindFirstChild("PetMutationMachine", true)
-        end
-        if not machine then return false end
-
-        local promptPart = machine:FindFirstChild("ProxPromptPart", true) or machine:FindFirstChild("Model", true) or machine.PrimaryPart
-        local prompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
-        local targetCFrame = (promptPart and promptPart.CFrame + Vector3.new(0, 2, 3)) or machine:GetPivot() + Vector3.new(0, 2, 3)
-
-        updateStatusUI("Teleport ke Mesin Mutasi...", true)
-        character:PivotTo(targetCFrame)
-        task.wait(0.4)
-
-        if prompt then
-            prompt.HoldDuration = 0
-            prompt.RequiresLineOfSight = false
-            pcall(function() fireproximityprompt(prompt) end)
-            task.wait(0.3)
+    -- TOTAL RECALL SAAT STOP: Tarik seluruh pet yang ada di kebun ke tas
+    RecallAllPetsFromFarm = function()
+        local farm = GetFarm()
+        local petArea = farm and farm:FindFirstChild("PetArea")
+        if petArea then
+            for _, obj in ipairs(petArea:GetChildren()) do
+                local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if prompt then
+                    prompt.HoldDuration = 0
+                    prompt.RequiresLineOfSight = false
+                    pcall(function() fireproximityprompt(prompt) end)
+                end
+                local objUUID = obj:GetAttribute("UUID") or obj:GetAttribute("PET_UUID")
+                if objUUID then
+                    UnequipPetByUUID(objUUID)
+                end
+            end
         end
 
-        if PetMutationMachineRemote and petUUID then
-            pcall(function()
-                PetMutationMachineRemote:FireServer("SubmitPet", petUUID)
-                PetMutationMachineRemote:FireServer(petUUID)
-            end)
+        local allPets = GetAllPets()
+        for _, p in ipairs(allPets) do
+            if p.InGarden then
+                UnequipPetByUUID(p.UUID)
+            end
         end
-
-        task.wait(0.5)
-        updateStatusUI("Kembali ke Kebun...", true)
-        character:PivotTo(originalCFrame)
-        task.wait(0.3)
-        return true
     end
 
-    -- =====================================================================
-    -- 13. AUTOMATION RUNNER ENGINE: ESTAFET MULTI-STAGE PIPELINE (MODE A - F)
-    -- =====================================================================
-    local runnerThread = nil
-
-    local function StopAutoPipeline()
-        State.MutasiRunning = false
-        if runnerThread then
-            task.cancel(runnerThread)
-            runnerThread = nil
-        end
-        StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
-        StartBtn.Text = "⚡ START"
-        updateStatusUI("STOPPED - Pipeline dihentikan.", false)
-    end
-
-    -- Pasang seluruh pet booster tim pendukung (XP / Elephant / Nightmare) yang dicentang
+    -- Pasang seluruh booster tim pendukung yang dicentang
     local function EquipSupportPets(teamName)
         local teamMap = State.MutasiSelectedTeams[teamName] or {}
         local allPets = GetAllPets()
@@ -1483,6 +1447,115 @@ return function(ParentContainer, State, ZyloLib, Main)
                 end
             end
         end
+    end
+
+    -- Tarik/Unequip seluruh booster tim pendukung dari kebun
+    local function UnequipSupportPets(teamName)
+        local teamMap = State.MutasiSelectedTeams[teamName] or {}
+        for u, isSel in pairs(teamMap) do
+            if isSel == true then
+                UnequipPetByUUID(u)
+                task.wait(0.1)
+            end
+        end
+    end
+
+    -- PERBAIKAN MESIN MUTASI: Pet di-unequip ke tas, dipegang di tangan, teleport, tekan E
+    local function SafeInteractWithMutationMachine(petUUID)
+        local character = LocalPlayer.Character
+        if not character or not character:FindFirstChild("HumanoidRootPart") then return false end
+        local originalCFrame = character:GetPivot()
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+
+        -- 1. Tarik pet dari kebun terlebih dahulu agar masuk ke tas
+        updateStatusUI("Menarik pet dari kebun untuk dimasukkan ke mesin...", true)
+        UnequipPetByUUID(petUUID)
+        task.wait(0.5)
+
+        -- 2. Cari tool pet di Backpack / Character lalu pegang di tangan
+        local sUuid = tostring(petUUID)
+        local stripped = sUuid:gsub("[{}]", "")
+        local petTool = nil
+
+        local function findToolInContainer(container)
+            if not container then return nil end
+            for _, item in ipairs(container:GetChildren()) do
+                if item:IsA("Tool") then
+                    local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value)
+                    if u and (tostring(u) == sUuid or tostring(u):gsub("[{}]", "") == stripped) then
+                        return item
+                    end
+                end
+            end
+            return nil
+        end
+
+        petTool = findToolInContainer(backpack) or findToolInContainer(character)
+        if petTool and humanoid and petTool.Parent == backpack then
+            humanoid:EquipTool(petTool)
+            task.wait(0.3)
+        end
+
+        -- 3. Cari Mesin Mutasi
+        local machine = workspace:FindFirstChild("NPCS") and workspace.NPCS:FindFirstChild("PetMutationMachine")
+        if not machine then
+            machine = workspace:FindFirstChild("PetMutationMachine", true)
+        end
+        if not machine then
+            updateStatusUI("Mesin Mutasi tidak ditemukan di map!", false)
+            return false
+        end
+
+        local promptPart = machine:FindFirstChild("ProxPromptPart", true) or machine:FindFirstChild("Model", true) or machine.PrimaryPart
+        local prompt = machine:FindFirstChildWhichIsA("ProximityPrompt", true)
+        local targetCFrame = (promptPart and promptPart.CFrame + Vector3.new(0, 2, 3)) or machine:GetPivot() + Vector3.new(0, 2, 3)
+
+        updateStatusUI("Teleport ke Mesin Mutasi...", true)
+        character:PivotTo(targetCFrame)
+        task.wait(0.4)
+
+        -- 4. Tekan tombol E (ProximityPrompt) dengan pet di tangan
+        if prompt then
+            prompt.HoldDuration = 0
+            prompt.RequiresLineOfSight = false
+            pcall(function() fireproximityprompt(prompt) end)
+            task.wait(0.4)
+        end
+
+        -- Backup interaksi Remote Event jika game mengandalkan remote
+        if PetMutationMachineRemote and petUUID then
+            pcall(function()
+                PetMutationMachineRemote:FireServer("SubmitPet", petUUID)
+                PetMutationMachineRemote:FireServer(petUUID)
+            end)
+        end
+
+        task.wait(1.5)
+
+        -- 5. Kembali ke kebun
+        updateStatusUI("Kembali ke Kebun...", true)
+        character:PivotTo(originalCFrame)
+        task.wait(0.3)
+        return true
+    end
+
+    -- =====================================================================
+    -- 13. AUTOMATION RUNNER ENGINE: PIPELINE STRICT LOCK & BOOSTER SWAP
+    -- =====================================================================
+    local runnerThread = nil
+
+    local function StopAutoPipeline()
+        State.MutasiRunning = false
+        if runnerThread then
+            task.cancel(runnerThread)
+            runnerThread = nil
+        end
+        StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
+        StartBtn.Text = "⚡ START"
+        updateStatusUI("STOPPED - Menarik seluruh pet dari kebun ke tas...", false)
+        RecallAllPetsFromFarm()
+        updateStatusUI("STOPPED - Seluruh pet berhasil ditarik ke tas.", false)
     end
 
     local function RunAutoPipeline()
@@ -1538,7 +1611,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                 end
 
                 if #availableSupply == 0 then
-                    updateStatusUI(string.format("Gudang GBXP kosong / tidak ada pet umur %d-%d.", minGBAge, maxGBAge), false)
+                    updateStatusUI(string.format("Gudang GBXP kosong / tidak ada pet non-fav umur %d-%d.", minGBAge, maxGBAge), false)
                     task.wait(3)
                     if not State.MutasiRunning then break end
                 else
@@ -1556,7 +1629,9 @@ return function(ParentContainer, State, ZyloLib, Main)
                     updateStatusUI(string.format("Rombongan Siap (%d Pet): %s", #currentBatch, table.concat(batchNames, ", ")), true)
                     task.wait(1.5)
 
-                    -- 3. JALUR ESTAFET: ROMBONGAN MENGALIR KE SETIAP FITUR STASIUN
+                    -- 3. JALUR ESTAFET DENGAN PERGANTIAN BOOSTER OTOMATIS
+                    local previousStageName = nil
+
                     for stageIdx, stageName in ipairs(modeConfig.stages) do
                         if not State.MutasiRunning then break end
 
@@ -1565,47 +1640,39 @@ return function(ParentContainer, State, ZyloLib, Main)
                         local stUnequipAge = stageThresh.UnequipAge or 500
                         if stUnequipAge <= 0 then stUnequipAge = 500 end
 
-                        updateStatusUI(string.format("[Tahap %s]: Mempersiapkan Booster & Pet Target...", stageName), true)
+                        -- A. PERGANTIAN BOOSTER: Tarik booster tahap sebelumnya, pasang booster tahap baru!
+                        if previousStageName and previousStageName ~= stageName then
+                            updateStatusUI(string.format("Mengganti booster: Menarik booster %s...", previousStageName), true)
+                            UnequipSupportPets(previousStageName)
+                            task.wait(0.3)
+                        end
+                        previousStageName = stageName
 
-                        -- A. Pasang Booster Pendukung Jika Tahap Mendukung (XP / Elephant / Nightmare)
-                        if stageName == "XP" or stageName == "Elephant" or stageName == "Nightmare" then
+                        updateStatusUI(string.format("[Tahap %s]: Memasang booster tim %s...", stageName, stageName), true)
+                        if stageName == "XP" or stageName == "Elephant" or stageName == "Nightmare" or stageName == "100 Age" then
                             EquipSupportPets(stageName)
                             task.wait(0.2)
                         end
 
-                        -- B. Penanganan Khusus Mesin Mutasi (Langsung Interaksi)
+                        -- B. PENANGANAN TAHAP MESIN MUTASI
                         if stageName == "Machine" then
                             for _, tPet in ipairs(currentBatch) do
                                 if not State.MutasiRunning then break end
                                 updateStatusUI(string.format("[Mesin]: Memproses mutasi %s...", tPet.Name), true)
                                 SafeInteractWithMutationMachine(tPet.UUID)
-                                task.wait(2.5)
-                                SafeInteractWithMutationMachine(tPet.UUID)
-                                UnequipPetByUUID(tPet.UUID)
-                                task.wait(0.5)
+                                task.wait(1.5)
                             end
                         else
-                            -- C. Penanganan Fitur Lapangan (XP, Elephant, 100 Age, Nightmare)
-                            -- Pasang pet dalam rombongan jika memenuhi Equip Age
-                            local activeInGarden = {}
+                            -- C. PENANGANAN FITUR LAPANGAN (XP, Elephant, 100 Age, Nightmare)
+                            -- Pasang pet rombongan ke kebun
                             for _, tPet in ipairs(currentBatch) do
-                                if tPet.Age >= stEquipAge then
-                                    if not tPet.InGarden then
-                                        EquipPetByUUID(tPet.UUID)
-                                        task.wait(0.2)
-                                    end
-                                    activeInGarden[tPet.UUID] = true
-                                else
-                                    -- Jika umur belum cukup, tetap pasang agar terdorong oleh booster
-                                    if not tPet.InGarden then
-                                        EquipPetByUUID(tPet.UUID)
-                                        task.wait(0.2)
-                                    end
-                                    activeInGarden[tPet.UUID] = true
+                                if not tPet.InGarden then
+                                    EquipPetByUUID(tPet.UUID)
+                                    task.wait(0.2)
                                 end
                             end
 
-                            -- D. SINKRONISASI ROMBONGAN: Slot kosong dibiarkan, tunggu semua pet selesai
+                            -- D. SINKRONISASI ROMBONGAN: Slot kosong dibiarkan, tunggu semua pet rombongan tuntas
                             local stageFinishedMap = {}
 
                             while State.MutasiRunning do
@@ -1625,19 +1692,17 @@ return function(ParentContainer, State, ZyloLib, Main)
                                         local isTargetMet = false
 
                                         if stageName == "Nightmare" then
-                                            -- Syarat Nightmare: Mutasi berubah jadi Nightmare ATAU tembus Unequip Age
                                             if pData.RawMutation == "A" or pData.Mutation == "Nightmare" or pData.Age >= stUnequipAge then
                                                 isTargetMet = true
                                             end
                                         else
-                                            -- Syarat Standar (XP / Elephant / 100 Age): Tembus Unequip Age
                                             if pData.Age >= stUnequipAge then
                                                 isTargetMet = true
                                             end
                                         end
 
                                         if isTargetMet then
-                                            -- PET SELESAI DI TAHAP INI: UNEQUIP & BIARKAN SLOT KOSONG!
+                                            -- PET INI TUNTAS DI TAHAP INI: UNEQUIP & BIARKAN SLOT KOSONG!
                                             updateStatusUI(string.format("[%s]: %s Capai Target (Age %d)! Slot ditahan kosong.", stageName, pData.Name, pData.Age), true)
                                             UnequipPetByUUID(u)
                                             stageFinishedMap[u] = true
@@ -1650,7 +1715,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                                 end
 
                                 if allDone then
-                                    updateStatusUI(string.format("[Tahap %s Selesai]: Seluruh rombongan siap lanjut!", stageName), true)
+                                    updateStatusUI(string.format("[Tahap %s Selesai]: Seluruh rombongan lulus!", stageName), true)
                                     task.wait(1)
                                     break
                                 end
@@ -1662,14 +1727,20 @@ return function(ParentContainer, State, ZyloLib, Main)
                         if not State.MutasiRunning then break end
                     end
 
-                    -- 4. FINIS: SELURUH RUTE SELESAI UNTUK ROMBONGAN INI
+                    -- E. BERSIHKAN BOOSTER TAHAP TERAKHIR SETELAH ROMBONGAN SELESAI
+                    if previousStageName then
+                        UnequipSupportPets(previousStageName)
+                        task.wait(0.2)
+                    end
+
+                    -- 4. PENGUNCIAN SUPLAI: HANYA KETIKA SELURUH TAHAP FINIS, PET DITANDAI SELESAI
                     if State.MutasiRunning then
                         for _, tPet in ipairs(currentBatch) do
                             State.CompletedPets[tPet.UUID] = true
                             State.CompletedPets[tostring(tPet.UUID):gsub("[{}]", "")] = true
                             UnequipPetByUUID(tPet.UUID)
                         end
-                        updateStatusUI("✓ Rombongan TUNTAS! Mengambil rombongan baru dari GBXP...", true)
+                        updateStatusUI("✓ Rombongan TUNTAS sampai tahap akhir! Menyuplai rombongan berikutnya...", true)
                         task.wait(1.5)
                     end
                 end
