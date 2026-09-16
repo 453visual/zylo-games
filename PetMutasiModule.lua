@@ -96,8 +96,8 @@ return function(ParentContainer, State, ZyloLib, Main)
     State.GBXPMaxEquip = State.GBXPMaxEquip or 1
     State.GBXPSelectMode = State.GBXPSelectMode or "auto"
 
-    -- Threshold Age per Tim
-    State.MutasiTeamThresholds = State.MutasiTeamThresholds or {
+    -- Threshold Age per Tim (Tersimpan independen untuk masing-masing tim)
+    local defaultTeamThresholds = {
         Elephant = { EquipAge = 20, UnequipAge = 0 },
         Machine = { EquipAge = 20, UnequipAge = 0 },
         Nightmare = { EquipAge = 20, UnequipAge = 0 },
@@ -106,6 +106,25 @@ return function(ParentContainer, State, ZyloLib, Main)
         GBXP = { EquipAge = 0, UnequipAge = 100, MaxEquip = 1, SelectMode = "auto" },
         Config = { EquipAge = 20, UnequipAge = 0 }
     }
+
+    State.MutasiTeamThresholds = State.MutasiTeamThresholds or {}
+    for catName, defThresh in pairs(defaultTeamThresholds) do
+        if not State.MutasiTeamThresholds[catName] then
+            State.MutasiTeamThresholds[catName] = {
+                EquipAge = defThresh.EquipAge,
+                UnequipAge = defThresh.UnequipAge,
+                MaxEquip = defThresh.MaxEquip,
+                SelectMode = defThresh.SelectMode
+            }
+        else
+            -- Pastikan tim non-GBXP tidak tertular nilai 0 dan 100 dari GBXP jika sesi sebelumnya sempat terganggu
+            if catName ~= "GBXP" and State.MutasiTeamThresholds[catName].EquipAge == 0 and State.MutasiTeamThresholds[catName].UnequipAge == 100 then
+                State.MutasiTeamThresholds[catName].EquipAge = defThresh.EquipAge
+                State.MutasiTeamThresholds[catName].UnequipAge = defThresh.UnequipAge
+            end
+        end
+    end
+
     if State.MutasiTeamThresholds.GBXP then
         State.MutasiTeamThresholds.GBXP.EquipAge = State.MutasiTeamThresholds.GBXP.EquipAge or 0
         State.MutasiTeamThresholds.GBXP.UnequipAge = State.MutasiTeamThresholds.GBXP.UnequipAge or 100
@@ -113,8 +132,10 @@ return function(ParentContainer, State, ZyloLib, Main)
         State.MutasiTeamThresholds.GBXP.SelectMode = State.MutasiTeamThresholds.GBXP.SelectMode or "auto"
     end
 
-    State.MutasiEquipAge = State.MutasiTeamThresholds[State.MutasiActiveCategory] and State.MutasiTeamThresholds[State.MutasiActiveCategory].EquipAge or (State.MutasiActiveCategory == "GBXP" and 0 or 20)
-    State.MutasiUnequipAge = State.MutasiTeamThresholds[State.MutasiActiveCategory] and State.MutasiTeamThresholds[State.MutasiActiveCategory].UnequipAge or (State.MutasiActiveCategory == "GBXP" and 100 or 0)
+    local currentActiveCat = State.MutasiActiveCategory or "Elephant"
+    local activeThresh = State.MutasiTeamThresholds[currentActiveCat] or defaultTeamThresholds[currentActiveCat] or { EquipAge = 20, UnequipAge = 0 }
+    State.MutasiEquipAge = activeThresh.EquipAge
+    State.MutasiUnequipAge = activeThresh.UnequipAge
 
     -- Tabel Seleksi Pet per Tim Kategori
     State.MutasiSelectedTeams = State.MutasiSelectedTeams or {
@@ -363,6 +384,8 @@ return function(ParentContainer, State, ZyloLib, Main)
     CreateTeamBadge(StatsScroll, "🧪", "GBXP", "GBXP", Color3.fromRGB(180, 140, 255), 84)
 
     -- Row 3B: Equip Age
+    local isUpdatingCategory = false
+
     local RowEq = Instance.new("Frame", ThreshBody)
     RowEq.Size = UDim2.new(1, 0, 0, 25)
     RowEq.BackgroundTransparency = 1
@@ -372,7 +395,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     EqLabel.Position = UDim2.new(0, 4, 0, 0)
     EqLabel.Size = UDim2.new(0.6, 0, 1, 0)
     EqLabel.BackgroundTransparency = 1
-    EqLabel.Text = "Equip Age"
+    EqLabel.Text = (State.MutasiActiveCategory == "GBXP") and "Equip Age" or ("Equip Age (" .. State.MutasiActiveCategory .. ")")
     EqLabel.TextColor3 = C.TEXT_W
     EqLabel.Font = Enum.Font.GothamMedium
     EqLabel.TextSize = 9.5
@@ -391,6 +414,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     eqStroke.Color = Color3.fromRGB(42, 50, 78)
 
     EqBox:GetPropertyChangedSignal("Text"):Connect(function()
+        if isUpdatingCategory then return end
         local num = tonumber(EqBox.Text)
         if num then
             State.MutasiEquipAge = num
@@ -413,7 +437,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     UneqLabel.Position = UDim2.new(0, 4, 0, 0)
     UneqLabel.Size = UDim2.new(0.6, 0, 1, 0)
     UneqLabel.BackgroundTransparency = 1
-    UneqLabel.Text = "Unequip Age"
+    UneqLabel.Text = (State.MutasiActiveCategory == "GBXP") and "Unequip Age" or ("Unequip Age (" .. State.MutasiActiveCategory .. ")")
     UneqLabel.TextColor3 = C.TEXT_W
     UneqLabel.Font = Enum.Font.GothamMedium
     UneqLabel.TextSize = 9.5
@@ -432,6 +456,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     unStroke.Color = Color3.fromRGB(42, 50, 78)
 
     UneqBox:GetPropertyChangedSignal("Text"):Connect(function()
+        if isUpdatingCategory then return end
         local num = tonumber(UneqBox.Text)
         if num then
             State.MutasiUnequipAge = num
@@ -444,7 +469,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end)
 
-    -- Row 3D: GBXP Max Equip (Pengatur Slot Target Pipeline)
+    -- Row 3D: GBXP Max Equip (Pengatur Slot Target Pipeline) - HANYA MUNCUL DI TAB GBXP!
     local RowMaxEquip = Instance.new("Frame", ThreshBody)
     RowMaxEquip.Size = UDim2.new(1, 0, 0, 25)
     RowMaxEquip.BackgroundTransparency = 1
@@ -474,6 +499,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     meStroke.Color = Color3.fromRGB(42, 50, 78)
 
     MaxEquipBox:GetPropertyChangedSignal("Text"):Connect(function()
+        if isUpdatingCategory then return end
         local num = tonumber(MaxEquipBox.Text)
         if num and num > 0 then
             State.GBXPMaxEquip = math.clamp(math.floor(num), 1, 8)
@@ -486,7 +512,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         end
     end)
 
-    -- Row 3E: GBXP Select Mode (auto / manual)
+    -- Row 3E: GBXP Select Mode (auto / manual) - HANYA MUNCUL DI TAB GBXP!
     local RowSelectMode = Instance.new("Frame", ThreshBody)
     RowSelectMode.Size = UDim2.new(1, 0, 0, 25)
     RowSelectMode.BackgroundTransparency = 1
@@ -813,41 +839,73 @@ return function(ParentContainer, State, ZyloLib, Main)
     -- 7. FUNGSI GANTI KATEGORI (SWITCH CATEGORY)
     -- =====================================================================
     SwitchCategory = function(catName)
+        if not catName then return end
+        isUpdatingCategory = true
         State.MutasiActiveCategory = catName
+        local isGBXP = (catName == "GBXP")
 
-        -- Update tombol pill sub-nav
-        for cName, data in pairs(CategoryButtons) do
-            local isActive = (cName == catName)
-            data.btn.BackgroundColor3 = isActive and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
-            data.btn.TextColor3 = isActive and Color3.fromRGB(255, 255, 255) or C.TEXT_M
-            data.stroke.Color = isActive and C.PURPLE or Color3.fromRGB(38, 45, 70)
-            data.stroke.Thickness = isActive and 1.5 or 1
+        -- 1. Update tombol pill sub-nav jika ada
+        if CategoryButtons then
+            for cName, data in pairs(CategoryButtons) do
+                if data and data.btn then
+                    local isActive = (cName == catName)
+                    data.btn.BackgroundColor3 = isActive and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
+                    data.btn.TextColor3 = isActive and Color3.fromRGB(255, 255, 255) or C.TEXT_M
+                    if data.stroke then
+                        data.stroke.Color = isActive and C.PURPLE or Color3.fromRGB(38, 45, 70)
+                        data.stroke.Thickness = isActive and 1.5 or 1
+                    end
+                end
+            end
         end
 
-        -- Update threshold values untuk tim ini
-        if State.MutasiTeamThresholds[catName] then
-            State.MutasiEquipAge = State.MutasiTeamThresholds[catName].EquipAge
-            State.MutasiUnequipAge = State.MutasiTeamThresholds[catName].UnequipAge
+        -- 2. Ambil nilai threshold spesifik untuk tim ini
+        local thData = State.MutasiTeamThresholds[catName]
+        if not thData then
+            local defs = {
+                GBXP = { EquipAge = 0, UnequipAge = 100, MaxEquip = 1, SelectMode = "auto" },
+                ["100 Age"] = { EquipAge = 100, UnequipAge = 0 },
+                Elephant = { EquipAge = 20, UnequipAge = 0 },
+                Machine = { EquipAge = 20, UnequipAge = 0 },
+                Nightmare = { EquipAge = 20, UnequipAge = 0 },
+                XP = { EquipAge = 20, UnequipAge = 0 },
+                Config = { EquipAge = 20, UnequipAge = 0 }
+            }
+            thData = defs[catName] or { EquipAge = 20, UnequipAge = 0 }
+            State.MutasiTeamThresholds[catName] = thData
         end
+
+        State.MutasiEquipAge = thData.EquipAge
+        State.MutasiUnequipAge = thData.UnequipAge
         EqBox.Text = tostring(State.MutasiEquipAge)
         UneqBox.Text = tostring(State.MutasiUnequipAge)
 
-        local isGBXP = (catName == "GBXP")
+        -- 3. KONTROL EKSKLUSIF: HANYA GBXP YANG MENAMPILKAN MAX EQUIP & SELECT MODE!
+        -- Tim lainnya (Elephant, Machine, Nightmare, 100 Age, XP): HANYA Equip Age & Unequip Age!
         RowMaxEquip.Visible = isGBXP
         RowSelectMode.Visible = isGBXP
+
+        -- Atur ukuran tinggi collapsible container
         if isThreshOpen then
-            updateThreshSize()
+            ThreshBody.Size = isGBXP and UDim2.new(1, 0, 0, 144) or UDim2.new(1, 0, 0, 88)
+        else
+            ThreshBody.Size = UDim2.new(1, 0, 0, 0)
         end
 
+        -- Sesuaikan teks judul dan label threshold
         if isGBXP then
+            thTitle.Text = "( GBXP Controller ) Threshold & Slot Pipeline"
             EqLabel.Text = "Equip Age"
             UneqLabel.Text = "Unequip Age"
-            MaxEquipBox.Text = tostring(State.GBXPMaxEquip or (State.MutasiTeamThresholds.GBXP and State.MutasiTeamThresholds.GBXP.MaxEquip) or 1)
-            SelectModeBtn.Text = (State.GBXPSelectMode or "auto") .. " ▾"
+            MaxEquipBox.Text = tostring(State.GBXPMaxEquip or thData.MaxEquip or 1)
+            SelectModeBtn.Text = (State.GBXPSelectMode or thData.SelectMode or "auto") .. " ▾"
         else
+            thTitle.Text = "( " .. catName .. " Team ) Threshold Age & Kg"
             EqLabel.Text = "Equip Age (" .. catName .. ")"
             UneqLabel.Text = "Unequip Age (" .. catName .. ")"
         end
+
+        isUpdatingCategory = false
 
         if updateThresholdTitle then updateThresholdTitle() end
         if updateTeamBadgesUI then updateTeamBadgesUI() end
@@ -1077,7 +1135,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             if isGBXP then
                 empty.Text = "Tidak ada pet Non-Favorite di inventory game yang cocok."
             else
-                empty.Text = "Belum ada pet FAVORITE di kategori ini. Silakan beri bintang/favorit pada pet di inventory game terlebih dahulu!"
+                empty.Text = "Belum ada pet FAVORITE (⭐) untuk Tim " .. activeCat .. ". Silakan beri bintang/favorit pada pet di inventory game terlebih dahulu!"
             end
             empty.TextColor3 = C.TEXT_M
             empty.Font = Enum.Font.GothamMedium
@@ -1090,8 +1148,13 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     task.defer(function()
-        if updateTeamBadgesUI then updateTeamBadgesUI() end
-        refreshPetList()
+        local initialCategory = State.MutasiActiveCategory or "Elephant"
+        if SwitchCategory then
+            SwitchCategory(initialCategory)
+        else
+            if updateTeamBadgesUI then updateTeamBadgesUI() end
+            if refreshPetList then refreshPetList() end
+        end
     end)
 
     -- =====================================================================
@@ -1121,16 +1184,14 @@ return function(ParentContainer, State, ZyloLib, Main)
     startStroke.Thickness = 1.5
 
     updateActionButton = function()
-        local isGBXP = (State.MutasiActiveCategory == "GBXP")
-        local suffix = isGBXP and " NM+LVL" or ""
         if not State.MutasiRunning then
             StartBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
-            StartBtn.Text = "⚡ START" .. suffix
-            StopBtn.Text = "STOP" .. suffix
+            StartBtn.Text = "⚡ START"
+            StopBtn.Text = "STOP"
         else
             StartBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 80)
-            StartBtn.Text = "RUNNING" .. suffix .. " (" .. State.MutasiMode .. ")"
-            StopBtn.Text = "STOP" .. suffix
+            StartBtn.Text = "RUNNING (" .. (State.MutasiMode or "Mode: A") .. ")"
+            StopBtn.Text = "STOP"
         end
     end
 
