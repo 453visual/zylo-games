@@ -1,11 +1,15 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6.5 - COMPLETE ENGINE)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.7.0 - ULTIMATE ENGINE)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
---  Mode Pipeline: Modal Popup Selector (Mode A - F) dengan Penjelasan Lengkap
---  Presisi Penuh (Full Width hingga Titik Kanan) & Tombol START / STOP
---  Status: 100% TERINTEGRASI DATASET ASLI + RUNNER ENGINE MODE A S/D F
+--  Sub-Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
+--  Mode Pipeline: Modal Popup Selector (Mode A - F)
+--  Specialized Filters:
+--    - Elephant, Machine, Nightmare, 100 Age, XP: HANYA PET FAVORIT
+--    - GBXP: HANYA PET NON-FAVORIT (Feeder / Leveling Pet)
+--    - Pinned Selected Pets di Bagian Atas dengan UI Pembeda Jelas
+--    - Search Bar ("Select Optional") untuk Mencari Pet Tanpa Perlu Scroll
+--  Status: 100% TERINTEGRASI ENGINE OTOMASI RESMI DENGAN REMOTE ASLI GAME
 -- =========================================================================
 
 return function(ParentContainer, State, ZyloLib, Main)
@@ -43,7 +47,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- SERVICES & REMOTES RESMI DARI DECOMPILE & DARK DEX
+    -- SERVICES & REMOTES RESMI DARI GAME MODULES
     -- =====================================================================
     local GameEvents = ReplicatedStorage:WaitForChild("GameEvents", 10)
     local PetsServiceRemote = GameEvents and GameEvents:FindFirstChild("PetsService")
@@ -66,29 +70,51 @@ return function(ParentContainer, State, ZyloLib, Main)
         PetUtilities = require(ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("PetServices", 5):WaitForChild("PetUtilities", 5))
     end)
 
-    -- State Inisialisasi Mutasi
+    -- =====================================================================
+    -- STATE INISIALISASI
+    -- =====================================================================
     State.MutasiActiveCategory = State.MutasiActiveCategory or "Elephant"
     State.MutasiEquipAge = State.MutasiEquipAge or 20
     State.MutasiUnequipAge = State.MutasiUnequipAge or 0
     State.MutasiMode = State.MutasiMode or "Mode: A"
     State.MutasiRunning = State.MutasiRunning or false
-    State.MutasiSelectedPets = State.MutasiSelectedPets or {}
     State.MutasiSearchQuery = State.MutasiSearchQuery or ""
     State.CompletedPets = State.CompletedPets or {}
     State.MutasiStatusText = "IDLE - Siap Memulai Pipeline"
 
-    -- Container Utama
+    -- Tabel Seleksi Pet per Tim Kategori:
+    -- Elephant, Machine, Nightmare, 100 Age, XP, GBXP
+    State.MutasiSelectedTeams = State.MutasiSelectedTeams or {
+        Elephant = {},
+        Machine = {},
+        Nightmare = {},
+        ["100 Age"] = {},
+        XP = {},
+        GBXP = {}
+    }
+    for _, cat in ipairs({"Elephant", "Machine", "Nightmare", "100 Age", "XP", "GBXP"}) do
+        State.MutasiSelectedTeams[cat] = State.MutasiSelectedTeams[cat] or {}
+    end
+
+    -- =====================================================================
+    -- CONTAINER UTAMA
+    -- =====================================================================
     local MutasiWrapper = Instance.new("Frame", ParentContainer)
-    MutasiWrapper.Size = UDim2.new(1, 0, 0, 472)
+    MutasiWrapper.Size = UDim2.new(1, 0, 0, 480)
     MutasiWrapper.BackgroundTransparency = 1
 
     local MutasiLayout = Instance.new("UIListLayout", MutasiWrapper)
     MutasiLayout.SortOrder = Enum.SortOrder.LayoutOrder
     MutasiLayout.Padding = UDim.new(0, 6)
 
+    -- Forward declarations
+    local updateThresholdTitle
+    local updateActionButton
+    local refreshPetList
+    local updateStatusUI
+
     -- =====================================================================
     -- 1. SUB-NAVIGASI KATEGORI (FULL WIDTH PILLS ROW)
-    -- Urutan: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config + ⚙
     -- =====================================================================
     local NavRow = Instance.new("Frame", MutasiWrapper)
     NavRow.Size = UDim2.new(1, 0, 0, 28)
@@ -122,10 +148,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     local totalWeight = 7.0
 
     local CategoryButtons = {}
-    local updateThresholdTitle
-    local updateActionButton
-    local refreshPetList
-    local updateStatusUI
 
     for _, catData in ipairs(Categories) do
         local catName = catData.name
@@ -173,14 +195,23 @@ return function(ParentContainer, State, ZyloLib, Main)
     gearStroke.Color = Color3.fromRGB(38, 45, 70)
 
     GearBtn.MouseButton1Click:Connect(function()
-        print("[ZyloHub] Settings button clicked")
+        State.MutasiActiveCategory = "Config"
+        for cName, data in pairs(CategoryButtons) do
+            local isActive = (cName == "Config")
+            data.btn.BackgroundColor3 = isActive and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
+            data.btn.TextColor3 = isActive and Color3.fromRGB(255, 255, 255) or C.TEXT_M
+            data.stroke.Color = isActive and C.PURPLE or Color3.fromRGB(38, 45, 70)
+            data.stroke.Thickness = isActive and 1.5 or 1
+        end
+        if updateThresholdTitle then updateThresholdTitle() end
+        if refreshPetList then refreshPetList() end
     end)
 
     -- =====================================================================
     -- 2. DROPDOWN HEADER: ( [Category] Team ) Threshold Age & Kg
     -- =====================================================================
     local ThreshHeader = Instance.new("TextButton", MutasiWrapper)
-    ThreshHeader.Size = UDim2.new(1, 0, 0, 30)
+    ThreshHeader.Size = UDim2.new(1, 0, 0, 28)
     ThreshHeader.BackgroundColor3 = Color3.fromRGB(13, 16, 32)
     ThreshHeader.Text = ""
     ThreshHeader.LayoutOrder = 2
@@ -215,7 +246,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     -- 3. BODY COLLAPSIBLE: STATS ROW + EQUIP/UNEQUIP AGE INPUTS
     -- =====================================================================
     local ThreshBody = Instance.new("Frame", MutasiWrapper)
-    ThreshBody.Size = UDim2.new(1, 0, 0, 86)
+    ThreshBody.Size = UDim2.new(1, 0, 0, 84)
     ThreshBody.BackgroundTransparency = 1
     ThreshBody.LayoutOrder = 3
 
@@ -232,12 +263,12 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     -- Row 3A: Inline Stats Row
     local StatsScroll = Instance.new("ScrollingFrame", ThreshBody)
-    StatsScroll.Size = UDim2.new(1, 0, 0, 22)
+    StatsScroll.Size = UDim2.new(1, 0, 0, 20)
     StatsScroll.BackgroundTransparency = 1
     StatsScroll.BorderSizePixel = 0
     StatsScroll.ScrollBarThickness = 0
     StatsScroll.ScrollingDirection = Enum.ScrollingDirection.X
-    StatsScroll.CanvasSize = UDim2.new(0, 480, 0, 22)
+    StatsScroll.CanvasSize = UDim2.new(0, 480, 0, 20)
     StatsScroll.LayoutOrder = 1
 
     local StatsLayout = Instance.new("UIListLayout", StatsScroll)
@@ -266,7 +297,7 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     -- Row 3B: Equip Age
     local RowEq = Instance.new("Frame", ThreshBody)
-    RowEq.Size = UDim2.new(1, 0, 0, 26)
+    RowEq.Size = UDim2.new(1, 0, 0, 25)
     RowEq.BackgroundTransparency = 1
     RowEq.LayoutOrder = 2
 
@@ -299,7 +330,7 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     -- Row 3C: Unequip Age
     local RowUneq = Instance.new("Frame", ThreshBody)
-    RowUneq.Size = UDim2.new(1, 0, 0, 26)
+    RowUneq.Size = UDim2.new(1, 0, 0, 25)
     RowUneq.BackgroundTransparency = 1
     RowUneq.LayoutOrder = 3
 
@@ -331,10 +362,10 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 4. SECTION HEADER: Select Pet [Category] Team (Favorite List)
+    -- 4. SECTION HEADER: Select Pet [Category] Team
     -- =====================================================================
     local PetListHeader = Instance.new("Frame", MutasiWrapper)
-    PetListHeader.Size = UDim2.new(1, 0, 0, 22)
+    PetListHeader.Size = UDim2.new(1, 0, 0, 20)
     PetListHeader.BackgroundTransparency = 1
     PetListHeader.LayoutOrder = 4
 
@@ -342,26 +373,263 @@ return function(ParentContainer, State, ZyloLib, Main)
     ListTitle.Position = UDim2.new(0, 4, 0, 0)
     ListTitle.Size = UDim2.new(1, -8, 1, 0)
     ListTitle.BackgroundTransparency = 1
-    ListTitle.Text = "Select Pet " .. State.MutasiActiveCategory .. " Team (Favorite List)"
+    ListTitle.Text = "Select Pet " .. State.MutasiActiveCategory .. " Team"
     ListTitle.TextColor3 = C.TEXT_M
     ListTitle.Font = Enum.Font.GothamMedium
     ListTitle.TextSize = 9
     ListTitle.TextXAlignment = Enum.TextXAlignment.Left
 
     -- =====================================================================
-    -- 5. DAFTAR PET (CARD LIST SESUAI SCREENSHOT DENGAN FILTER PURE PET)
+    -- 5. "SELECT OPTIONAL" QUICK SEARCH BAR (PERMINTAAN #2)
+    -- Memungkinkan user mencari / mengetik pet langsung tanpa scroll manual
+    -- =====================================================================
+    local SearchBarRow = Instance.new("Frame", MutasiWrapper)
+    SearchBarRow.Size = UDim2.new(1, 0, 0, 28)
+    SearchBarRow.BackgroundColor3 = Color3.fromRGB(13, 16, 32)
+    SearchBarRow.LayoutOrder = 5
+    Instance.new("UICorner", SearchBarRow).CornerRadius = UDim.new(0, 6)
+    local sbBoxStroke = Instance.new("UIStroke", SearchBarRow)
+    sbBoxStroke.Color = Color3.fromRGB(40, 48, 76)
+
+    local SearchIcon = Instance.new("TextLabel", SearchBarRow)
+    SearchIcon.Position = UDim2.new(0, 8, 0, 0)
+    SearchIcon.Size = UDim2.new(0, 16, 1, 0)
+    SearchIcon.BackgroundTransparency = 1
+    SearchIcon.Text = "🔍"
+    SearchIcon.TextColor3 = C.TEXT_M
+    SearchIcon.Font = Enum.Font.GothamBold
+    SearchIcon.TextSize = 11
+
+    local SearchInput = Instance.new("TextBox", SearchBarRow)
+    SearchInput.Position = UDim2.new(0, 28, 0, 0)
+    SearchInput.Size = UDim2.new(1, -56, 1, 0)
+    SearchInput.BackgroundTransparency = 1
+    SearchInput.PlaceholderText = "Select Optional / Cari nama pet, KG, atau Age..."
+    SearchInput.PlaceholderColor3 = Color3.fromRGB(115, 128, 160)
+    SearchInput.Text = State.MutasiSearchQuery or ""
+    SearchInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SearchInput.Font = Enum.Font.GothamMedium
+    SearchInput.TextSize = 9
+    SearchInput.TextXAlignment = Enum.TextXAlignment.Left
+    SearchInput.ClearTextOnFocus = false
+
+    local ClearSearchBtn = Instance.new("TextButton", SearchBarRow)
+    ClearSearchBtn.Position = UDim2.new(1, -24, 0.5, -9)
+    ClearSearchBtn.Size = UDim2.new(0, 18, 0, 18)
+    ClearSearchBtn.BackgroundColor3 = Color3.fromRGB(24, 28, 48)
+    ClearSearchBtn.Text = "✕"
+    ClearSearchBtn.TextColor3 = Color3.fromRGB(160, 175, 210)
+    ClearSearchBtn.Font = Enum.Font.GothamBold
+    ClearSearchBtn.TextSize = 9
+    ClearSearchBtn.Visible = (SearchInput.Text ~= "")
+    Instance.new("UICorner", ClearSearchBtn).CornerRadius = UDim.new(0, 9)
+
+    ClearSearchBtn.MouseButton1Click:Connect(function()
+        SearchInput.Text = ""
+        State.MutasiSearchQuery = ""
+        ClearSearchBtn.Visible = false
+        if refreshPetList then refreshPetList() end
+    end)
+
+    SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
+        State.MutasiSearchQuery = SearchInput.Text:lower()
+        ClearSearchBtn.Visible = (SearchInput.Text ~= "")
+        if refreshPetList then refreshPetList() end
+    end)
+
+    -- =====================================================================
+    -- 6. SCANNER SISTEM: IS FAVORITED & GET ALL PETS
+    -- =====================================================================
+    local function IsPetFavorited(uuid, item)
+        if not uuid and item then
+            uuid = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value)
+        end
+        local sUuid = tostring(uuid or "")
+        local stripped = sUuid:gsub("[{}]", "")
+
+        if DataService and sUuid ~= "" then
+            local ok, data = pcall(function() return DataService:GetData() end)
+            if ok and data and data.PetsData and data.PetsData.PetInventory and data.PetsData.PetInventory.Data then
+                local entry = data.PetsData.PetInventory.Data[sUuid] or data.PetsData.PetInventory.Data[stripped]
+                if entry and entry.PetData and entry.PetData.IsFavorite ~= nil then
+                    return entry.PetData.IsFavorite == true
+                end
+            end
+        end
+
+        if PetsServiceMod and PetsServiceMod.GetPlayerPetData and sUuid ~= "" then
+            local ok, info = pcall(function() return PetsServiceMod:GetPlayerPetData(sUuid) end)
+            if ok and info and info.PetData and info.PetData.IsFavorite ~= nil then
+                return info.PetData.IsFavorite == true
+            end
+        end
+
+        if item then
+            local isFavAttr = item:GetAttribute("IsFavorite") or item:GetAttribute("Favorite") or item:GetAttribute("FAVORITE") or item:GetAttribute("IsFav")
+            if isFavAttr == true or isFavAttr == 1 or isFavAttr == "true" then return true end
+            local favVal = item:FindFirstChild("IsFavorite") or item:FindFirstChild("Favorite") or item:FindFirstChild("Fav")
+            if favVal and (favVal.Value == true or favVal.Value == 1) then return true end
+            local petData = item:FindFirstChild("PetData")
+            if petData then
+                local pFav = petData:FindFirstChild("IsFavorite") or petData:FindFirstChild("Favorite") or petData:FindFirstChild("Fav")
+                if pFav and (pFav.Value == true or pFav.Value == 1) then return true end
+            end
+        end
+        return false
+    end
+
+    local function GetAllPets()
+        local pets = {}
+        local seenUUIDs = {}
+        local equippedMap = {}
+
+        if DataService then
+            local ok, data = pcall(function() return DataService:GetData() end)
+            if ok and data and data.PetsData and data.PetsData.EquippedPets then
+                for _, u in ipairs(data.PetsData.EquippedPets) do
+                    local sU = tostring(u)
+                    equippedMap[sU] = true
+                    equippedMap[sU:gsub("[{}]", "")] = true
+                end
+            end
+        end
+
+        local toolLookup = {}
+        local function registerTools(container)
+            if not container then return end
+            for _, item in ipairs(container:GetChildren()) do
+                if item:IsA("Tool") and not item:FindFirstChild("Item_String") then
+                    local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value)
+                    if u then
+                        local sU = tostring(u)
+                        toolLookup[sU] = item
+                        toolLookup[sU:gsub("[{}]", "")] = item
+                    end
+                end
+            end
+        end
+        if LocalPlayer then
+            registerTools(LocalPlayer:FindFirstChild("Backpack"))
+            registerTools(LocalPlayer.Character)
+        end
+
+        -- 1. Scan DataService Inventory
+        if DataService then
+            local ok, data = pcall(function() return DataService:GetData() end)
+            if ok and data and data.PetsData and data.PetsData.PetInventory and data.PetsData.PetInventory.Data then
+                for uuid, entry in pairs(data.PetsData.PetInventory.Data) do
+                    local petData = entry.PetData or {}
+                    local rawType = entry.PetType or petData.Species or petData.Name or "Pet"
+                    local cleanUUID = tostring(uuid)
+                    local strippedUUID = cleanUUID:gsub("[{}]", "")
+
+                    local rawMut = petData.MutationType or "Normal"
+                    local mutation = getAutoMutationName(rawMut)
+                    local level = tonumber(petData.Level or petData.Lvl or 1) or 1
+                    local numWeight = 0
+                    local weightStr = "?"
+
+                    if PetUtilities and PetUtilities.CalculateWeight and petData.BaseWeight then
+                        local calcW = PetUtilities:CalculateWeight(petData.BaseWeight, level) * 100
+                        numWeight = math.round(calcW) / 100
+                        weightStr = string.format("%.2f", numWeight)
+                    elseif petData.BaseWeight then
+                        numWeight = tonumber(petData.BaseWeight) or 0
+                        weightStr = tostring(petData.BaseWeight)
+                    end
+
+                    local toolObj = toolLookup[cleanUUID] or toolLookup[strippedUUID]
+                    local speciesName = rawType
+                    if toolObj then
+                        local cleanToolName = toolObj.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
+                        if cleanToolName ~= "" and not cleanToolName:lower():find("tool") then
+                            speciesName = cleanToolName
+                        end
+                    end
+
+                    local isFav = (petData.IsFavorite == true) or IsPetFavorited(cleanUUID, toolObj)
+                    local isInGarden = (equippedMap[cleanUUID] == true) or (equippedMap[strippedUUID] == true)
+
+                    seenUUIDs[cleanUUID] = true
+                    seenUUIDs[strippedUUID] = true
+
+                    table.insert(pets, {
+                        UUID = cleanUUID,
+                        Name = speciesName,
+                        Mutation = mutation,
+                        RawMutation = rawMut,
+                        Age = level,
+                        Weight = weightStr,
+                        NumericWeight = numWeight,
+                        IsFavorite = isFav,
+                        InGarden = isInGarden,
+                        Tool = toolObj
+                    })
+                end
+            end
+        end
+
+        -- 2. Fallback scan dari Backpack & Character Tools
+        local function scanFallbackTools(container)
+            if not container then return end
+            for _, item in ipairs(container:GetChildren()) do
+                if item:IsA("Tool") and not item:FindFirstChild("Item_String") then
+                    local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value) or item.Name
+                    local cleanUUID = tostring(u)
+                    local strippedUUID = cleanUUID:gsub("[{}]", "")
+
+                    if not seenUUIDs[cleanUUID] and not seenUUIDs[strippedUUID] then
+                        seenUUIDs[cleanUUID] = true
+                        seenUUIDs[strippedUUID] = true
+
+                        local cleanSpecies = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
+                        local weightStr = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "?"
+                        local age = tonumber(item.Name:match("%[Age%s*(%d+)%]") or item.Name:match("Age%s*(%d+)")) or 1
+                        local rawMut = item:GetAttribute("Mutation") or (item.Name:match("%[(.-)%]") or "Normal")
+                        local isFav = IsPetFavorited(cleanUUID, item)
+
+                        table.insert(pets, {
+                            UUID = cleanUUID,
+                            Name = cleanSpecies,
+                            Mutation = getAutoMutationName(rawMut),
+                            RawMutation = rawMut,
+                            Age = age,
+                            Weight = weightStr,
+                            NumericWeight = tonumber(weightStr) or 0,
+                            IsFavorite = isFav,
+                            InGarden = false,
+                            Tool = item
+                        })
+                    end
+                end
+            end
+        end
+        if LocalPlayer then
+            scanFallbackTools(LocalPlayer:FindFirstChild("Backpack"))
+            scanFallbackTools(LocalPlayer.Character)
+        end
+
+        return pets
+    end
+
+    -- =====================================================================
+    -- 7. DAFTAR PET DENGAN SORTING SELECTED DI ATAS & FILTER SPESIFIK
+    --  - Elephant, Machine, Nightmare, 100 Age, XP: HANYA PET FAVORIT (PERBAIKAN #1)
+    --  - GBXP: HANYA PET NON-FAVORIT (PERBAIKAN #3)
+    --  - Selected Pets ditaruh paling atas dengan UI pembeda jelas
     -- =====================================================================
     local PetListScroll = Instance.new("ScrollingFrame", MutasiWrapper)
-    PetListScroll.Size = UDim2.new(1, 0, 0, 150)
+    PetListScroll.Size = UDim2.new(1, 0, 0, 145)
     PetListScroll.BackgroundColor3 = Color3.fromRGB(9, 12, 22)
     PetListScroll.ScrollBarThickness = 3
     PetListScroll.ScrollBarImageColor3 = C.PURPLE
-    PetListScroll.LayoutOrder = 5
+    PetListScroll.LayoutOrder = 6
     Instance.new("UICorner", PetListScroll).CornerRadius = UDim.new(0, 8)
     local plsStroke = Instance.new("UIStroke", PetListScroll)
     plsStroke.Color = Color3.fromRGB(30, 36, 60)
 
     local PlsLayout = Instance.new("UIListLayout", PetListScroll)
+    PlsLayout.SortOrder = Enum.SortOrder.LayoutOrder
     PlsLayout.Padding = UDim.new(0, 4)
     local PlsPadding = Instance.new("UIPadding", PetListScroll)
     PlsPadding.PaddingTop = UDim.new(0, 6)
@@ -369,74 +637,42 @@ return function(ParentContainer, State, ZyloLib, Main)
     PlsPadding.PaddingLeft = UDim.new(0, 6)
     PlsPadding.PaddingRight = UDim.new(0, 6)
 
-    -- Filter item consumable
-    local BLACKLIST_ITEM_KEYWORDS = {
-        "shard", "treat", "reroll", "pack", "bundle", "crate", "chest", "box", "gift", 
-        "potion", "elixir", "scroll", "book", "tome", "ticket", "token", "pass", "badge",
-        "watering can", "sprinkler", "shovel", "hoe", "net", "fertilizer"
-    }
-
-    local function isPurePetTool(tool)
-        if not tool:IsA("Tool") then return false end
-        if tool:FindFirstChild("Item_String") then return false end
-        local nLower = tool.Name:lower()
-        if nLower:find("seed") or nLower:find("egg") then return false end
-        for _, kw in ipairs(BLACKLIST_ITEM_KEYWORDS) do
-            if nLower:find(kw) then return false end
-        end
-        return (tool:FindFirstChild("PetData") ~= nil) or (not tool:FindFirstChild("PetEggToolLocal"))
-    end
-
-    local function GetBackpackPets()
-        local pets = {}
-        local bp = LocalPlayer and LocalPlayer:FindFirstChild("Backpack")
-        local char = LocalPlayer and LocalPlayer.Character
-        local function scan(container)
-            if not container then return end
-            for _, tool in ipairs(container:GetChildren()) do
-                if isPurePetTool(tool) then
-                    local pName = tool.Name:gsub("%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
-                    local mutation = tool:GetAttribute("Mutation") or (tool.Name:match("%[(.-)%]") or "Normal")
-                    local age = tool:GetAttribute("Age") or tonumber(tool.Name:match("Age%s*(%d+)")) or 1
-                    local weight = tool:GetAttribute("Weight") or tonumber(tool.Name:match("(%d+%.?%d*)%s*KG")) or 5.0
-                    local uuid = tool:GetAttribute("UUID") or tool.Name
-
-                    table.insert(pets, {
-                        UUID = uuid,
-                        Name = pName,
-                        Mutation = mutation,
-                        Age = age,
-                        Weight = weight,
-                        Tool = tool
-                    })
-                end
-            end
-        end
-        scan(bp)
-        scan(char)
-        return pets
-    end
-
     refreshPetList = function()
-        ListTitle.Text = "Select Pet " .. State.MutasiActiveCategory .. " Team (Favorite List)"
+        local activeCat = State.MutasiActiveCategory or "Elephant"
+        local isGBXP = (activeCat == "GBXP")
+
+        -- Update judul section header
+        if isGBXP then
+            ListTitle.Text = "Select Pet GBXP Team (Non-Favorite / Feeder List)"
+        elseif activeCat == "Config" then
+            ListTitle.Text = "Configuration & Delays"
+        else
+            ListTitle.Text = "Select Pet " .. activeCat .. " Team (Favorite List)"
+        end
 
         for _, c in ipairs(PetListScroll:GetChildren()) do
-            if c:IsA("TextButton") or c:IsA("TextLabel") then c:Destroy() end
+            if c:IsA("TextButton") or c:IsA("TextLabel") or c:IsA("Frame") then
+                c:Destroy()
+            end
         end
 
-        local pets = GetBackpackPets()
-        local count = 0
+        local allPets = GetAllPets()
 
+        -- Update counter stat badges
         local cEle, cMac, cNM, c100, cXP, cGBXP = 0, 0, 0, 0, 0, 0
-        for _, p in ipairs(pets) do
+        for _, p in ipairs(allPets) do
             local pNameLow = p.Name:lower()
             local mLow = p.Mutation:lower()
-            if pNameLow:find("elephant") or mLow:find("elephant") then cEle = cEle + 1 end
-            if pNameLow:find("machine") or mLow:find("machine") or mLow:find("mechanic") then cMac = cMac + 1 end
-            if mLow:find("nightmare") or mLow:find("mutasi") then cNM = cNM + 1 end
-            if p.Age >= 100 then c100 = c100 + 1 end
-            if mLow:find("xp") and not mLow:find("gbxp") then cXP = cXP + 1 end
-            if mLow:find("gbxp") then cGBXP = cGBXP + 1 end
+            if p.IsFavorite then
+                if pNameLow:find("elephant") or mLow:find("elephant") then cEle = cEle + 1 end
+                if pNameLow:find("machine") or mLow:find("machine") or mLow:find("mechanic") then cMac = cMac + 1 end
+                if mLow:find("nightmare") or p.RawMutation == "A" then cNM = cNM + 1 end
+                if p.Age >= 100 then c100 = c100 + 1 end
+                if mLow:find("xp") and not mLow:find("gbxp") then cXP = cXP + 1 end
+            else
+                -- GBXP khusus pet non-favorit
+                cGBXP = cGBXP + 1
+            end
         end
         statEle.Text  = "🐘 Elephant (" .. cEle .. ")"
         statMac.Text  = "⚙️ Machine (" .. cMac .. ")"
@@ -445,27 +681,106 @@ return function(ParentContainer, State, ZyloLib, Main)
         statXP.Text   = "📘 XP (" .. cXP .. ")"
         statGBXP.Text = "🧪 GBXP (" .. cGBXP .. ")"
 
-        for _, pet in ipairs(pets) do
+        if activeCat == "Config" then
+            local cfgInfo = Instance.new("TextLabel", PetListScroll)
+            cfgInfo.Size = UDim2.new(1, 0, 1, 0)
+            cfgInfo.BackgroundTransparency = 1
+            cfgInfo.Text = "Pengaturan Otomasi: Gunakan slider delay dan target Age di atas.\nTekan tab kategori lain untuk memilih pet tim."
+            cfgInfo.TextColor3 = C.TEXT_M
+            cfgInfo.Font = Enum.Font.GothamMedium
+            cfgInfo.TextSize = 9
+            PetListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+            return
+        end
+
+        -- Filter list sesuai tab yang aktif:
+        -- Elephant, Nightmare, Machine, 100 Age, XP -> HANYA PET FAVORIT
+        -- GBXP -> HANYA PET NON-FAVORIT
+        local filtered = {}
+        for _, p in ipairs(allPets) do
+            local matchesFavoriteRule = false
+            if isGBXP then
+                matchesFavoriteRule = (p.IsFavorite == false)
+            else
+                matchesFavoriteRule = (p.IsFavorite == true)
+            end
+
+            if matchesFavoriteRule then
+                -- Filter pencarian teks ("Select Optional")
+                local matchesSearch = true
+                if State.MutasiSearchQuery and State.MutasiSearchQuery ~= "" then
+                    local q = State.MutasiSearchQuery
+                    local nLow = p.Name:lower()
+                    local mLow = p.Mutation:lower()
+                    local aStr = tostring(p.Age)
+                    local wStr = tostring(p.Weight):lower()
+                    if not (nLow:find(q, 1, true) or mLow:find(q, 1, true) or aStr:find(q, 1, true) or wStr:find(q, 1, true)) then
+                        matchesSearch = false
+                    end
+                end
+
+                if matchesSearch then
+                    table.insert(filtered, p)
+                end
+            end
+        end
+
+        local teamMap = State.MutasiSelectedTeams[activeCat] or {}
+
+        -- SORTING: Pet yang SUDAH DIPILIH ditempatkan di PALING ATAS! (PERBAIKAN #1)
+        table.sort(filtered, function(a, b)
+            local aSel = (teamMap[a.UUID] == true) or (teamMap[tostring(a.UUID):gsub("[{}]", "")] == true)
+            local bSel = (teamMap[b.UUID] == true) or (teamMap[tostring(b.UUID):gsub("[{}]", "")] == true)
+            if aSel ~= bSel then
+                return aSel == true -- Selected placed first!
+            end
+            if a.Age ~= b.Age then
+                return a.Age > b.Age
+            end
+            return a.Name < b.Name
+        end)
+
+        local count = 0
+        for idx, pet in ipairs(filtered) do
             count = count + 1
-            local isSelected = State.MutasiSelectedPets[pet.UUID] or false
-            local displayText = string.format("[%s] %s | Age %s | %.2f KG", pet.Mutation, pet.Name, tostring(pet.Age), pet.Weight)
+            local cleanUUID = pet.UUID
+            local isSelected = (teamMap[cleanUUID] == true) or (teamMap[tostring(cleanUUID):gsub("[{}]", "")] == true)
 
             local itemBtn = Instance.new("TextButton", PetListScroll)
-            itemBtn.Size = UDim2.new(1, 0, 0, 26)
-            itemBtn.BackgroundColor3 = isSelected and Color3.fromRGB(68, 28, 115) or Color3.fromRGB(15, 19, 36)
-            itemBtn.Text = displayText
-            itemBtn.TextColor3 = isSelected and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(220, 225, 245)
-            itemBtn.Font = Enum.Font.GothamBold
-            itemBtn.TextSize = 8.5
-            itemBtn.TextXAlignment = Enum.TextXAlignment.Center
+            itemBtn.Size = UDim2.new(1, 0, 0, 28)
+            itemBtn.LayoutOrder = isSelected and idx or (1000 + idx)
             Instance.new("UICorner", itemBtn).CornerRadius = UDim.new(0, 6)
 
             local iStroke = Instance.new("UIStroke", itemBtn)
-            iStroke.Color = isSelected and C.PURPLE_L or Color3.fromRGB(35, 42, 65)
-            iStroke.Thickness = isSelected and 1.5 or 1
+
+            -- UI Pembeda Jelas Antara Selected vs Unselected (PERBAIKAN #1)
+            if isSelected then
+                itemBtn.BackgroundColor3 = Color3.fromRGB(56, 22, 98) -- Cosmic Glowing Purple
+                itemBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                itemBtn.Font = Enum.Font.GothamBold
+                itemBtn.TextSize = 8.5
+                iStroke.Color = Color3.fromRGB(168, 85, 247)
+                iStroke.Thickness = 1.5
+
+                local favTag = pet.IsFavorite and "⭐" or "🧪"
+                itemBtn.Text = string.format("[✓ TERPILIH] %s [%s] %s | Age %s | %s KG", favTag, pet.Mutation, pet.Name, tostring(pet.Age), tostring(pet.Weight))
+            else
+                itemBtn.BackgroundColor3 = Color3.fromRGB(13, 17, 32) -- Dark Obsidian Normal
+                itemBtn.TextColor3 = Color3.fromRGB(210, 218, 240)
+                itemBtn.Font = Enum.Font.GothamMedium
+                itemBtn.TextSize = 8.5
+                iStroke.Color = Color3.fromRGB(34, 40, 64)
+                iStroke.Thickness = 1
+
+                local favTag = pet.IsFavorite and "⭐ " or ""
+                itemBtn.Text = string.format("%s[%s] %s | Age %s | %s KG", favTag, pet.Mutation, pet.Name, tostring(pet.Age), tostring(pet.Weight))
+            end
 
             itemBtn.MouseButton1Click:Connect(function()
-                State.MutasiSelectedPets[pet.UUID] = not State.MutasiSelectedPets[pet.UUID]
+                local newSel = not isSelected
+                teamMap[cleanUUID] = newSel
+                teamMap[tostring(cleanUUID):gsub("[{}]", "")] = newSel
+                State.MutasiSelectedTeams[activeCat] = teamMap
                 refreshPetList()
             end)
         end
@@ -474,25 +789,30 @@ return function(ParentContainer, State, ZyloLib, Main)
             local empty = Instance.new("TextLabel", PetListScroll)
             empty.Size = UDim2.new(1, 0, 1, 0)
             empty.BackgroundTransparency = 1
-            empty.Text = "Belum ada pet murni terdeteksi di Backpack / Karakter."
+            if isGBXP then
+                empty.Text = "Tidak ada pet Non-Favorite yang cocok dengan pencarian."
+            else
+                empty.Text = "Belum ada pet FAVORITE di kategori ini. Silakan beri bintang/favorit pada pet di inventory game terlebih dahulu!"
+            end
             empty.TextColor3 = C.TEXT_M
             empty.Font = Enum.Font.GothamMedium
             empty.TextSize = 8.5
+            empty.TextWrapped = true
             PetListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
         else
-            PetListScroll.CanvasSize = UDim2.new(0, 0, 0, count * 30 + 12)
+            PetListScroll.CanvasSize = UDim2.new(0, 0, 0, count * 32 + 12)
         end
     end
 
     task.defer(refreshPetList)
 
     -- =====================================================================
-    -- 6. BOTTOM ACTION BUTTONS: [ ⚡ START ] [ STOP ] [ Mode: A ▾ ]
+    -- 8. BOTTOM ACTION BUTTONS: [ ⚡ START ] [ STOP ] [ Mode: A ▾ ]
     -- =====================================================================
     local ActionRow = Instance.new("Frame", MutasiWrapper)
     ActionRow.Size = UDim2.new(1, 0, 0, 32)
     ActionRow.BackgroundTransparency = 1
-    ActionRow.LayoutOrder = 6
+    ActionRow.LayoutOrder = 7
 
     local ActLayout = Instance.new("UIListLayout", ActionRow)
     ActLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -544,12 +864,12 @@ return function(ParentContainer, State, ZyloLib, Main)
     modeStroke.Thickness = 1.5
 
     -- =====================================================================
-    -- 7. STATUS BAR & ACTIVITY MONITOR (LIVE REAL-TIME FEEDBACK)
+    -- 9. STATUS BAR & ACTIVITY MONITOR
     -- =====================================================================
     local StatusBar = Instance.new("Frame", MutasiWrapper)
     StatusBar.Size = UDim2.new(1, 0, 0, 24)
     StatusBar.BackgroundColor3 = Color3.fromRGB(11, 14, 28)
-    StatusBar.LayoutOrder = 7
+    StatusBar.LayoutOrder = 8
     Instance.new("UICorner", StatusBar).CornerRadius = UDim.new(0, 6)
     local sbStroke = Instance.new("UIStroke", StatusBar)
     sbStroke.Color = Color3.fromRGB(38, 46, 75)
@@ -587,8 +907,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 8. MODAL POPUP: PILIHAN MODE PIPELINE (HIDE & TAMPILKAN)
-    -- Mode A s/d Mode F Lengkap dengan Rute Alur & Penjelasan
+    -- 10. MODAL POPUP: MODE PIPELINE SELECTOR
     -- =====================================================================
     local ModePopup = Instance.new("Frame", ParentContainer)
     ModePopup.Size = UDim2.new(1, 0, 0, 235)
@@ -763,7 +1082,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             State.MutasiMode = m.id
             ModePopup.Visible = false
             updateModeSelectionUI()
-            print("[ZyloHub] Mode dipilih: " .. m.letter .. " - " .. m.desc)
+            print("[ZyloHub] Mode dipilih: " .. m.letter)
         end)
     end
 
@@ -778,7 +1097,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 9. FUNGSI HELPER EKSEKUSI (FARM, INVENTORY, EQUIP & MACHINE)
+    -- 11. FUNGSI GAME: FARM, INVENTORY & EQUIP / UNEQUIP
     -- =====================================================================
     local function GetFarm()
         if not Farms then return nil end
@@ -837,43 +1156,12 @@ return function(ParentContainer, State, ZyloLib, Main)
 
         if PetsServiceMod and PetsServiceMod.EquipPet then
             pcall(function() PetsServiceMod:EquipPet(uuid, targetPos) end)
+            pcall(function() PetsServiceMod:EquipPet(tostring(uuid):gsub("[{}]", ""), targetPos) end)
         end
         if PetsServiceRemote then
             pcall(function() PetsServiceRemote:FireServer("EquipPet", uuid, targetPos) end)
+            pcall(function() PetsServiceRemote:FireServer("EquipPet", tostring(uuid):gsub("[{}]", ""), targetPos) end)
         end
-    end
-
-    local function GetFullInventoryMap()
-        local invMap = {}
-        if DataService then
-            pcall(function()
-                local data = DataService:GetData()
-                if data and data.PetsData and data.PetsData.PetInventory then
-                    local invData = data.PetsData.PetInventory.Data or {}
-                    for u, entry in pairs(invData) do
-                        local sU = tostring(u)
-                        local petData = entry.PetData or {}
-                        local rawType = entry.PetType or petData.Species or petData.Name or "Pet"
-                        local rawMut = petData.MutationType or "Normal"
-                        local mutation = getAutoMutationName(rawMut)
-                        local level = petData.Level or petData.Lvl or 1
-                        local baseWeight = petData.BaseWeight or petData.Weight or 1.0
-                        local isFav = petData.IsFavorite or false
-
-                        invMap[sU] = {
-                            UUID = sU,
-                            Name = rawType,
-                            Mutation = mutation,
-                            RawMutation = rawMut,
-                            Age = level,
-                            BaseWeight = tonumber(baseWeight) or 1.0,
-                            IsFavorite = isFav
-                        }
-                    end
-                end
-            end)
-        end
-        return invMap
     end
 
     local function SafeInteractWithMutationMachine(petUUID)
@@ -918,7 +1206,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- 10. AUTOMATION RUNNER ENGINE (MODE A S/D MODE F)
+    -- 12. AUTOMATION RUNNER ENGINE (SESUAI PILIHAN TIM & MODE)
     -- =====================================================================
     local runnerThread = nil
 
@@ -933,6 +1221,26 @@ return function(ParentContainer, State, ZyloLib, Main)
         updateStatusUI("STOPPED - Pipeline dihentikan.", false)
     end
 
+    local function EquipTeamPets(teamName)
+        local teamMap = State.MutasiSelectedTeams[teamName] or {}
+        local allPets = GetAllPets()
+        local petLookup = {}
+        for _, p in ipairs(allPets) do
+            petLookup[p.UUID] = p
+            petLookup[tostring(p.UUID):gsub("[{}]", "")] = p
+        end
+
+        for u, isSel in pairs(teamMap) do
+            if isSel then
+                local p = petLookup[u] or petLookup[tostring(u):gsub("[{}]", "")]
+                if p and not p.InGarden then
+                    EquipPetByUUID(p.UUID)
+                    task.wait(0.15)
+                end
+            end
+        end
+    end
+
     local function RunAutoPipeline()
         if runnerThread then task.cancel(runnerThread) end
         runnerThread = task.spawn(function()
@@ -941,45 +1249,44 @@ return function(ParentContainer, State, ZyloLib, Main)
             task.wait(0.5)
 
             while State.MutasiRunning do
-                local inv = GetFullInventoryMap()
-                local backpackPets = GetBackpackPets()
+                local allPets = GetAllPets()
+                local petLookup = {}
+                for _, p in ipairs(allPets) do
+                    petLookup[p.UUID] = p
+                    petLookup[tostring(p.UUID):gsub("[{}]", "")] = p
+                end
 
-                -- Temukan pet target yang belum selesai
+                -- Ambil pet target:
+                -- Prioritas 1: Pet yang dipilih di tab GBXP (atau tim aktif)
+                -- Prioritas 2: Pet non-favorit yang belum selesai
                 local targetPet = nil
-                for _, p in ipairs(backpackPets) do
-                    local petInfo = inv[tostring(p.UUID)] or p
-                    local isCompleted = State.CompletedPets[p.UUID]
+                local gbxpSelected = State.MutasiSelectedTeams["GBXP"] or {}
+                for u, isSel in pairs(gbxpSelected) do
+                    if isSel and not State.CompletedPets[u] then
+                        local p = petLookup[u] or petLookup[tostring(u):gsub("[{}]", "")]
+                        if p then
+                            targetPet = p
+                            break
+                        end
+                    end
+                end
 
-                    if not isCompleted and not petInfo.IsFavorite then
-                        if activeMode == "Mode: A" then
+                -- Jika tidak ada yang dicentang di GBXP, cari pet non-favorit otomatis
+                if not targetPet then
+                    for _, p in ipairs(allPets) do
+                        if not p.IsFavorite and not State.CompletedPets[p.UUID] then
                             local threshold = math.max(tonumber(State.MutasiEquipAge) or 20, 100)
-                            if petInfo.Age < threshold then
-                                targetPet = petInfo
+                            if activeMode == "Mode: A" and p.Age < threshold then
+                                targetPet = p
                                 break
-                            end
-                        elseif activeMode == "Mode: B" then
-                            if petInfo.RawMutation ~= "A" and petInfo.Mutation ~= "Nightmare" then
-                                targetPet = petInfo
+                            elseif activeMode == "Mode: B" and p.RawMutation ~= "A" and p.Mutation ~= "Nightmare" then
+                                targetPet = p
                                 break
-                            end
-                        elseif activeMode == "Mode: C" then
-                            if petInfo.Mutation == "Normal" then
-                                targetPet = petInfo
+                            elseif activeMode == "Mode: C" and p.Mutation == "Normal" then
+                                targetPet = p
                                 break
-                            end
-                        elseif activeMode == "Mode: D" then
-                            if petInfo.Age < 100 then
-                                targetPet = petInfo
-                                break
-                            end
-                        elseif activeMode == "Mode: E" then
-                            if petInfo.Age < 100 or (petInfo.RawMutation ~= "A" and petInfo.Mutation ~= "Nightmare") then
-                                targetPet = petInfo
-                                break
-                            end
-                        elseif activeMode == "Mode: F" then
-                            if petInfo.Age < 100 or petInfo.Mutation == "Normal" then
-                                targetPet = petInfo
+                            elseif (activeMode == "Mode: D" or activeMode == "Mode: E" or activeMode == "Mode: F") and p.Age < 100 then
+                                targetPet = p
                                 break
                             end
                         end
@@ -995,34 +1302,49 @@ return function(ParentContainer, State, ZyloLib, Main)
                     local pAge = targetPet.Age or 1
                     local pUuid = targetPet.UUID
 
-                    -- Eksekusi per mode
+                    -- Pastikan Tim XP / Pendukung Terpasang
+                    if activeMode == "Mode: A" or activeMode == "Mode: B" or activeMode == "Mode: C" then
+                        EquipTeamPets("XP")
+                    elseif activeMode == "Mode: D" or activeMode == "Mode: E" or activeMode == "Mode: F" then
+                        EquipTeamPets("Elephant")
+                    end
+
+                    -- Eksekusi Sesuai Mode
                     if activeMode == "Mode: A" then
                         local threshold = math.max(tonumber(State.MutasiEquipAge) or 20, 100)
                         updateStatusUI(string.format("[Mode A]: Push Age %s (%d/%d)...", pName, pAge, threshold), true)
                         EquipPetByUUID(pUuid)
-                        task.wait(2)
+                        task.wait(2.5)
 
-                        local updatedInv = GetFullInventoryMap()
-                        local curr = updatedInv[pUuid] or targetPet
-                        if curr.Age >= threshold then
-                            updateStatusUI(string.format("[Mode A]: %s Mencapai Age %d! Selesai.", pName, curr.Age), true)
-                            UnequipPetByUUID(pUuid)
-                            State.CompletedPets[pUuid] = true
-                            task.wait(1)
+                        local refreshed = GetAllPets()
+                        for _, rp in ipairs(refreshed) do
+                            if rp.UUID == pUuid or tostring(rp.UUID):gsub("[{}]", "") == tostring(pUuid):gsub("[{}]", "") then
+                                if rp.Age >= threshold then
+                                    updateStatusUI(string.format("[Mode A]: %s Mencapai Age %d! Selesai.", pName, rp.Age), true)
+                                    UnequipPetByUUID(pUuid)
+                                    State.CompletedPets[pUuid] = true
+                                    task.wait(1)
+                                end
+                                break
+                            end
                         end
 
                     elseif activeMode == "Mode: B" then
                         updateStatusUI(string.format("[Mode B]: Mutasi Nightmare %s (Mut: %s)...", pName, targetPet.Mutation), true)
                         EquipPetByUUID(pUuid)
-                        task.wait(2)
+                        task.wait(2.5)
 
-                        local updatedInv = GetFullInventoryMap()
-                        local curr = updatedInv[pUuid] or targetPet
-                        if curr.RawMutation == "A" or curr.Mutation == "Nightmare" then
-                            updateStatusUI(string.format("[Mode B]: SUKSES! %s telah menjadi Nightmare!", pName), true)
-                            UnequipPetByUUID(pUuid)
-                            State.CompletedPets[pUuid] = true
-                            task.wait(1)
+                        local refreshed = GetAllPets()
+                        for _, rp in ipairs(refreshed) do
+                            if rp.UUID == pUuid or tostring(rp.UUID):gsub("[{}]", "") == tostring(pUuid):gsub("[{}]", "") then
+                                if rp.RawMutation == "A" or rp.Mutation == "Nightmare" then
+                                    updateStatusUI(string.format("[Mode B]: SUKSES! %s telah menjadi Nightmare!", pName), true)
+                                    UnequipPetByUUID(pUuid)
+                                    State.CompletedPets[pUuid] = true
+                                    task.wait(1)
+                                end
+                                break
+                            end
                         end
 
                     elseif activeMode == "Mode: C" then
@@ -1037,31 +1359,39 @@ return function(ParentContainer, State, ZyloLib, Main)
                         task.wait(1)
 
                     elseif activeMode == "Mode: D" then
-                        updateStatusUI(string.format("[Mode D]: Push Elephant Base + Age 100 untuk %s...", pName), true)
+                        updateStatusUI(string.format("[Mode D]: Push Elephant Base + Age 100 (%s)...", pName), true)
                         EquipPetByUUID(pUuid)
-                        task.wait(2)
+                        task.wait(2.5)
 
-                        local updatedInv = GetFullInventoryMap()
-                        local curr = updatedInv[pUuid] or targetPet
-                        if curr.Age >= 100 then
-                            updateStatusUI(string.format("[Mode D]: %s Selesai Base + Age 100!", pName), true)
-                            UnequipPetByUUID(pUuid)
-                            State.CompletedPets[pUuid] = true
-                            task.wait(1)
+                        local refreshed = GetAllPets()
+                        for _, rp in ipairs(refreshed) do
+                            if rp.UUID == pUuid or tostring(rp.UUID):gsub("[{}]", "") == tostring(pUuid):gsub("[{}]", "") then
+                                if rp.Age >= 100 then
+                                    updateStatusUI(string.format("[Mode D]: %s Selesai Base + Age 100!", pName), true)
+                                    UnequipPetByUUID(pUuid)
+                                    State.CompletedPets[pUuid] = true
+                                    task.wait(1)
+                                end
+                                break
+                            end
                         end
 
                     elseif activeMode == "Mode: E" then
                         updateStatusUI(string.format("[Mode E]: Elephant > Nightmare > Age 100 (%s)...", pName), true)
                         EquipPetByUUID(pUuid)
-                        task.wait(2)
+                        task.wait(2.5)
 
-                        local updatedInv = GetFullInventoryMap()
-                        local curr = updatedInv[pUuid] or targetPet
-                        if curr.Age >= 100 and (curr.RawMutation == "A" or curr.Mutation == "Nightmare") then
-                            updateStatusUI(string.format("[Mode E]: Sempurna! %s Nightmare + Age 100!", pName), true)
-                            UnequipPetByUUID(pUuid)
-                            State.CompletedPets[pUuid] = true
-                            task.wait(1)
+                        local refreshed = GetAllPets()
+                        for _, rp in ipairs(refreshed) do
+                            if rp.UUID == pUuid or tostring(rp.UUID):gsub("[{}]", "") == tostring(pUuid):gsub("[{}]", "") then
+                                if rp.Age >= 100 and (rp.RawMutation == "A" or rp.Mutation == "Nightmare") then
+                                    updateStatusUI(string.format("[Mode E]: Sempurna! %s Nightmare + Age 100!", pName), true)
+                                    UnequipPetByUUID(pUuid)
+                                    State.CompletedPets[pUuid] = true
+                                    task.wait(1)
+                                end
+                                break
+                            end
                         end
 
                     elseif activeMode == "Mode: F" then
@@ -1069,15 +1399,19 @@ return function(ParentContainer, State, ZyloLib, Main)
                         SafeInteractWithMutationMachine(pUuid)
                         task.wait(3)
                         EquipPetByUUID(pUuid)
-                        task.wait(2)
+                        task.wait(2.5)
 
-                        local updatedInv = GetFullInventoryMap()
-                        local curr = updatedInv[pUuid] or targetPet
-                        if curr.Age >= 100 and curr.Mutation ~= "Normal" then
-                            updateStatusUI(string.format("[Mode F]: Sempurna! %s Mutasi Mesin + Age 100!", pName), true)
-                            UnequipPetByUUID(pUuid)
-                            State.CompletedPets[pUuid] = true
-                            task.wait(1)
+                        local refreshed = GetAllPets()
+                        for _, rp in ipairs(refreshed) do
+                            if rp.UUID == pUuid or tostring(rp.UUID):gsub("[{}]", "") == tostring(pUuid):gsub("[{}]", "") then
+                                if rp.Age >= 100 and rp.Mutation ~= "Normal" then
+                                    updateStatusUI(string.format("[Mode F]: Sempurna! %s Mutasi Mesin + Age 100!", pName), true)
+                                    UnequipPetByUUID(pUuid)
+                                    State.CompletedPets[pUuid] = true
+                                    task.wait(1)
+                                end
+                                break
+                            end
                         end
                     end
                 end
