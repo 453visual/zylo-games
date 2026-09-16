@@ -1,8 +1,9 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6.3)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v3.6.4)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
+--  Mode Pipeline: Modal Popup Selector (Mode A - F) dengan Penjelasan Lengkap
 --  Presisi Penuh (Full Width hingga Titik Kanan) & Tombol START / STOP
 -- =========================================================================
 
@@ -32,7 +33,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     -- =====================================================================
     -- 1. SUB-NAVIGASI KATEGORI (FULL WIDTH PILLS ROW)
     -- Urutan: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config + ⚙
-    -- Dibuat Presisi Penuh (Full-Width) pas dari ujung kiri sampai titik merah kanan
+    -- Dibuat Presisi Penuh (Full-Width) pas dari ujung kiri sampai titik kanan
     -- =====================================================================
     local NavRow = Instance.new("Frame", MutasiWrapper)
     NavRow.Size = UDim2.new(1, 0, 0, 28)
@@ -64,7 +65,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         { name = "GBXP",      weight = 0.85 },
         { name = "Config",    weight = 1.00 }
     }
-    local totalWeight = 7.0 -- Total bobot untuk kalkulasi rasio lebar otomatis
+    local totalWeight = 7.0 -- Total bobot rasio lebar otomatis
 
     local CategoryButtons = {}
     local updateThresholdTitle
@@ -435,7 +436,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     task.defer(refreshPetList)
 
     -- =====================================================================
-    -- 6. BOTTOM ACTION BUTTONS: [ ⚡ START ] [ STOP ] [ Mode: A ]
+    -- 6. BOTTOM ACTION BUTTONS: [ ⚡ START ] [ STOP ] [ Mode: A ▾ ]
     -- =====================================================================
     local ActionRow = Instance.new("Frame", MutasiWrapper)
     ActionRow.Size = UDim2.new(1, 0, 0, 32)
@@ -480,11 +481,11 @@ return function(ParentContainer, State, ZyloLib, Main)
     stopStroke.Color = Color3.fromRGB(50, 58, 88)
     stopStroke.Thickness = 1.5
 
-    -- Tombol 3: Mode: A / Mode: B
+    -- Tombol 3: Mode Button dengan Indikator Dropdown (Tampilkan / Sembunyikan)
     local ModeBtn = Instance.new("TextButton", ActionRow)
     ModeBtn.Size = UDim2.new(0.24, -5, 0, 30)
     ModeBtn.BackgroundColor3 = Color3.fromRGB(15, 18, 36)
-    ModeBtn.Text = State.MutasiMode
+    ModeBtn.Text = State.MutasiMode .. " ▾"
     ModeBtn.TextColor3 = C.CYAN
     ModeBtn.Font = Enum.Font.GothamBold
     ModeBtn.TextSize = 9
@@ -493,20 +494,209 @@ return function(ParentContainer, State, ZyloLib, Main)
     modeStroke.Color = Color3.fromRGB(50, 58, 88)
     modeStroke.Thickness = 1.5
 
-    ModeBtn.MouseButton1Click:Connect(function()
-        if State.MutasiMode == "Mode: A" then
-            State.MutasiMode = "Mode: B"
-        else
-            State.MutasiMode = "Mode: A"
+    -- =====================================================================
+    -- 7. MODAL POPUP: PILIHAN MODE PIPELINE (HIDE & TAMPILKAN)
+    -- Mode A s/d Mode F Lengkap dengan Rute Alur & Penjelasan
+    -- Diletakkan mengambang (ZIndex tinggi) tepat di atas area pet list
+    -- =====================================================================
+    local ModePopup = Instance.new("Frame", ParentContainer)
+    ModePopup.Size = UDim2.new(1, 0, 0, 235)
+    ModePopup.Position = UDim2.new(0, 0, 1, -268)
+    ModePopup.BackgroundColor3 = Color3.fromRGB(10, 13, 26)
+    ModePopup.BorderSizePixel = 0
+    ModePopup.ZIndex = 40
+    ModePopup.Visible = false
+    Instance.new("UICorner", ModePopup).CornerRadius = UDim.new(0, 8)
+    local mpStroke = Instance.new("UIStroke", ModePopup)
+    mpStroke.Color = C.PURPLE
+    mpStroke.Thickness = 1.5
+
+    -- Header Modal Popup
+    local MpHeader = Instance.new("Frame", ModePopup)
+    MpHeader.Size = UDim2.new(1, 0, 0, 28)
+    MpHeader.BackgroundColor3 = Color3.fromRGB(16, 20, 38)
+    MpHeader.BorderSizePixel = 0
+    MpHeader.ZIndex = 41
+    Instance.new("UICorner", MpHeader).CornerRadius = UDim.new(0, 8)
+
+    local MpTitle = Instance.new("TextLabel", MpHeader)
+    MpTitle.Position = UDim2.new(0, 10, 0, 0)
+    MpTitle.Size = UDim2.new(1, -40, 1, 0)
+    MpTitle.BackgroundTransparency = 1
+    MpTitle.Text = "PILIH MODE PIPELINE MUTASI"
+    MpTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    MpTitle.Font = Enum.Font.GothamBold
+    MpTitle.TextSize = 9.5
+    MpTitle.TextXAlignment = Enum.TextXAlignment.Left
+    MpTitle.ZIndex = 42
+
+    local MpClose = Instance.new("TextButton", MpHeader)
+    MpClose.Position = UDim2.new(1, -26, 0.5, -10)
+    MpClose.Size = UDim2.new(0, 20, 0, 20)
+    MpClose.BackgroundColor3 = Color3.fromRGB(28, 20, 36)
+    MpClose.Text = "✕"
+    MpClose.TextColor3 = Color3.fromRGB(220, 180, 255)
+    MpClose.Font = Enum.Font.GothamBold
+    MpClose.TextSize = 10
+    MpClose.ZIndex = 42
+    Instance.new("UICorner", MpClose).CornerRadius = UDim.new(0, 10)
+
+    -- Scrollable List Pilihan Mode
+    local MpScroll = Instance.new("ScrollingFrame", ModePopup)
+    MpScroll.Position = UDim2.new(0, 6, 0, 32)
+    MpScroll.Size = UDim2.new(1, -12, 1, -38)
+    MpScroll.BackgroundTransparency = 1
+    MpScroll.BorderSizePixel = 0
+    MpScroll.ScrollBarThickness = 3
+    MpScroll.ScrollBarImageColor3 = C.PURPLE
+    MpScroll.ZIndex = 41
+    MpScroll.CanvasSize = UDim2.new(0, 0, 0, 290)
+
+    local MpList = Instance.new("UIListLayout", MpScroll)
+    MpList.SortOrder = Enum.SortOrder.LayoutOrder
+    MpList.Padding = UDim.new(0, 5)
+
+    local PipelineModes = {
+        {
+            id = "Mode: A",
+            letter = "MODE A",
+            route = "GBXP > XP > 100 AGE > INVENTORY FAVORIT",
+            desc = "Khusus nge-push pet agar cepat menyentuh Age 100–500.",
+            order = 1
+        },
+        {
+            id = "Mode: B",
+            letter = "MODE B",
+            route = "GBXP > XP > NIGHTMARE > INVENTORY FAVORIT",
+            desc = "Khusus pet yang hanya diincar mutasinya secara cepat via skill pet.",
+            order = 2
+        },
+        {
+            id = "Mode: C",
+            letter = "MODE C",
+            route = "GBXP > XP > MACHINE > INVENTORY FAVORIT",
+            desc = "Khusus pet yang hanya diincar mutasinya secara cepat via mesin mutasi.",
+            order = 3
+        },
+        {
+            id = "Mode: D",
+            letter = "MODE D",
+            route = "GBXP > XP > ELEPHANT > 100 AGE > INVENTORY FAVORIT",
+            desc = "Membangun pet (Base max + Age tinggi).",
+            order = 4
+        },
+        {
+            id = "Mode: E",
+            letter = "MODE E",
+            route = "GBXP > XP > ELEPHANT > NIGHTMARE > 100 AGE > INVENTORY FAVORIT",
+            desc = "Membangun pet sempurna dari nol (Base max + Mutasi Skill + Age tinggi).",
+            order = 5
+        },
+        {
+            id = "Mode: F",
+            letter = "MODE F",
+            route = "GBXP > XP > ELEPHANT > MACHINE > 100 AGE > INVENTORY FAVORIT",
+            desc = "Membangun pet sempurna dari nol (Base max + Mutasi Mesin + Age tinggi).",
+            order = 6
+        }
+    }
+
+    local ModeItemElements = {}
+
+    local function updateModeSelectionUI()
+        ModeBtn.Text = State.MutasiMode .. (ModePopup.Visible and " ▴" or " ▾")
+        for mId, elem in pairs(ModeItemElements) do
+            local isSelected = (State.MutasiMode == mId)
+            elem.btn.BackgroundColor3 = isSelected and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
+            elem.stroke.Color = isSelected and C.PURPLE or Color3.fromRGB(38, 45, 70)
+            elem.stroke.Thickness = isSelected and 1.5 or 1
+            elem.title.TextColor3 = isSelected and C.PURPLE_L or C.TEXT_W
+            elem.check.Visible = isSelected
         end
-        ModeBtn.Text = State.MutasiMode
+    end
+
+    for _, m in ipairs(PipelineModes) do
+        local mBtn = Instance.new("TextButton", MpScroll)
+        mBtn.Size = UDim2.new(1, -4, 0, 42)
+        mBtn.BackgroundColor3 = (State.MutasiMode == m.id) and Color3.fromRGB(48, 24, 80) or Color3.fromRGB(15, 18, 34)
+        mBtn.Text = ""
+        mBtn.AutoButtonColor = false
+        mBtn.LayoutOrder = m.order
+        mBtn.ZIndex = 42
+        Instance.new("UICorner", mBtn).CornerRadius = UDim.new(0, 6)
+        local mStroke = Instance.new("UIStroke", mBtn)
+        mStroke.Color = (State.MutasiMode == m.id) and C.PURPLE or Color3.fromRGB(38, 45, 70)
+        mStroke.Thickness = (State.MutasiMode == m.id) and 1.5 or 1
+
+        -- Judul Mode
+        local mLblTitle = Instance.new("TextLabel", mBtn)
+        mLblTitle.Position = UDim2.new(0, 8, 0, 3)
+        mLblTitle.Size = UDim2.new(1, -40, 0, 13)
+        mLblTitle.BackgroundTransparency = 1
+        mLblTitle.Text = m.letter .. ": (" .. m.route .. ")"
+        mLblTitle.TextColor3 = (State.MutasiMode == m.id) and C.PURPLE_L or C.TEXT_W
+        mLblTitle.Font = Enum.Font.GothamBold
+        mLblTitle.TextSize = 8.5
+        mLblTitle.TextXAlignment = Enum.TextXAlignment.Left
+        mLblTitle.ZIndex = 43
+
+        -- Deskripsi Mode
+        local mLblDesc = Instance.new("TextLabel", mBtn)
+        mLblDesc.Position = UDim2.new(0, 8, 0, 18)
+        mLblDesc.Size = UDim2.new(1, -40, 0, 20)
+        mLblDesc.BackgroundTransparency = 1
+        mLblDesc.Text = m.desc
+        mLblDesc.TextColor3 = C.TEXT_M
+        mLblDesc.Font = Enum.Font.GothamMedium
+        mLblDesc.TextSize = 8
+        mLblDesc.TextWrapped = true
+        mLblDesc.TextXAlignment = Enum.TextXAlignment.Left
+        mLblDesc.TextYAlignment = Enum.TextYAlignment.Top
+        mLblDesc.ZIndex = 43
+
+        -- Badge Checkmark
+        local mCheck = Instance.new("TextLabel", mBtn)
+        mCheck.Position = UDim2.new(1, -24, 0.5, -8)
+        mCheck.Size = UDim2.new(0, 16, 0, 16)
+        mCheck.BackgroundTransparency = 1
+        mCheck.Text = "✓"
+        mCheck.TextColor3 = C.CYAN
+        mCheck.Font = Enum.Font.GothamBold
+        mCheck.TextSize = 11
+        mCheck.Visible = (State.MutasiMode == m.id)
+        mCheck.ZIndex = 43
+
+        ModeItemElements[m.id] = {
+            btn = mBtn,
+            stroke = mStroke,
+            title = mLblTitle,
+            check = mCheck
+        }
+
+        mBtn.MouseButton1Click:Connect(function()
+            State.MutasiMode = m.id
+            ModePopup.Visible = false
+            updateModeSelectionUI()
+            print("[ZyloHub] Mode dipilih: " .. m.letter .. " - " .. m.desc)
+        end)
+    end
+
+    -- Toggle Tampilkan / Sembunyikan Popup Modal
+    ModeBtn.MouseButton1Click:Connect(function()
+        ModePopup.Visible = not ModePopup.Visible
+        updateModeSelectionUI()
+    end)
+
+    MpClose.MouseButton1Click:Connect(function()
+        ModePopup.Visible = false
+        updateModeSelectionUI()
     end)
 
     StartBtn.MouseButton1Click:Connect(function()
         State.MutasiRunning = true
         StartBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 80)
         StartBtn.Text = "RUNNING (" .. State.MutasiMode .. ")"
-        print("[ZyloHub] Auto Mutasi started: " .. State.MutasiActiveCategory)
+        print("[ZyloHub] Auto Mutasi started: " .. State.MutasiActiveCategory .. " [" .. State.MutasiMode .. "]")
     end)
 
     StopBtn.MouseButton1Click:Connect(function()
