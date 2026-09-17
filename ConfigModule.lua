@@ -1,5 +1,5 @@
 -- =========================================================================
---  ZYLOHUB - CONFIG MANAGER MODULE (v1.0 - PER-DEVICE PERSISTENCE)
+--  ZYLOHUB - CONFIG MANAGER MODULE (v1.1 - ROBUST PER-DEVICE PERSISTENCE)
 --  Repository: zylo-games/ConfigModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Features: Save, Load, Set Auto Load, Delete, Dropdown Profil, Auto Startup
@@ -7,18 +7,37 @@
 
 return function(ParentContainer, State, ZyloLib, Main)
     local HttpService = game:GetService("HttpService")
-    local C = ZyloLib.Colors
+    local C = ZyloLib and ZyloLib.Colors or {
+        PURPLE   = Color3.fromRGB(138, 43, 226),
+        PURPLE_L = Color3.fromRGB(180, 110, 255),
+        CYAN     = Color3.fromRGB(0, 220, 255),
+        CARD     = Color3.fromRGB(11, 14, 28),
+        CARD_2   = Color3.fromRGB(14, 18, 36),
+        STROKE   = Color3.fromRGB(36, 44, 72),
+        TEXT_W   = Color3.fromRGB(245, 247, 255),
+        TEXT_M   = Color3.fromRGB(120, 132, 165)
+    }
 
-    -- 1. FOLDER SYSTEM CHECK (PER-DEVICE STORAGE)
+    -- 1. FOLDER SYSTEM CHECK DENGAN PCALL (SAFE MOBILE CHECK)
     local CONFIG_FOLDER = "ZyloHub"
     local CONFIGS_PATH = "ZyloHub/Configs"
     local AUTOLOAD_FILE = "ZyloHub/Configs/autoload.txt"
 
+    local function SafeIsFolder(path)
+        if not isfolder then return false end
+        local ok, res = pcall(function() return isfolder(path) end)
+        return ok and (res == true)
+    end
+
+    local function SafeIsFile(path)
+        if not isfile then return false end
+        local ok, res = pcall(function() return isfile(path) end)
+        return ok and (res == true)
+    end
+
     local function SafeMakeFolder(path)
-        if makefolder and isfolder then
-            if not isfolder(path) then
-                pcall(function() makefolder(path) end)
-            end
+        if makefolder and not SafeIsFolder(path) then
+            pcall(function() makefolder(path) end)
         end
     end
 
@@ -28,9 +47,9 @@ return function(ParentContainer, State, ZyloLib, Main)
     -- 2. HELPER BACA & TULIS FILE EXECUTOR
     local function GetSavedConfigFiles()
         local files = {}
-        if listfiles and isfolder and isfolder(CONFIGS_PATH) then
+        if listfiles and SafeIsFolder(CONFIGS_PATH) then
             local ok, list = pcall(function() return listfiles(CONFIGS_PATH) end)
-            if ok and list then
+            if ok and type(list) == "table" then
                 for _, fullPath in ipairs(list) do
                     local fileName = fullPath:match("([^/\\]+)%.json$")
                     if fileName then
@@ -48,7 +67,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     local currentConfigName = "Default"
     local isAutoLoadEnabled = false
 
-    if isfile and isfile(AUTOLOAD_FILE) then
+    if SafeIsFile(AUTOLOAD_FILE) then
         local ok, target = pcall(function() return readfile(AUTOLOAD_FILE) end)
         if ok and target and target ~= "" then
             currentConfigName = target:gsub("%s+", "")
@@ -64,18 +83,23 @@ return function(ParentContainer, State, ZyloLib, Main)
 
         -- Kloning data yang dapat diserialisasi dari State
         local dataToSave = {}
-        for k, v in pairs(State) do
-            local t = type(v)
-            if t == "string" or t == "number" or t == "boolean" or t == "table" then
-                dataToSave[k] = v
+        if State and type(State) == "table" then
+            for k, v in pairs(State) do
+                local t = type(v)
+                if t == "string" or t == "number" or t == "boolean" or t == "table" then
+                    dataToSave[k] = v
+                end
             end
         end
 
         local jsonString = ""
         local okEncode, errEncode = pcall(function()
-            jsonString = HttpService:JSONEncode(dataToSave)
+            return HttpService:JSONEncode(dataToSave)
         end)
-        if not okEncode then return false, "JSON Encode Error: " .. tostring(errEncode) end
+        if not okEncode or not jsonString then 
+            return false, "JSON Encode Error: " .. tostring(errEncode) 
+        end
+        jsonString = errEncode
 
         local filePath = CONFIGS_PATH .. "/" .. configName .. ".json"
         local okWrite, errWrite = pcall(function()
@@ -88,31 +112,37 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     -- 4. FUNGSI LOAD CONFIG (MEMULIHKAN SELURUH ISI STATE)
     local function LoadConfigFromFile(configName)
-        if not readfile or not isfile then return false, "Executor tidak mendukung readfile/isfile" end
+        if not readfile or not SafeIsFile then return false, "Executor tidak mendukung readfile/isfile" end
         configName = (configName and configName ~= "") and configName or "Default"
         local filePath = CONFIGS_PATH .. "/" .. configName .. ".json"
 
-        if not isfile(filePath) then
+        if not SafeIsFile(filePath) then
             return false, "File konfigurasi '" .. configName .. "' tidak ditemukan."
         end
 
         local content = ""
         local okRead, errRead = pcall(function()
-            content = readfile(filePath)
+            return readfile(filePath)
         end)
-        if not okRead or content == "" then return false, "Gagal membaca isi file: " .. tostring(errRead) end
+        if not okRead or not errRead or errRead == "" then 
+            return false, "Gagal membaca isi file: " .. tostring(errRead) 
+        end
+        content = errRead
 
         local decoded = nil
         local okDecode, errDecode = pcall(function()
-            decoded = HttpService:JSONDecode(content)
+            return HttpService:JSONDecode(content)
         end)
-        if not okDecode or type(decoded) ~= "table" then
+        if not okDecode or type(errDecode) ~= "table" then
             return false, "Format file JSON korup: " .. tostring(errDecode)
         end
+        decoded = errDecode
 
         -- Terapkan kembali ke dalam tabel State global
-        for k, v in pairs(decoded) do
-            State[k] = v
+        if State and type(State) == "table" then
+            for k, v in pairs(decoded) do
+                State[k] = v
+            end
         end
 
         return true, decoded
@@ -120,11 +150,11 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     -- 5. FUNGSI DELETE CONFIG
     local function DeleteConfigFile(configName)
-        if not delfile or not isfile then return false, "Executor tidak mendukung delfile/isfile" end
+        if not delfile or not SafeIsFile then return false, "Executor tidak mendukung delfile/isfile" end
         configName = (configName and configName ~= "") and configName or "Default"
         local filePath = CONFIGS_PATH .. "/" .. configName .. ".json"
 
-        if not isfile(filePath) then
+        if not SafeIsFile(filePath) then
             return false, "File tidak ditemukan."
         end
 
@@ -132,9 +162,9 @@ return function(ParentContainer, State, ZyloLib, Main)
         if not ok then return false, tostring(err) end
 
         -- Jika file yang dihapus sedang jadi autoload, bersihkan autoload.txt
-        if isfile(AUTOLOAD_FILE) then
-            local curAuto = readfile(AUTOLOAD_FILE)
-            if curAuto and curAuto:find(configName) then
+        if SafeIsFile(AUTOLOAD_FILE) then
+            local okAuto, curAuto = pcall(function() return readfile(AUTOLOAD_FILE) end)
+            if okAuto and curAuto and curAuto:find(configName) then
                 pcall(function() delfile(AUTOLOAD_FILE) end)
             end
         end
@@ -143,32 +173,13 @@ return function(ParentContainer, State, ZyloLib, Main)
     end
 
     -- =====================================================================
-    -- MEMBANGUN TAMPILAN UI (SESUAI GAMBAR REFERENSI ANDA)
+    -- MEMBANGUN TAMPILAN UI (LANGSUNG TERHUBUNG KE PARENT CONTAINER SCROLL)
     -- =====================================================================
-    local ConfigWrapper = Instance.new("Frame", ParentContainer)
-    ConfigWrapper.Size = UDim2.new(1, 0, 0, 480)
-    ConfigWrapper.BackgroundTransparency = 1
-
-    local CwLayout = Instance.new("UIListLayout", ConfigWrapper)
-    CwLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    CwLayout.Padding = UDim.new(0, 8)
-
-    -- Header Title
-    local HeaderLabel = Instance.new("TextLabel", ConfigWrapper)
-    HeaderLabel.Size = UDim2.new(1, 0, 0, 24)
-    HeaderLabel.BackgroundTransparency = 1
-    HeaderLabel.Text = "Config"
-    HeaderLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    HeaderLabel.Font = Enum.Font.GothamBold
-    HeaderLabel.TextSize = 16
-    HeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
-    HeaderLabel.LayoutOrder = 1
-
-    -- Card Container Utama
-    local CardFrame = Instance.new("Frame", ConfigWrapper)
-    CardFrame.Size = UDim2.new(1, 0, 0, 390)
+    -- Card Frame Utama
+    local CardFrame = Instance.new("Frame", ParentContainer)
+    CardFrame.Size = UDim2.new(1, 0, 0, 410)
     CardFrame.BackgroundColor3 = Color3.fromRGB(11, 14, 28)
-    CardFrame.LayoutOrder = 2
+    CardFrame.LayoutOrder = 1
     Instance.new("UICorner", CardFrame).CornerRadius = UDim.new(0, 10)
     local cardStroke = Instance.new("UIStroke", CardFrame)
     cardStroke.Color = Color3.fromRGB(36, 44, 72)
@@ -176,15 +187,16 @@ return function(ParentContainer, State, ZyloLib, Main)
     local CardLayout = Instance.new("UIListLayout", CardFrame)
     CardLayout.SortOrder = Enum.SortOrder.LayoutOrder
     CardLayout.Padding = UDim.new(0, 6)
+    
     local CardPad = Instance.new("UIPadding", CardFrame)
-    CardPad.PaddingTop = UDim.new(0, 8)
-    CardPad.PaddingBottom = UDim.new(0, 8)
+    CardPad.PaddingTop = UDim.new(0, 10)
+    CardPad.PaddingBottom = UDim.new(0, 10)
     CardPad.PaddingLeft = UDim.new(0, 12)
     CardPad.PaddingRight = UDim.new(0, 12)
 
     -- Header Panel Accordion
     local PanelHeader = Instance.new("Frame", CardFrame)
-    PanelHeader.Size = UDim2.new(1, 0, 0, 28)
+    PanelHeader.Size = UDim2.new(1, 0, 0, 26)
     PanelHeader.BackgroundTransparency = 1
     PanelHeader.LayoutOrder = 1
 
@@ -192,7 +204,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     PhTitle.Position = UDim2.new(0, 0, 0, 0)
     PhTitle.Size = UDim2.new(1, -30, 1, 0)
     PhTitle.BackgroundTransparency = 1
-    PhTitle.Text = "Config Panel"
+    PhTitle.Text = "⚙️  CONFIG MANAGER"
     PhTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
     PhTitle.Font = Enum.Font.GothamBold
     PhTitle.TextSize = 12
@@ -216,7 +228,7 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     -- Deskripsi Settings
     local DescBox = Instance.new("Frame", CardFrame)
-    DescBox.Size = UDim2.new(1, 0, 0, 48)
+    DescBox.Size = UDim2.new(1, 0, 0, 44)
     DescBox.BackgroundTransparency = 1
     DescBox.LayoutOrder = 3
 
@@ -232,7 +244,7 @@ return function(ParentContainer, State, ZyloLib, Main)
 
     local DescText = Instance.new("TextLabel", DescBox)
     DescText.Position = UDim2.new(0, 0, 0, 18)
-    DescText.Size = UDim2.new(1, 0, 0, 28)
+    DescText.Size = UDim2.new(1, 0, 0, 26)
     DescText.BackgroundTransparency = 1
     DescText.Text = "Save, load, delete and auto-load every toggle, slider, dropdown and box in the script. Turn on Auto Load and that config comes back on its own next time you run it."
     DescText.TextColor3 = Color3.fromRGB(120, 132, 165)
@@ -242,7 +254,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     DescText.TextXAlignment = Enum.TextXAlignment.Left
     DescText.TextYAlignment = Enum.TextYAlignment.Top
 
-    -- Row 1: Config Name
+    -- Row 1: Config Name Input
     local RowName = Instance.new("Frame", CardFrame)
     RowName.Size = UDim2.new(1, 0, 0, 42)
     RowName.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
@@ -329,12 +341,12 @@ return function(ParentContainer, State, ZyloLib, Main)
     local sdbStroke = Instance.new("UIStroke", SavedDropdownBtn)
     sdbStroke.Color = Color3.fromRGB(48, 58, 90)
 
-    -- Dropdown List Menu
+    -- Dropdown List Menu (Di-attach ke Main Window agar tidak terpotong)
     local DropListFrame = Instance.new("Frame", Main)
     DropListFrame.Size = UDim2.new(0, 145, 0, 120)
     DropListFrame.BackgroundColor3 = Color3.fromRGB(16, 20, 40)
     DropListFrame.Visible = false
-    DropListFrame.ZIndex = 60
+    DropListFrame.ZIndex = 70
     Instance.new("UICorner", DropListFrame).CornerRadius = UDim.new(0, 6)
     local dlfStroke = Instance.new("UIStroke", DropListFrame)
     dlfStroke.Color = C.PURPLE
@@ -344,7 +356,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     DropScroll.Size = UDim2.new(1, 0, 1, 0)
     DropScroll.BackgroundTransparency = 1
     DropScroll.ScrollBarThickness = 2
-    DropScroll.ZIndex = 61
+    DropScroll.ZIndex = 71
     local DropLayout = Instance.new("UIListLayout", DropScroll)
     DropLayout.Padding = UDim.new(0, 2)
     Instance.new("UIPadding", DropScroll).PaddingTop = UDim.new(0, 4)
@@ -365,7 +377,7 @@ return function(ParentContainer, State, ZyloLib, Main)
             b.Font = Enum.Font.GothamMedium
             b.TextSize = 8.5
             b.TextXAlignment = Enum.TextXAlignment.Left
-            b.ZIndex = 62
+            b.ZIndex = 72
             Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
 
             b.MouseButton1Click:Connect(function()
@@ -422,7 +434,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                 pcall(function() writefile(AUTOLOAD_FILE, currentConfigName) end)
             end
         else
-            if delfile and isfile and isfile(AUTOLOAD_FILE) then
+            if delfile and SafeIsFile(AUTOLOAD_FILE) then
                 pcall(function() delfile(AUTOLOAD_FILE) end)
             end
         end
@@ -528,11 +540,11 @@ return function(ParentContainer, State, ZyloLib, Main)
     -- AUTO STARTUP LOADER (MEMUAT OTOMATIS SAAT GAME SELESAI LOADING)
     -- =====================================================================
     task.spawn(function()
-        if isfile and isfile(AUTOLOAD_FILE) then
+        if SafeIsFile(AUTOLOAD_FILE) then
             local ok, autoTarget = pcall(function() return readfile(AUTOLOAD_FILE) end)
             if ok and autoTarget and autoTarget ~= "" then
                 autoTarget = autoTarget:gsub("%s+", "")
-                task.wait(3) -- Safety check agar map dan game stabil
+                task.wait(3) -- Menunggu map dan game stabil
                 local okLoad = LoadConfigFromFile(autoTarget)
                 if okLoad then
                     Notify("✓ Startup: Auto Load '" .. autoTarget .. "' berhasil diaktifkan.", false)
@@ -544,6 +556,6 @@ return function(ParentContainer, State, ZyloLib, Main)
     return {
         Save = SaveConfigToFile,
         Load = LoadConfigFromFile,
-        Wrapper = ConfigWrapper
+        Card = CardFrame
     }
 end
