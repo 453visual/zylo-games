@@ -702,7 +702,7 @@ end)
 -- =============================================================
 local PetHatchModule = nil
 local okHatch, errHatch = pcall(function()
-    local raw = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/PetHatchModule.lua")
+    local raw = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/PetHatchModule.lua?t=" .. tostring(os.time()))
     local fn = loadstring(raw)
     if fn then
         PetHatchModule = fn()(PagePets, State, ZyloLib, Main)
@@ -718,7 +718,7 @@ end
 local accMutasi, bodyMutasi = ZyloLib:CreateAccordion(PagePets, "Auto Mutasi", false, 490)
 local PetMutasiModule = nil
 local okMutasi, errMutasi = pcall(function()
-    local raw = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/PetMutasiModule.lua")
+    local raw = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/PetMutasiModule.lua?t=" .. tostring(os.time()))
     local fn = loadstring(raw)
     if fn then
         local moduleFunc = fn()
@@ -734,18 +734,32 @@ end
 local accEle, bodyEle = ZyloLib:CreateAccordion(PagePets, "Auto Elephant", false, 85)
 
 -- =============================================================
--- [PEMANGGILAN MODUL CONFIG MANAGER: TAB CONFIG]
+-- [PEMANGGILAN MODUL CONFIG MANAGER: TAB CONFIG (ANTI-CACHE & SAFE)]
 -- =============================================================
 local ConfigModule = nil
-local okConfig, errConfig = pcall(function()
-    local raw = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/ConfigModule.lua")
-    local fn = loadstring(raw)
-    if fn then
-        ConfigModule = fn()(PageConfig, State, ZyloLib, Main)
-    end
+local configUrl = "https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/ConfigModule.lua?t=" .. tostring(os.time())
+
+local okFetch, rawConfigCode = pcall(function()
+    return game:HttpGet(configUrl)
 end)
-if not okConfig then
-    warn("[ZyloHub] ConfigModule note:", errConfig)
+
+if okFetch and rawConfigCode and rawConfigCode ~= "" then
+    local fn, loadErr = loadstring(rawConfigCode)
+    if fn then
+        local okRun, runErr = pcall(function()
+            local moduleFunc = fn()
+            if type(moduleFunc) == "function" then
+                ConfigModule = moduleFunc(PageConfig, State, ZyloLib, Main)
+            end
+        end)
+        if not okRun then
+            warn("[ZyloHub Config] Runtime Execution Error:", runErr)
+        end
+    else
+        warn("[ZyloHub Config] Loadstring Syntax Error:", loadErr)
+    end
+else
+    warn("[ZyloHub Config] Gagal mengunduh file ConfigModule dari GitHub:", rawConfigCode)
 end
 
 -- =============================================================
