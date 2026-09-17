@@ -1,13 +1,13 @@
 -- =========================================================================
---  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v4.3.0 - PRO TRACKER)
+--  ZYLOHUB - AUTO MUTASI MODULE (OFFICIAL EXTENSION v4.4.0 - PURE ACCURACY)
 --  Repository: zylo-games/PetMutasiModule.lua
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
 --  Sub-Tabs: Elephant > Machine > Nightmare > 100 Age > XP > GBXP > Config
 --  Mode Pipeline: Modal Popup Selector (Mode A - F)
---  Pembaruan:
---    1. Realtime Time Tracker: Durasi Mode Keseluruhan & Durasi Tiap Tahap (XP, 100 Age, dll)
---    2. Realtime Pets Inventory: Presisi kapasitas tas & stok pet siap salur GBXP
---    3. Rekap Kumulatif: Total Pet Lulus per Mode & Total Pet Berhasil Mutasi
+--  Pembaruan v4.4.0:
+--    1. Whitelist Scanner Berbasis PetDataset.lua (515 Spesies Pet Murni)
+--    2. Anti-Egg, Anti-Seed, & Anti-Tool Filter (Menghilangkan data palsu/549)
+--    3. Sinkronisasi Realtime Presisi dengan Pet Items (215/245)
 --    4. Seluruh fitur mutasi Machine & Nightmare tetap paten & terkunci 100%
 -- =========================================================================
 
@@ -44,6 +44,95 @@ return function(ParentContainer, State, ZyloLib, Main)
             if tostring(v):lower() == tostring(rawCode):lower() then return v end
         end
         return tostring(rawCode)
+    end
+
+    -- =====================================================================
+    -- INTEGRASI PETDATASET (515 SPESIES PET MURNI & ANTI-EGG/SEED FILTER)
+    -- =====================================================================
+    local PetDatasetMod = nil
+    local ValidSpeciesLookup = {}
+    local KnownEggLookup = {}
+
+    local function LoadPetDataset()
+        if not PetDatasetMod then
+            local ok, res = pcall(function()
+                return game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/PetDataset.lua")
+            end)
+            if not ok or not res or res:find("404") then
+                pcall(function()
+                    res = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/Petdataset.lua")
+                end)
+            end
+            if res and not res:find("404") then
+                pcall(function()
+                    PetDatasetMod = loadstring(res)()
+                end)
+            end
+        end
+
+        if PetDatasetMod then
+            if PetDatasetMod.AllPets then
+                for _, pName in ipairs(PetDatasetMod.AllPets) do
+                    ValidSpeciesLookup[tostring(pName):lower()] = tostring(pName)
+                end
+            end
+            if PetDatasetMod.Eggs then
+                for eggName, _ in pairs(PetDatasetMod.Eggs) do
+                    KnownEggLookup[tostring(eggName):lower()] = true
+                end
+            end
+        end
+    end
+    task.spawn(LoadPetDataset)
+
+    -- Fungsi Pembersih Nama & Validasi Pet Murni
+    local function CleanPetNameString(rawName)
+        if not rawName then return "" end
+        local cleaned = tostring(rawName)
+        cleaned = cleaned:gsub("%s*%b[]", "") -- Buang teks dalam kurung siku [...]
+        cleaned = cleaned:gsub("%s*%b()", "") -- Buang teks dalam kurung biasa (...)
+        cleaned = cleaned:gsub("^%s*(.-)%s*$", "%1") -- Trim spasi
+        return cleaned
+    end
+
+    local function IsRealPetSpecies(rawName, toolObj)
+        if not rawName or rawName == "" then return false, "" end
+        local lowRaw = rawName:lower()
+
+        -- 1. Filter Anti-Egg
+        if lowRaw:find("egg") or KnownEggLookup[lowRaw] then return false, "" end
+
+        -- 2. Filter Anti-Seed, Crops, & Tools
+        if lowRaw:find("seed") or lowRaw:find("hoe") or lowRaw:find("can") or lowRaw:find("crate") or lowRaw:find("potion") or lowRaw:find("fertilizer") then
+            return false, ""
+        end
+        if toolObj and toolObj:FindFirstChild("Item_String") then
+            return false, ""
+        end
+
+        -- 3. Filter Whitelist PetDataset (515 Spesies)
+        local cleaned = CleanPetNameString(rawName)
+        local lowClean = cleaned:lower()
+
+        if ValidSpeciesLookup[lowClean] then
+            return true, ValidSpeciesLookup[lowClean]
+        end
+
+        -- Pencocokan awalan/akhiran (misal: "Shiny Sea Anemone" -> "Sea Anemone")
+        for validLow, officialName in pairs(ValidSpeciesLookup) do
+            if lowClean:find(validLow, 1, true) then
+                return true, officialName
+            end
+        end
+
+        -- Jika dataset belum termuat, gunakan proteksi dasar berbasis atribut
+        if not next(ValidSpeciesLookup) then
+            if toolObj and (toolObj:GetAttribute("PET_UUID") or toolObj:GetAttribute("PetData")) then
+                return true, cleaned
+            end
+        end
+
+        return false, ""
     end
 
     -- =====================================================================
@@ -810,7 +899,7 @@ return function(ParentContainer, State, ZyloLib, Main)
     end)
 
     -- =====================================================================
-    -- 6. SCANNER SISTEM & INVENTORY STATS
+    -- 6. SCANNER SISTEM MURNI (WHITELIST PETDATASET & ACCURATE INVENTORY)
     -- =====================================================================
     local function IsPetFavorited(uuid, item)
         if not uuid and item then
@@ -865,12 +954,15 @@ return function(ParentContainer, State, ZyloLib, Main)
         local function registerTools(container)
             if not container then return end
             for _, item in ipairs(container:GetChildren()) do
-                if item:IsA("Tool") and not item:FindFirstChild("Item_String") then
-                    local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value)
-                    if u then
-                        local sU = tostring(u)
-                        toolLookup[sU] = item
-                        toolLookup[sU:gsub("[{}]", "")] = item
+                if item:IsA("Tool") then
+                    local isReal, verifiedName = IsRealPetSpecies(item.Name, item)
+                    if isReal then
+                        local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value)
+                        if u then
+                            local sU = tostring(u)
+                            toolLookup[sU] = item
+                            toolLookup[sU:gsub("[{}]", "")] = item
+                        end
                     end
                 end
             end
@@ -880,91 +972,96 @@ return function(ParentContainer, State, ZyloLib, Main)
             registerTools(LocalPlayer.Character)
         end
 
+        -- 1. Scan dari DataService Inventaris Resmi
         if DataService then
             local ok, data = pcall(function() return DataService:GetData() end)
             if ok and data and data.PetsData and data.PetsData.PetInventory and data.PetsData.PetInventory.Data then
                 for uuid, entry in pairs(data.PetsData.PetInventory.Data) do
                     local petData = entry.PetData or {}
-                    local rawType = entry.PetType or petData.Species or petData.Name or "Pet"
+                    local rawType = entry.PetType or petData.Species or petData.Name or ""
                     local cleanUUID = tostring(uuid)
                     local strippedUUID = cleanUUID:gsub("[{}]", "")
 
-                    local rawMut = petData.MutationType or "Normal"
-                    local mutation = getAutoMutationName(rawMut)
-                    local level = tonumber(petData.Level or petData.Lvl or 1) or 1
-                    local numWeight = 0
-                    local weightStr = "?"
-
-                    if PetUtilities and PetUtilities.CalculateWeight and petData.BaseWeight then
-                        local calcW = PetUtilities:CalculateWeight(petData.BaseWeight, level) * 100
-                        numWeight = math.round(calcW) / 100
-                        weightStr = string.format("%.2f", numWeight)
-                    elseif petData.BaseWeight then
-                        numWeight = tonumber(petData.BaseWeight) or 0
-                        weightStr = tostring(petData.BaseWeight)
-                    end
-
+                    local isReal, verifiedSpecies = IsRealPetSpecies(rawType)
                     local toolObj = toolLookup[cleanUUID] or toolLookup[strippedUUID]
-                    local speciesName = rawType
-                    if toolObj then
-                        local cleanToolName = toolObj.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
-                        if cleanToolName ~= "" and not cleanToolName:lower():find("tool") then
-                            speciesName = cleanToolName
-                        end
+
+                    if not isReal and toolObj then
+                        isReal, verifiedSpecies = IsRealPetSpecies(toolObj.Name, toolObj)
                     end
 
-                    local isFav = (petData.IsFavorite == true) or IsPetFavorited(cleanUUID, toolObj)
-                    local isInGarden = (equippedMap[cleanUUID] == true) or (equippedMap[strippedUUID] == true)
+                    -- Hanya masukkan jika terverifikasi PET MURNI
+                    if isReal and verifiedSpecies ~= "" then
+                        local rawMut = petData.MutationType or "Normal"
+                        local mutation = getAutoMutationName(rawMut)
+                        local level = tonumber(petData.Level or petData.Lvl or 1) or 1
+                        local numWeight = 0
+                        local weightStr = "?"
 
-                    seenUUIDs[cleanUUID] = true
-                    seenUUIDs[strippedUUID] = true
+                        if PetUtilities and PetUtilities.CalculateWeight and petData.BaseWeight then
+                            local calcW = PetUtilities:CalculateWeight(petData.BaseWeight, level) * 100
+                            numWeight = math.round(calcW) / 100
+                            weightStr = string.format("%.2f", numWeight)
+                        elseif petData.BaseWeight then
+                            numWeight = tonumber(petData.BaseWeight) or 0
+                            weightStr = tostring(petData.BaseWeight)
+                        end
 
-                    table.insert(pets, {
-                        UUID = cleanUUID,
-                        Name = speciesName,
-                        Mutation = mutation,
-                        RawMutation = rawMut,
-                        Age = level,
-                        Weight = weightStr,
-                        NumericWeight = numWeight,
-                        IsFavorite = isFav,
-                        InGarden = isInGarden,
-                        Tool = toolObj
-                    })
+                        local isFav = (petData.IsFavorite == true) or IsPetFavorited(cleanUUID, toolObj)
+                        local isInGarden = (equippedMap[cleanUUID] == true) or (equippedMap[strippedUUID] == true)
+
+                        seenUUIDs[cleanUUID] = true
+                        seenUUIDs[strippedUUID] = true
+
+                        table.insert(pets, {
+                            UUID = cleanUUID,
+                            Name = verifiedSpecies,
+                            Mutation = mutation,
+                            RawMutation = rawMut,
+                            Age = level,
+                            Weight = weightStr,
+                            NumericWeight = numWeight,
+                            IsFavorite = isFav,
+                            InGarden = isInGarden,
+                            Tool = toolObj
+                        })
+                    end
                 end
             end
         end
 
+        -- 2. Scan Fallback dari Backpack & Character (Hanya Pet Murni yang Belum Terdaftar)
         local function scanFallbackTools(container)
             if not container then return end
             for _, item in ipairs(container:GetChildren()) do
-                if item:IsA("Tool") and not item:FindFirstChild("Item_String") then
-                    local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value) or item.Name
-                    local cleanUUID = tostring(u)
-                    local strippedUUID = cleanUUID:gsub("[{}]", "")
+                if item:IsA("Tool") then
+                    local isReal, verifiedSpecies = IsRealPetSpecies(item.Name, item)
+                    if isReal and verifiedSpecies ~= "" then
+                        local u = item:GetAttribute("PET_UUID") or item:GetAttribute("UUID") or (item:FindFirstChild("PET_UUID") and item.PET_UUID.Value)
+                        local cleanUUID = tostring(u or item:GetDebugId())
+                        local strippedUUID = cleanUUID:gsub("[{}]", "")
 
-                    if not seenUUIDs[cleanUUID] and not seenUUIDs[strippedUUID] then
-                        seenUUIDs[cleanUUID] = true
-                        seenUUIDs[strippedUUID] = true
+                        if not seenUUIDs[cleanUUID] and not seenUUIDs[strippedUUID] then
+                            seenUUIDs[cleanUUID] = true
+                            seenUUIDs[strippedUUID] = true
 
-                        local cleanSpecies = item.Name:gsub("%s*%[.-%]", ""):gsub("^%s*(.-)%s*$", "%1")
-                        local weightStr = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "?"
-                        local age = tonumber(item.Name:match("%[Age%s*(%d+)%]") or item.Name:match("Age%s*(%d+)")) or 1
-                        local rawMut = item:GetAttribute("Mutation") or (item.Name:match("%[(.-)%]") or "Normal")
-                        local isFav = IsPetFavorited(cleanUUID, item)
+                            local weightStr = item.Name:match("%[([%d%.]+)%s*KG%]") or item.Name:match("([%d%.]+)%s*KG") or "?"
+                            local age = tonumber(item.Name:match("%[Age%s*(%d+)%]") or item.Name:match("Age%s*(%d+)")) or 1
+                            local rawMut = item:GetAttribute("Mutation") or (item.Name:match("%[(.-)%]") or "Normal")
+                            local isFav = IsPetFavorited(cleanUUID, item)
 
-                        table.insert(pets, {
-                            UUID = cleanUUID,
-                            Name = cleanSpecies,
-                            Mutation = getAutoMutationName(rawMut),
-                            RawMutation = rawMut,
-                            Age = age,
-                            Weight = weightStr,
-                            NumericWeight = tonumber(weightStr) or 0,
-                            IsFavorite = isFav,
-                            InGarden = false,
-                            Tool = item
-                        })
+                            table.insert(pets, {
+                                UUID = cleanUUID,
+                                Name = verifiedSpecies,
+                                Mutation = getAutoMutationName(rawMut),
+                                RawMutation = rawMut,
+                                Age = age,
+                                Weight = weightStr,
+                                NumericWeight = tonumber(weightStr) or 0,
+                                IsFavorite = isFav,
+                                InGarden = false,
+                                Tool = item
+                            })
+                        end
                     end
                 end
             end
@@ -977,29 +1074,19 @@ return function(ParentContainer, State, ZyloLib, Main)
         return pets
     end
 
-    -- Scanner Khusus Pets Inventory & Stok Siap Salur GBXP
+    -- Scanner Pets Inventory Presisi (Membaca Teks UI Game Resmi)
     GetPetsInventoryInfo = function()
         local allPets = GetAllPets()
         local currentCount = #allPets
-        local maxSlots = 285
+        local maxSlots = 245
 
-        if DataService then
-            local ok, data = pcall(function() return DataService:GetData() end)
-            if ok and data and data.PetsData then
-                if data.PetsData.MaxInventorySlots then
-                    maxSlots = tonumber(data.PetsData.MaxInventorySlots) or maxSlots
-                elseif data.PetsData.PetInventory and data.PetsData.PetInventory.MaxSlots then
-                    maxSlots = tonumber(data.PetsData.PetInventory.MaxSlots) or maxSlots
-                end
-            end
-        end
-
+        -- Ambil angka persis dari GUI Game (Contoh: "Pet Items (215/245)")
         local pGui = LocalPlayer:FindFirstChild("PlayerGui")
         if pGui then
             for _, g in ipairs(pGui:GetDescendants()) do
-                if g:IsA("TextLabel") and g.Visible and g.Text:find("/") then
-                    local cur, mx = g.Text:match("(%d+)%s*/%s*(%d+)")
-                    if cur and mx and tonumber(mx) and tonumber(mx) > 50 then
+                if g:IsA("TextLabel") and g.Visible and g.Text:find("Pet Items") then
+                    local cur, mx = g.Text:match("%((%d+)%s*/%s*(%d+)%)")
+                    if cur and mx then
                         currentCount = tonumber(cur) or currentCount
                         maxSlots = tonumber(mx) or maxSlots
                         break
@@ -1011,7 +1098,7 @@ return function(ParentContainer, State, ZyloLib, Main)
         local freeSlots = math.max(0, maxSlots - currentCount)
         local totalStr = string.format("%d/%d", currentCount, maxSlots)
 
-        -- Hitung Stok GBXP Siap Salur
+        -- Hitung Stok Siap Salur GBXP Murni
         local minGBAge = State.MutasiTeamThresholds.GBXP.EquipAge or 0
         local maxGBAge = State.MutasiTeamThresholds.GBXP.UnequipAge or 500
         local gbxpStock = 0
@@ -1939,7 +2026,7 @@ return function(ParentContainer, State, ZyloLib, Main)
                     petLookup[tostring(p.UUID):gsub("[{}]", "")] = p
                 end
 
-                -- 1. Gudang Suplai GBXP
+                -- 1. Gudang Suplai GBXP (Hanya Pet Murni Non-Favorite)
                 local minGBAge = State.MutasiTeamThresholds.GBXP.EquipAge or 0
                 local maxGBAge = State.MutasiTeamThresholds.GBXP.UnequipAge or 500
                 local isAutoSelect = (State.GBXPSelectMode == "auto")
