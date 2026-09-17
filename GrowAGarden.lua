@@ -1,7 +1,7 @@
 -- =========================================================================
 --  ZYLOHUB - GROW A GARDEN (v3.5 - SAFE MODULAR EDITION)
 --  Theme: Deep Obsidian Black (#070912) & Cosmic Purple (#8A2BE2)
---  STATUS: AUTO FARM & AUTO PLACE EGG LOCKED (100% PRESERVED & PRECISE)
+--  STATUS: AUTO FARM, AUTO PLACE EGG, & CONFIG MANAGER CONNECTED (100% PRESERVED)
 -- =========================================================================
 
 local Players = game:GetService("Players")
@@ -465,7 +465,7 @@ local PageFarm      = Window:CreateTab("Farm", "🍃", 2, 480)
 local PagePets      = Window:CreateTab("Pets", "🐾", 3, 1500)
 local PageUtility   = Window:CreateTab("Utility", "🔧", 4, 240)
 local PageShop      = Window:CreateTab("Shop", "🛒", 5)
-local PageConfig    = Window:CreateTab("Config", "⚙️", 6)
+local PageConfig    = Window:CreateTab("Config", "⚙️", 6, 500)
 local PageEvent     = Window:CreateTab("Event", "⭐", 7)
 local PageInventory = Window:CreateTab("Inventory", "🎒", 8)
 local PageWebhook   = Window:CreateTab("Webhook", "🔗", 9)
@@ -732,6 +732,21 @@ if not okMutasi then
 end
 
 local accEle, bodyEle = ZyloLib:CreateAccordion(PagePets, "Auto Elephant", false, 85)
+
+-- =============================================================
+-- [PEMANGGILAN MODUL CONFIG MANAGER: TAB CONFIG]
+-- =============================================================
+local ConfigModule = nil
+local okConfig, errConfig = pcall(function()
+    local raw = game:HttpGet("https://raw.githubusercontent.com/ranklee26-glitch/zylo-games/main/ConfigModule.lua")
+    local fn = loadstring(raw)
+    if fn then
+        ConfigModule = fn()(PageConfig, State, ZyloLib, Main)
+    end
+end)
+if not okConfig then
+    warn("[ZyloHub] ConfigModule note:", errConfig)
+end
 
 -- =============================================================
 -- [FARM PAGE CONTENT - 100% PERSIS KODE ASLI & LOCKED]
